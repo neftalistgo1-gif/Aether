@@ -23,5 +23,21 @@ Aether crecerá junto con Servicios AMR.
 Misión
  
 Aether es el espacio donde convergen todos los elementos de un WISP: personas, infraestructura, clientes, pagos, soporte y operación. No reemplaza el trabajo de las personas; las conecta mediante información clara y centralizada.
+
 Vision 
 
+
+Aether existe para ayudar a pequeños y medianos WISP
+a administrar su operación de manera sencilla,
+segura y eficiente.
+
+Cada línea de código deberá resolver un problema real.
+
+La simplicidad tendrá prioridad sobre la complejidad.
+
+La documentación tendrá el mismo valor que el código.
+
+Nunca sacrificaremos la estabilidad por agregar funciones.
+
+Construiremos software para personas,
+no para impresionar programadores.
