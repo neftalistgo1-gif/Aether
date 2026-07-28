@@ -93,6 +93,16 @@ class Service(Base):
         cascade="all, delete-orphan",
         order_by="ServiceEvent.occurred_at",
     )
+    suspensions: Mapped[list["Suspension"]] = relationship(
+        back_populates="service",
+        cascade="all, delete-orphan",
+        order_by="Suspension.executed_at",
+        lazy="selectin",
+    )
+    cancellation: Mapped["Cancellation | None"] = relationship(
+        back_populates="service",
+        uselist=False,
+    )
 
     @property
     def current_customer_id(self) -> UUID | None:
@@ -184,3 +194,6 @@ class ServiceEvent(Base):
     )
 
     service: Mapped[Service] = relationship(back_populates="events")
+
+
+from app.models.service_operations import Cancellation, Suspension

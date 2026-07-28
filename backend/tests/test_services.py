@@ -142,19 +142,8 @@ class ServiceEndpointsTestCase(unittest.TestCase):
             {"from": "500.00", "to": "600.00"},
         )
 
-    def test_service_follows_allowed_status_lifecycle(self) -> None:
+    def test_generic_transition_only_activates_service(self) -> None:
         service = create_service(self.service_payload(), self.db)
-
-        with self.assertRaises(HTTPException) as invalid_transition:
-            transition_service_status(
-                service.id,
-                ServiceTransitionCreate(
-                    target_status=ServiceStatus.suspended,
-                    reason="Intento inválido",
-                ),
-                self.db,
-            )
-        self.assertEqual(invalid_transition.exception.status_code, 409)
 
         service = transition_service_status(
             service.id,
@@ -166,44 +155,16 @@ class ServiceEndpointsTestCase(unittest.TestCase):
         )
         self.assertIsNotNone(service.activation_date)
 
-        service = transition_service_status(
-            service.id,
-            ServiceTransitionCreate(
-                target_status=ServiceStatus.suspended,
-                reason="Mensualidad vencida",
-            ),
-            self.db,
-        )
-        service = transition_service_status(
-            service.id,
-            ServiceTransitionCreate(
-                target_status=ServiceStatus.active,
-                reason="Pago verificado",
-            ),
-            self.db,
-        )
-        service = transition_service_status(
-            service.id,
-            ServiceTransitionCreate(
-                target_status=ServiceStatus.cancelled,
-                reason="Baja solicitada por el cliente",
-            ),
-            self.db,
-        )
-
-        self.assertEqual(service.status, ServiceStatus.cancelled)
-        self.assertIsNotNone(service.cancellation_date)
-
-        with self.assertRaises(HTTPException) as terminal_transition:
+        with self.assertRaises(HTTPException) as specialized_transition:
             transition_service_status(
                 service.id,
                 ServiceTransitionCreate(
-                    target_status=ServiceStatus.active,
-                    reason="Intento de reactivación",
+                    target_status=ServiceStatus.suspended,
+                    reason="Debe usar el flujo de suspensión",
                 ),
                 self.db,
             )
-        self.assertEqual(terminal_transition.exception.status_code, 409)
+        self.assertEqual(specialized_transition.exception.status_code, 409)
 
         events = list_service_events(service.id, self.db)
         self.assertEqual(
@@ -211,9 +172,6 @@ class ServiceEndpointsTestCase(unittest.TestCase):
             [
                 ServiceStatus.pending,
                 ServiceStatus.active,
-                ServiceStatus.suspended,
-                ServiceStatus.active,
-                ServiceStatus.cancelled,
             ],
         )
 

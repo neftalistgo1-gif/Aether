@@ -54,6 +54,19 @@ pending -> active -> suspended -> active -> cancelled
 También se permite cancelar directamente un servicio pendiente, activo o
 suspendido. Un servicio cancelado es un estado terminal.
 
+### Operación administrativa
+
+La suspensión exige confirmar que terminó el periodo de tolerancia, que se
+revisaron las prórrogas, que no existe una prórroga vigente y que se notificó
+al cliente. Conserva la deuda, responsable y resultado de MikroTik.
+
+La reactivación conserva autorización, responsable, deuda y resultado de red.
+Los intentos fallidos quedan registrados y pueden reintentarse.
+
+La baja definitiva puede ejecutarse inmediatamente o programarse para una
+fecha futura. Conserva titular solicitante, folio, saldos y estado de
+recuperación de equipos.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:

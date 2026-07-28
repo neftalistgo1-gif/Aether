@@ -31,16 +31,9 @@ router = APIRouter(prefix="/api/v1/services", tags=["services"])
 ALLOWED_STATUS_TRANSITIONS = {
     ServiceStatus.pending: {
         ServiceStatus.active,
-        ServiceStatus.cancelled,
     },
-    ServiceStatus.active: {
-        ServiceStatus.suspended,
-        ServiceStatus.cancelled,
-    },
-    ServiceStatus.suspended: {
-        ServiceStatus.active,
-        ServiceStatus.cancelled,
-    },
+    ServiceStatus.active: set(),
+    ServiceStatus.suspended: set(),
     ServiceStatus.cancelled: set(),
 }
 
