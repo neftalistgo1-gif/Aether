@@ -38,11 +38,21 @@ La documentación interactiva estará disponible en
 ## Módulos disponibles
 
 - `Customers`: crear, listar, buscar, consultar y actualizar personas.
-- `Services`: crear, listar, buscar y consultar conexiones de internet.
+- `Services`: crear, listar, buscar, consultar y actualizar conexiones.
 
 Cada Service conserva su precio mensual acordado y se relaciona con su
 titular mediante `ServiceHolder`, evitando que el código `AMR###` se use como
 identificador permanente de una persona.
+
+Los cambios comerciales y de estado generan eventos auditables. El ciclo de
+vida permitido es:
+
+```text
+pending -> active -> suspended -> active -> cancelled
+```
+
+También se permite cancelar directamente un servicio pendiente, activo o
+suspendido. Un servicio cancelado es un estado terminal.
 
 ## Pruebas
 

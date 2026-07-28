@@ -10,6 +10,7 @@ from sqlalchemy import (
     Enum as SqlEnum,
     ForeignKey,
     Index,
+    JSON,
     Numeric,
     SmallInteger,
     String,
@@ -27,6 +28,12 @@ class ServiceStatus(str, Enum):
     active = "active"
     suspended = "suspended"
     cancelled = "cancelled"
+
+
+class ServiceEventType(str, Enum):
+    registered = "registered"
+    details_updated = "details_updated"
+    status_changed = "status_changed"
 
 
 class Service(Base):
@@ -81,6 +88,11 @@ class Service(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    events: Mapped[list["ServiceEvent"]] = relationship(
+        back_populates="service",
+        cascade="all, delete-orphan",
+        order_by="ServiceEvent.occurred_at",
+    )
 
     @property
     def current_customer_id(self) -> UUID | None:
@@ -123,3 +135,52 @@ class ServiceHolder(Base):
     change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     service: Mapped[Service] = relationship(back_populates="holders")
+
+
+class ServiceEvent(Base):
+    __tablename__ = "service_events"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    service_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("services.id", ondelete="CASCADE"),
+        index=True,
+    )
+    event_type: Mapped[ServiceEventType] = mapped_column(
+        SqlEnum(
+            ServiceEventType,
+            name="service_event_type",
+            native_enum=False,
+            validate_strings=True,
+        )
+    )
+    from_status: Mapped[ServiceStatus | None] = mapped_column(
+        SqlEnum(
+            ServiceStatus,
+            name="service_status",
+            native_enum=False,
+            validate_strings=True,
+        ),
+        nullable=True,
+    )
+    to_status: Mapped[ServiceStatus | None] = mapped_column(
+        SqlEnum(
+            ServiceStatus,
+            name="service_status",
+            native_enum=False,
+            validate_strings=True,
+        ),
+        nullable=True,
+    )
+    changes: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    reason: Mapped[str] = mapped_column(Text)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+    )
+
+    service: Mapped[Service] = relationship(back_populates="events")
