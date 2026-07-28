@@ -35,6 +35,15 @@ Desde la carpeta `backend`:
 La documentación interactiva estará disponible en
 `http://127.0.0.1:8000/docs`.
 
+## Módulos disponibles
+
+- `Customers`: crear, listar, buscar, consultar y actualizar personas.
+- `Services`: crear, listar, buscar y consultar conexiones de internet.
+
+Cada Service conserva su precio mensual acordado y se relaciona con su
+titular mediante `ServiceHolder`, evitando que el código `AMR###` se use como
+identificador permanente de una persona.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:

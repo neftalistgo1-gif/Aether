@@ -6,6 +6,7 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import DATABASE_URL
 from app.db.base import Base
 from app.models.customer import Customer
+from app.models.service import Service, ServiceHolder
 
 config = context.config
 config.set_main_option("sqlalchemy.url", DATABASE_URL)

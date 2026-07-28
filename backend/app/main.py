@@ -3,6 +3,7 @@ from fastapi import FastAPI
 
 from app.api.v1.endpoints.customers import router as customers_router
 from app.api.v1.endpoints.health import router as health_router
+from app.api.v1.endpoints.services import router as services_router
 
 app = FastAPI(
     title="Aether API",
@@ -12,6 +13,7 @@ app = FastAPI(
 
 app.include_router(health_router)
 app.include_router(customers_router)
+app.include_router(services_router)
 
 
 @app.get("/")
