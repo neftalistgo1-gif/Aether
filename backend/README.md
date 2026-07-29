@@ -45,6 +45,12 @@ Las cuentas con `customers.write` pueden registrar y editar clientes desde la
 interfaz. Toda edición exige un motivo y genera una auditoría con los valores
 anteriores y posteriores; las cuentas de consulta no ven estas acciones.
 
+Las cuentas con `services.write`, junto con lectura de clientes y planes,
+pueden registrar servicios pendientes. La interfaz sólo usa planes activos con
+precio vigente y el backend verifica que `plan_id`, nombre y precio coincidan
+con el catálogo. El alta queda auditada y nunca activa automáticamente la
+conexión.
+
 ## Primer administrador y acceso
 
 Todas las rutas de negocio requieren autenticación. Para preparar una

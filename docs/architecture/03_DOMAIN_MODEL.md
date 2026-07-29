@@ -65,6 +65,10 @@ domicilio específico.
 - Un Service puede cambiar de plan, precio, IP, torre o AP.
 - Los cambios de plan conservan el precio por periodo de facturación; no
   recalculan cargos ya generados.
+- Toda alta nueva realizada mediante la interfaz debe vincular el Service a un
+  Plan activo y validar nombre y precio contra el catálogo.
+- Los servicios históricos sin vínculo de catálogo permanecen legibles durante
+  la transición; no se inventa un Plan para ellos.
 - Plan, precio y domicilio no se modifican mediante la actualización genérica
   del Service.
 - La suspensión no equivale a cancelación.

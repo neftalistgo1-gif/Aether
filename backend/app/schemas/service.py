@@ -17,12 +17,19 @@ from app.models.service import ServiceEventType, ServiceStatus
 
 class ServiceCreate(BaseModel):
     customer_id: UUID
+    plan_id: UUID | None = None
     amr_code: str = Field(pattern=r"^AMR\d{3,6}$")
     address: str = Field(min_length=5, max_length=250)
     plan_name: str = Field(min_length=2, max_length=100)
     monthly_price: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
     payment_day: int = Field(ge=1, le=28)
     grace_days: int = Field(default=5, ge=0, le=30)
+    registered_by: str = Field(default="system", min_length=2, max_length=150)
+    reason: str = Field(
+        default="Service registration",
+        min_length=3,
+        max_length=500,
+    )
 
     @field_validator("amr_code", mode="before")
     @classmethod

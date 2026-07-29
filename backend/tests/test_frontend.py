@@ -35,6 +35,7 @@ class FrontendShellTestCase(unittest.TestCase):
             "/api/v1/customers",
             "/api/v1/services",
             "/api/v1/payments",
+            "/api/v1/plans?plan_status=active",
         ):
             with self.subTest(endpoint=endpoint):
                 self.assertIn(endpoint, script)
@@ -43,6 +44,9 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn('hasCapability("customers.write")', script)
         self.assertIn('method: editing ? "PATCH" : "POST"', script)
         self.assertIn('reason: $("#customer-reason").value.trim()', script)
+        self.assertIn('hasCapability("services.write")', script)
+        self.assertIn("plan_id: plan.id", script)
+        self.assertIn('setNotice("El servicio quedó registrado como pendiente.")', script)
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

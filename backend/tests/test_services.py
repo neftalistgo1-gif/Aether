@@ -1,4 +1,5 @@
 import unittest
+from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
@@ -16,8 +17,10 @@ from app.api.v1.endpoints.services import (
     transition_service_status,
     update_service,
 )
+from app.api.v1.endpoints.plans import create_plan
 from app.db.base import Base
 from app.models.customer import Customer
+from app.models.audit import AuditEvent
 from app.models.service import (
     Service,
     ServiceEvent,
@@ -30,6 +33,8 @@ from app.schemas.service import (
     ServiceTransitionCreate,
     ServiceUpdate,
 )
+from app.schemas.plan import PlanCreate
+from sqlalchemy import select
 
 
 class ServiceEndpointsTestCase(unittest.TestCase):
@@ -72,6 +77,12 @@ class ServiceEndpointsTestCase(unittest.TestCase):
         self.assertEqual(self.db.query(Service).count(), 1)
         self.assertEqual(self.db.query(ServiceHolder).count(), 1)
         self.assertEqual(self.db.query(ServiceEvent).count(), 1)
+        audit = self.db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action == "service.created"
+            )
+        )
+        self.assertEqual(audit.after_data["amr_code"], "AMR301")
 
         service_id = created.id
         self.db.close()
@@ -79,6 +90,30 @@ class ServiceEndpointsTestCase(unittest.TestCase):
 
         persisted = get_service(service_id, self.db)
         self.assertEqual(persisted.current_customer_id, self.customer.id)
+
+    def test_catalog_plan_is_validated_and_linked(self) -> None:
+        plan = create_plan(
+            PlanCreate(
+                name="Hogar 30 Mbps",
+                speed="30 Mbps",
+                monthly_price=Decimal("600.00"),
+                valid_from=date.today(),
+                created_by="Administración",
+            ),
+            self.db,
+        )
+        payload = self.service_payload("AMR302")
+        payload.plan_id = plan.id
+        payload.plan_name = plan.name
+        payload.monthly_price = plan.current_price
+        created = create_service(payload, self.db)
+        self.assertEqual(created.plan_id, plan.id)
+
+        invalid = self.service_payload("AMR303")
+        invalid.plan_id = plan.id
+        with self.assertRaises(HTTPException) as mismatch:
+            create_service(invalid, self.db)
+        self.assertEqual(mismatch.exception.status_code, 409)
 
     def test_create_service_rejects_unknown_customer(self) -> None:
         payload = self.service_payload()

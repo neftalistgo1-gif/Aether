@@ -199,7 +199,14 @@
                 <p class="eyebrow">CONECTIVIDAD</p>
                 <h2>Servicios</h2>
               </div>
+              <button
+                id="new-service-button"
+                class="secondary-button"
+                type="button"
+                hidden
+              >Nuevo servicio</button>
             </div>
+            <p id="service-write-note" class="inline-note" hidden></p>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -318,6 +325,99 @@
             type="button"
           >Cancelar</button>
           <button class="primary-button" type="submit">Guardar cliente</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="service-dialog" aria-labelledby="service-dialog-title">
+      <form id="service-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">ALTA OPERATIVA</p>
+            <h2 id="service-dialog-title">Nuevo servicio</h2>
+          </div>
+          <button
+            id="close-service-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Cliente titular
+            <select id="service-customer" required></select>
+          </label>
+          <label>
+            Plan
+            <select id="service-plan" required></select>
+          </label>
+          <label>
+            Código AMR
+            <input
+              id="service-amr"
+              placeholder="AMR001"
+              pattern="AMR[0-9]{3,6}"
+              maxlength="9"
+              required
+            >
+          </label>
+          <label>
+            Día de pago
+            <input
+              id="service-payment-day"
+              type="number"
+              min="1"
+              max="28"
+              value="5"
+              required
+            >
+          </label>
+          <label class="full-row">
+            Domicilio de instalación
+            <input
+              id="service-address"
+              minlength="5"
+              maxlength="250"
+              required
+            >
+          </label>
+          <label>
+            Días de tolerancia
+            <input
+              id="service-grace-days"
+              type="number"
+              min="0"
+              max="30"
+              value="5"
+              required
+            >
+          </label>
+          <div class="plan-summary">
+            <span>Precio mensual</span>
+            <strong id="service-plan-price">—</strong>
+          </div>
+          <label class="full-row">
+            Motivo del alta
+            <textarea
+              id="service-reason"
+              rows="2"
+              minlength="3"
+              maxlength="500"
+              required
+            >Alta solicitada por el cliente</textarea>
+          </label>
+        </div>
+        <p id="service-form-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-service-dialog"
+            class="text-button"
+            type="button"
+          >Cancelar</button>
+          <button class="primary-button" type="submit">
+            Registrar servicio
+          </button>
         </div>
       </form>
     </dialog>

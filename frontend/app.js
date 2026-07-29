@@ -4,6 +4,7 @@ const state = {
   customers: [],
   services: [],
   payments: [],
+  plans: [],
   editingCustomerId: null,
 };
 
@@ -75,14 +76,16 @@ async function loadResource(path) {
 
 async function loadWorkspace() {
   state.user = await api("/api/v1/auth/me");
-  const [customers, services, payments] = await Promise.all([
+  const [customers, services, payments, plans] = await Promise.all([
     loadResource("/api/v1/customers"),
     loadResource("/api/v1/services"),
     loadResource("/api/v1/payments"),
+    loadResource("/api/v1/plans?plan_status=active"),
   ]);
   state.customers = customers;
   state.services = services;
   state.payments = payments;
+  state.plans = plans;
   renderUser();
   renderOverview();
   renderCustomers();
@@ -107,6 +110,21 @@ function renderUser() {
   document.querySelectorAll(".customer-action-column").forEach((column) => {
     column.hidden = !canWriteCustomers;
   });
+  const canWriteServices = hasCapability("services.write");
+  const hasServiceReferences = Boolean(
+    state.customers?.length &&
+    state.plans?.some(
+      (plan) => plan.status === "active" && plan.current_price !== null
+    )
+  );
+  $("#new-service-button").hidden = !(
+    canWriteServices && hasServiceReferences
+  );
+  const serviceWriteNote = $("#service-write-note");
+  serviceWriteNote.hidden = !canWriteServices || hasServiceReferences;
+  serviceWriteNote.textContent = hasServiceReferences
+    ? ""
+    : "Para registrar servicios se necesita al menos un cliente y un plan activo visibles para esta cuenta.";
 }
 
 function hasCapability(capability) {
@@ -338,6 +356,92 @@ function renderServices() {
   empty.hidden = state.services.length > 0;
 }
 
+function updateSelectedPlanPrice() {
+  const plan = state.plans?.find(
+    (item) => item.id === $("#service-plan").value
+  );
+  $("#service-plan-price").textContent = plan
+    ? formatMoney(plan.current_price)
+    : "—";
+}
+
+function openServiceDialog() {
+  const customers = state.customers || [];
+  const plans = (state.plans || []).filter(
+    (plan) => plan.status === "active" && plan.current_price !== null
+  );
+  $("#service-customer").innerHTML = customers
+    .map(
+      (customer) =>
+        `<option value="${customer.id}">${escapeText(customer.full_name)}</option>`
+    )
+    .join("");
+  $("#service-plan").innerHTML = plans
+    .map(
+      (plan) =>
+        `<option value="${plan.id}">${escapeText(plan.name)} · ${escapeText(plan.speed)}</option>`
+    )
+    .join("");
+  $("#service-amr").value = "";
+  $("#service-address").value = "";
+  $("#service-payment-day").value = "5";
+  $("#service-grace-days").value = "5";
+  $("#service-reason").value = "Alta solicitada por el cliente";
+  $("#service-form-error").textContent = "";
+  updateSelectedPlanPrice();
+  $("#service-dialog").showModal();
+  $("#service-amr").focus();
+}
+
+function closeServiceDialog() {
+  $("#service-dialog").close();
+}
+
+async function saveService(event) {
+  event.preventDefault();
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const errorBox = $("#service-form-error");
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const plan = state.plans.find(
+      (item) => item.id === $("#service-plan").value
+    );
+    if (!plan?.current_price) {
+      throw new Error("Selecciona un plan activo con precio vigente.");
+    }
+    const saved = await api("/api/v1/services", {
+      method: "POST",
+      body: JSON.stringify({
+        customer_id: $("#service-customer").value,
+        plan_id: plan.id,
+        amr_code: $("#service-amr").value.trim().toUpperCase(),
+        address: $("#service-address").value.trim(),
+        plan_name: plan.name,
+        monthly_price: plan.current_price,
+        payment_day: Number($("#service-payment-day").value),
+        grace_days: Number($("#service-grace-days").value),
+        registered_by: state.user.display_name,
+        reason: $("#service-reason").value.trim(),
+      }),
+    });
+    if (state.services) {
+      state.services.push(saved);
+      state.services.sort((a, b) => a.amr_code.localeCompare(b.amr_code));
+      renderServices();
+      renderOverview();
+    }
+    closeServiceDialog();
+    setNotice("El servicio quedó registrado como pendiente.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 function renderPayments() {
   const body = $("#payments-body");
   const empty = $("#payments-empty");
@@ -463,6 +567,11 @@ $("#cancel-customer-dialog").addEventListener(
   "click",
   closeCustomerDialog
 );
+$("#new-service-button").addEventListener("click", openServiceDialog);
+$("#service-plan").addEventListener("change", updateSelectedPlanPrice);
+$("#service-form").addEventListener("submit", saveService);
+$("#close-service-dialog").addEventListener("click", closeServiceDialog);
+$("#cancel-service-dialog").addEventListener("click", closeServiceDialog);
 $("#logout-button").addEventListener("click", () => logout());
 $("#menu-button").addEventListener("click", () => {
   const sidebar = $(".sidebar");

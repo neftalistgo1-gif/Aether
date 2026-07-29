@@ -23,6 +23,7 @@ Aether. Incluye:
 - directorio consultable de clientes;
 - alta y edición de clientes para cuentas con `customers.write`;
 - tablas de servicios y pagos recientes;
+- alta de servicios pendientes mediante selección de titular y plan vigente;
 - mensajes claros cuando la cuenta no tiene permiso para un área;
 - navegación adaptable a escritorio y móvil.
 
@@ -32,6 +33,11 @@ escritura es la gestión de clientes: compara los valores antes de enviarlos,
 evita actualizaciones vacías y exige un motivo que queda en auditoría. Los
 flujos siguientes conservarán confirmaciones, motivos y simulaciones cuando el
 backend ya las exige.
+
+El alta de servicios sólo aparece cuando la cuenta puede escribir servicios y
+consultar al menos un cliente y un plan activo. Nombre y precio se presentan
+desde el catálogo; no se capturan como texto libre. La activación permanece en
+su flujo especializado y no forma parte del formulario de alta.
 
 ## Implementación
 

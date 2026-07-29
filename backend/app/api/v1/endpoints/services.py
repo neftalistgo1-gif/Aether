@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
 from app.models.customer import Customer
+from app.models.plan import Plan, PlanStatus
 from app.models.service import (
     Service,
     ServiceEvent,
@@ -18,6 +19,7 @@ from app.models.service import (
     ServiceHolder,
     ServiceStatus,
 )
+from app.services.audit import record_audit_event
 from app.schemas.service import (
     ServiceCreate,
     ServiceEventRead,
@@ -62,8 +64,33 @@ def create_service(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Customer not found",
         )
+    if service.plan_id is not None:
+        plan = db.get(Plan, service.plan_id)
+        if plan is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Plan not found",
+            )
+        if (
+            plan.status != PlanStatus.active
+            or plan.current_price is None
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only an active priced plan can be assigned",
+            )
+        if (
+            service.plan_name != plan.name
+            or service.monthly_price != plan.current_price
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Service plan name and price must match the catalog",
+            )
 
-    service_data = service.model_dump(exclude={"customer_id"})
+    service_data = service.model_dump(
+        exclude={"customer_id", "registered_by", "reason"}
+    )
     new_service = Service(**service_data)
     new_service.holders.append(ServiceHolder(customer_id=service.customer_id))
     new_service.events.append(
@@ -77,6 +104,24 @@ def create_service(
     db.add(new_service)
 
     try:
+        db.flush()
+        record_audit_event(
+            db,
+            actor=service.registered_by,
+            action="service.created",
+            entity_type="Service",
+            entity_id=new_service.id,
+            reason=service.reason,
+            after_data={
+                "customer_id": service.customer_id,
+                "amr_code": new_service.amr_code,
+                "plan_id": new_service.plan_id,
+                "plan_name": new_service.plan_name,
+                "monthly_price": new_service.monthly_price,
+                "payment_day": new_service.payment_day,
+                "status": new_service.status,
+            },
+        )
         db.commit()
     except IntegrityError as error:
         db.rollback()
