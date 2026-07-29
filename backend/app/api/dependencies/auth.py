@@ -172,6 +172,7 @@ def capability_for_operation(
                 route_path.endswith("/verify")
                 or route_path.endswith("/reject")
                 or route_path.endswith("/cancel")
+                or route_path.endswith("/apply")
                 or route_path.endswith("/credit-refunds")
             )
         ):

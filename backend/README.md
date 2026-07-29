@@ -233,7 +233,9 @@ distinto al declarado, la explicación es obligatoria. Cada transición conserva
 responsable, motivo y fecha en `PaymentStatusEvent`.
 
 Los pagos verificados todavía no modifican cargos directamente; su aplicación
-a deuda se registra mediante `PaymentAllocation`.
+a deuda se registra mediante `PaymentAllocation`. Verificar, rechazar, cancelar
+y aplicar requieren `billing.approve`; recibir un pago utiliza
+`billing.write`.
 
 ### Aplicaciones y saldo a favor
 

@@ -373,6 +373,23 @@ class AuthenticationTestCase(unittest.TestCase):
                         capability_for_operation(method, route_path)
                     )
 
+    def test_payment_decisions_and_application_require_approval(self) -> None:
+        for path in (
+            "/api/v1/payments/{payment_id}/verify",
+            "/api/v1/payments/{payment_id}/reject",
+            "/api/v1/payments/{payment_id}/cancel",
+            "/api/v1/payments/{payment_id}/apply",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    capability_for_operation("POST", path),
+                    Capability.billing_approve,
+                )
+        self.assertEqual(
+            capability_for_operation("POST", "/api/v1/payments"),
+            Capability.billing_write,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

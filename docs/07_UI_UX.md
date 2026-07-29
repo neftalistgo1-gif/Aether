@@ -47,6 +47,13 @@ no reduce deuda y no ofrece verificar ni aplicar el pago en el mismo formulario.
 La ubicación del comprobante se envía como dato privado y nunca regresa en los
 listados; éstos sólo indican si existe evidencia.
 
+Las cuentas con `billing.approve` reciben acciones adicionales según el estado.
+Un pago pendiente puede verificarse, rechazarse o cancelarse; una diferencia
+entre el monto declarado y el confirmado exige explicación. Sólo después de la
+verificación aparece la aplicación a deuda. Esta segunda confirmación distribuye
+el monto entre cargos abiertos más antiguos y reporta por separado lo aplicado
+y el saldo a favor generado.
+
 ## Implementación
 
 La superficie actual usa HTML, CSS y JavaScript modular sin dependencias. Se

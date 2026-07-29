@@ -6,6 +6,7 @@ const state = {
   payments: [],
   plans: [],
   editingCustomerId: null,
+  selectedPaymentId: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -135,6 +136,9 @@ function renderUser() {
   paymentWriteNote.textContent = hasPaymentReferences
     ? ""
     : "Para registrar pagos se necesita al menos un cliente visible para esta cuenta.";
+  document.querySelectorAll(".payment-action-column").forEach((column) => {
+    column.hidden = !hasCapability("billing.approve");
+  });
 }
 
 function hasCapability(capability) {
@@ -461,6 +465,20 @@ function renderPayments() {
     empty.hidden = false;
     return;
   }
+  const canApprove = hasCapability("billing.approve");
+  const methodLabels = {
+    cash: "Efectivo",
+    bank_transfer: "Transferencia",
+    bank_deposit: "Depósito",
+    card: "Tarjeta",
+    other: "Otro",
+  };
+  const statusLabels = {
+    pending: "Pendiente",
+    verified: "Verificado",
+    rejected: "Rechazado",
+    cancelled: "Cancelado",
+  };
   body.innerHTML = state.payments
     .slice()
     .sort((a, b) => new Date(b.received_at) - new Date(a.received_at))
@@ -469,9 +487,32 @@ function renderPayments() {
       <tr>
         <td><strong>${escapeText(payment.reference || payment.id.slice(0, 8))}</strong></td>
         <td>${formatMoney(payment.declared_amount)}</td>
-        <td>${escapeText(payment.method)}</td>
+        <td>${escapeText(methodLabels[payment.method] || payment.method)}</td>
         <td>${formatDate(payment.received_at)}</td>
-        <td><span class="badge ${payment.status}">${escapeText(payment.status)}</span></td>
+        <td>
+          <span class="badge ${payment.status}">
+            ${payment.applied_at
+              ? "Aplicado"
+              : escapeText(statusLabels[payment.status] || payment.status)}
+          </span>
+        </td>
+        ${canApprove ? `
+          <td>
+            ${payment.status === "pending" ? `
+              <button
+                class="row-action payment-review-action"
+                type="button"
+                data-payment-id="${payment.id}"
+              >Revisar</button>
+            ` : payment.status === "verified" && !payment.applied_at ? `
+              <button
+                class="row-action payment-apply-action"
+                type="button"
+                data-payment-id="${payment.id}"
+              >Aplicar</button>
+            ` : "—"}
+          </td>
+        ` : ""}
       </tr>
     `)
     .join("");
@@ -561,6 +602,195 @@ async function savePayment(event) {
     closePaymentDialog();
     setNotice(
       "El pago quedó pendiente de verificación; la deuda todavía no cambió."
+    );
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+function paymentCustomerName(payment) {
+  return (
+    state.customers?.find(
+      (customer) => customer.id === payment.customer_id
+    )?.full_name || "Cliente no visible"
+  );
+}
+
+function paymentSummary(payment, amount) {
+  return `
+    <div>
+      <span>Cliente</span>
+      <strong>${escapeText(paymentCustomerName(payment))}</strong>
+    </div>
+    <div>
+      <span>Monto</span>
+      <strong>${formatMoney(amount)}</strong>
+    </div>
+    <div>
+      <span>Comprobante</span>
+      <strong>${payment.has_proof ? "Registrado" : "No registrado"}</strong>
+    </div>
+  `;
+}
+
+function selectedPayment() {
+  return state.payments?.find(
+    (payment) => payment.id === state.selectedPaymentId
+  );
+}
+
+function replacePayment(saved) {
+  const index = state.payments?.findIndex(
+    (payment) => payment.id === saved.id
+  );
+  if (index >= 0) state.payments[index] = saved;
+  renderPayments();
+  renderOverview();
+}
+
+function openPaymentReviewDialog(payment) {
+  state.selectedPaymentId = payment.id;
+  $("#payment-review-summary").innerHTML = paymentSummary(
+    payment,
+    payment.declared_amount
+  );
+  $("#payment-confirmed-amount").value = payment.declared_amount;
+  $("#payment-decision-notes").value = "";
+  $("#payment-review-error").textContent = "";
+  $("#payment-review-dialog").showModal();
+  $("#payment-confirmed-amount").focus();
+}
+
+function closePaymentReviewDialog() {
+  $("#payment-review-dialog").close();
+  state.selectedPaymentId = null;
+}
+
+function setPaymentReviewBusy(busy) {
+  $("#payment-review-form")
+    .querySelectorAll("button")
+    .forEach((button) => {
+      button.disabled = busy;
+    });
+}
+
+async function verifySelectedPayment(event) {
+  event.preventDefault();
+  const payment = selectedPayment();
+  const errorBox = $("#payment-review-error");
+  const notes = $("#payment-decision-notes").value.trim();
+  const confirmedAmount = $("#payment-confirmed-amount").value;
+  errorBox.textContent = "";
+  if (!payment) return;
+  if (
+    Number(confirmedAmount) !== Number(payment.declared_amount) &&
+    !notes
+  ) {
+    errorBox.textContent =
+      "Explica por qué el monto confirmado es distinto al declarado.";
+    return;
+  }
+  setPaymentReviewBusy(true);
+  try {
+    const saved = await api(`/api/v1/payments/${payment.id}/verify`, {
+      method: "POST",
+      body: JSON.stringify({
+        confirmed_amount: confirmedAmount,
+        verified_by: state.user.display_name,
+        notes: notes || null,
+      }),
+    });
+    replacePayment(saved);
+    closePaymentReviewDialog();
+    setNotice(
+      "El pago quedó verificado. Aún falta aplicarlo para reducir la deuda."
+    );
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    setPaymentReviewBusy(false);
+  }
+}
+
+async function decideSelectedPayment(action) {
+  const payment = selectedPayment();
+  const errorBox = $("#payment-review-error");
+  const reason = $("#payment-decision-notes").value.trim();
+  errorBox.textContent = "";
+  if (!payment) return;
+  if (reason.length < 3) {
+    errorBox.textContent =
+      "Escribe un motivo de al menos tres caracteres.";
+    return;
+  }
+  setPaymentReviewBusy(true);
+  try {
+    const saved = await api(`/api/v1/payments/${payment.id}/${action}`, {
+      method: "POST",
+      body: JSON.stringify({
+        performed_by: state.user.display_name,
+        reason,
+      }),
+    });
+    replacePayment(saved);
+    closePaymentReviewDialog();
+    setNotice(
+      action === "reject"
+        ? "El pago fue rechazado y permanece en el historial."
+        : "El registro del pago fue cancelado y permanece en el historial."
+    );
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    setPaymentReviewBusy(false);
+  }
+}
+
+function openPaymentApplyDialog(payment) {
+  state.selectedPaymentId = payment.id;
+  $("#payment-apply-summary").innerHTML = paymentSummary(
+    payment,
+    payment.confirmed_amount
+  );
+  $("#payment-apply-reason").value =
+    "Aplicación automática a los cargos abiertos más antiguos";
+  $("#payment-apply-error").textContent = "";
+  $("#payment-apply-dialog").showModal();
+  $("#payment-apply-reason").focus();
+}
+
+function closePaymentApplyDialog() {
+  $("#payment-apply-dialog").close();
+  state.selectedPaymentId = null;
+}
+
+async function applySelectedPayment(event) {
+  event.preventDefault();
+  const payment = selectedPayment();
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const errorBox = $("#payment-apply-error");
+  errorBox.textContent = "";
+  if (!payment) return;
+  submitButton.disabled = true;
+  try {
+    const result = await api(`/api/v1/payments/${payment.id}/apply`, {
+      method: "POST",
+      body: JSON.stringify({
+        applied_by: state.user.display_name,
+        reason: $("#payment-apply-reason").value.trim(),
+      }),
+    });
+    payment.applied_at = new Date().toISOString();
+    payment.applied_by = state.user.display_name;
+    renderPayments();
+    closePaymentApplyDialog();
+    setNotice(
+      `Pago aplicado: ${formatMoney(result.allocated_amount)} a deuda` +
+      ` y ${formatMoney(result.credit_generated)} a saldo a favor.`
     );
   } catch (error) {
     errorBox.textContent = error.message;
@@ -677,6 +907,45 @@ $("#payment-customer").addEventListener("change", updatePaymentServices);
 $("#payment-form").addEventListener("submit", savePayment);
 $("#close-payment-dialog").addEventListener("click", closePaymentDialog);
 $("#cancel-payment-dialog").addEventListener("click", closePaymentDialog);
+$("#payments-body").addEventListener("click", (event) => {
+  const reviewButton = event.target.closest(".payment-review-action");
+  const applyButton = event.target.closest(".payment-apply-action");
+  const button = reviewButton || applyButton;
+  if (!button) return;
+  const payment = state.payments?.find(
+    (item) => item.id === button.dataset.paymentId
+  );
+  if (!payment) return;
+  if (reviewButton) openPaymentReviewDialog(payment);
+  else openPaymentApplyDialog(payment);
+});
+$("#payment-review-form").addEventListener(
+  "submit",
+  verifySelectedPayment
+);
+$("#reject-payment-button").addEventListener("click", () => {
+  decideSelectedPayment("reject");
+});
+$("#cancel-pending-payment-button").addEventListener("click", () => {
+  decideSelectedPayment("cancel");
+});
+$("#close-payment-review-dialog").addEventListener(
+  "click",
+  closePaymentReviewDialog
+);
+$("#dismiss-payment-review").addEventListener(
+  "click",
+  closePaymentReviewDialog
+);
+$("#payment-apply-form").addEventListener("submit", applySelectedPayment);
+$("#close-payment-apply-dialog").addEventListener(
+  "click",
+  closePaymentApplyDialog
+);
+$("#cancel-payment-apply").addEventListener(
+  "click",
+  closePaymentApplyDialog
+);
 $("#logout-button").addEventListener("click", () => logout());
 $("#menu-button").addEventListener("click", () => {
   const sidebar = $(".sidebar");

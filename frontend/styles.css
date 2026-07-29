@@ -153,6 +153,14 @@ tbody tr:hover { background: rgba(35,136,239,.045); }
   font-size: .72rem;
   cursor: pointer;
 }
+.danger-button {
+  border: 1px solid rgba(255,113,133,.38);
+  border-radius: 8px;
+  background: rgba(255,113,133,.08);
+  padding: 8px 10px;
+  color: #ffb1bd;
+  cursor: pointer;
+}
 
 dialog {
   width: min(680px, calc(100% - 30px));
@@ -173,7 +181,25 @@ dialog form { padding: 26px; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; padding-top: 22px; }
 .full-row { grid-column: 1 / -1; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 6px; }
+.split-actions { justify-content: space-between; }
+.split-actions > div { display: flex; gap: 8px; }
 .dialog-actions .primary-button { padding: 11px 16px; }
+.decision-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 20px;
+}
+.decision-summary div {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(35,136,239,.05);
+}
+.decision-summary span { color: var(--muted); font-size: .68rem; }
+.decision-summary strong { font-size: .82rem; }
 .plan-summary { align-self: end; display: grid; gap: 6px; min-height: 68px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: rgba(35,136,239,.06); }
 .plan-summary span { color: var(--muted); font-size: .72rem; }
 .plan-summary strong { color: var(--cyan); font-size: 1.05rem; }
@@ -200,6 +226,9 @@ dialog form { padding: 26px; }
   .table-actions { width: 100%; align-items: stretch; flex-direction: column; }
   .form-grid { grid-template-columns: 1fr; }
   .full-row { grid-column: auto; }
+  .split-actions { align-items: stretch; flex-direction: column-reverse; }
+  .split-actions > div { justify-content: flex-end; flex-wrap: wrap; }
+  .decision-summary { grid-template-columns: 1fr; }
 }
 @media (max-width: 460px) {
   .metric-grid { grid-template-columns: 1fr; }

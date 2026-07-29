@@ -249,6 +249,7 @@
                     <th>Medio</th>
                     <th>Fecha</th>
                     <th>Estado</th>
+                    <th class="payment-action-column" hidden>Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="payments-body"></tbody>
@@ -515,6 +516,123 @@
           >Cancelar</button>
           <button class="primary-button" type="submit">
             Registrar como pendiente
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      id="payment-review-dialog"
+      aria-labelledby="payment-review-dialog-title"
+    >
+      <form id="payment-review-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">CONTROL FINANCIERO</p>
+            <h2 id="payment-review-dialog-title">Revisar pago pendiente</h2>
+          </div>
+          <button
+            id="close-payment-review-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div id="payment-review-summary" class="decision-summary"></div>
+        <div class="form-grid">
+          <label>
+            Monto confirmado
+            <input
+              id="payment-confirmed-amount"
+              type="number"
+              min="0.01"
+              step="0.01"
+              inputmode="decimal"
+              required
+            >
+          </label>
+          <label class="full-row">
+            Notas de verificación o motivo de decisión
+            <textarea
+              id="payment-decision-notes"
+              rows="3"
+              maxlength="1000"
+            ></textarea>
+          </label>
+        </div>
+        <p class="form-help">
+          Si el monto confirmado difiere del declarado, las notas son
+          obligatorias. Rechazar o cancelar siempre exige un motivo.
+        </p>
+        <p id="payment-review-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions split-actions">
+          <div>
+            <button
+              id="reject-payment-button"
+              class="danger-button"
+              type="button"
+            >Rechazar</button>
+            <button
+              id="cancel-pending-payment-button"
+              class="text-button"
+              type="button"
+            >Cancelar registro</button>
+          </div>
+          <div>
+            <button
+              id="dismiss-payment-review"
+              class="text-button"
+              type="button"
+            >Volver</button>
+            <button class="primary-button" type="submit">
+              Verificar pago
+            </button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      id="payment-apply-dialog"
+      aria-labelledby="payment-apply-dialog-title"
+    >
+      <form id="payment-apply-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">APLICACIÓN A DEUDA</p>
+            <h2 id="payment-apply-dialog-title">Aplicar pago verificado</h2>
+          </div>
+          <button
+            id="close-payment-apply-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div id="payment-apply-summary" class="decision-summary"></div>
+        <label>
+          Motivo operativo
+          <textarea
+            id="payment-apply-reason"
+            rows="3"
+            minlength="3"
+            maxlength="1000"
+            required
+          >Aplicación automática a los cargos abiertos más antiguos</textarea>
+        </label>
+        <p class="form-help">
+          Aether distribuirá el monto confirmado entre los cargos abiertos más
+          antiguos. Cualquier excedente quedará como saldo a favor.
+        </p>
+        <p id="payment-apply-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-payment-apply"
+            class="text-button"
+            type="button"
+          >Volver</button>
+          <button class="primary-button" type="submit">
+            Confirmar aplicación
           </button>
         </div>
       </form>

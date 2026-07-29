@@ -53,6 +53,15 @@ class FrontendShellTestCase(unittest.TestCase):
             "El pago quedó pendiente de verificación",
             script,
         )
+        self.assertIn('hasCapability("billing.approve")', script)
+        self.assertIn("/verify", script)
+        self.assertIn("/apply", script)
+        self.assertIn('decideSelectedPayment("reject")', script)
+        self.assertIn('decideSelectedPayment("cancel")', script)
+        self.assertIn(
+            "Aún falta aplicarlo para reducir la deuda",
+            script,
+        )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(
