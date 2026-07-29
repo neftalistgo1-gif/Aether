@@ -1,7 +1,8 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints.equipment_recovery import (
@@ -11,6 +12,7 @@ from app.api.v1.endpoints.equipment_recovery import (
 )
 from app.api.v1.endpoints.services import find_service_or_404
 from app.db.session import get_db
+from app.models.asset import Asset, AssetStatus
 from app.models.equipment_recovery import EquipmentRecovery
 from app.models.maintenance_inspection import (
     InspectionResult,
@@ -28,6 +30,17 @@ router = APIRouter(prefix="/api/v1/services", tags=["maintenance inspections"])
 TERMINAL_INSPECTION_RESULTS = {
     InspectionResult.ready_for_reuse,
     InspectionResult.discarded,
+}
+INSPECTABLE_ASSET_STATUSES = {
+    AssetStatus.quarantine,
+    AssetStatus.needs_repair,
+    AssetStatus.defective,
+}
+INSPECTION_ASSET_STATUSES = {
+    InspectionResult.ready_for_reuse: AssetStatus.ready_for_reuse,
+    InspectionResult.needs_repair: AssetStatus.needs_repair,
+    InspectionResult.defective: AssetStatus.defective,
+    InspectionResult.discarded: AssetStatus.discarded,
 }
 
 
@@ -91,6 +104,27 @@ def create_maintenance_inspection(
             detail="Only recovered equipment can be inspected",
         )
 
+    asset = db.scalar(
+        select(Asset).where(
+            Asset.latest_recovery_id == recovery.id,
+            func.lower(Asset.recovery_equipment_name)
+            == canonical_equipment_name.casefold(),
+        )
+    )
+    if asset is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Recovered equipment has no inventory asset",
+        )
+    if asset.status not in INSPECTABLE_ASSET_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Asset is not available for inspection",
+                "current_status": asset.status.value,
+            },
+        )
+
     history = list_recovery_inspections(recovery.id, db)
     equipment_history = [
         item
@@ -112,11 +146,41 @@ def create_maintenance_inspection(
 
     inspection = MaintenanceInspection(
         equipment_recovery_id=recovery.id,
+        asset_id=asset.id,
         **inspection_data.model_dump(exclude={"equipment_name"}),
         equipment_name=canonical_equipment_name,
     )
+    if (
+        inspection.serial_number
+        and asset.serial_number
+        and inspection.serial_number != asset.serial_number
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Serial number does not match the inventory asset",
+        )
+    if (
+        inspection.mac_address
+        and asset.mac_address
+        and inspection.mac_address != asset.mac_address
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="MAC address does not match the inventory asset",
+        )
+    asset.serial_number = inspection.serial_number or asset.serial_number
+    asset.mac_address = inspection.mac_address or asset.mac_address
+    asset.model = inspection.model or asset.model
+    asset.status = INSPECTION_ASSET_STATUSES[inspection.result]
     db.add(inspection)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Serial number or MAC address belongs to another asset",
+        ) from error
     db.refresh(inspection)
     return inspection
 
@@ -146,10 +210,23 @@ def get_equipment_inspection_status(
     latest_by_equipment: dict[str, MaintenanceInspection] = {}
     for inspection in history:
         latest_by_equipment[inspection.equipment_name.casefold()] = inspection
+    assets_by_equipment = {
+        asset.recovery_equipment_name.casefold(): asset
+        for asset in db.scalars(
+            select(Asset).where(Asset.latest_recovery_id == recovery.id)
+        )
+        if asset.recovery_equipment_name is not None
+    }
 
     result: list[EquipmentInspectionStatus] = []
     for equipment_name in recovery.recovered_equipment or []:
         latest = latest_by_equipment.get(equipment_name.casefold())
+        asset = assets_by_equipment.get(equipment_name.casefold())
+        if asset is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Recovered equipment has no inventory asset",
+            )
         state = (
             InspectionState(latest.result.value)
             if latest is not None
@@ -158,6 +235,8 @@ def get_equipment_inspection_status(
         result.append(
             EquipmentInspectionStatus(
                 equipment_name=equipment_name,
+                asset_id=asset.id,
+                internal_code=asset.internal_code,
                 state=state,
                 reusable=state == InspectionState.ready_for_reuse,
                 latest_inspection_id=latest.id if latest else None,

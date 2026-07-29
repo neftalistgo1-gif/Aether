@@ -30,6 +30,7 @@ flowchart TD
     suspension["Suspension<br/>Suspensión administrativa"]
     cancellation["Cancellation<br/>Baja definitiva"]
     equipmentRecovery["EquipmentRecovery<br/>Recuperación de equipos"]
+    maintenanceInspection["MaintenanceInspection<br/>Revisión y liberación"]
 
     customer -->|"puede ser titular mediante"| serviceHolder
     serviceHolder -->|"pertenece a"| service
@@ -58,4 +59,6 @@ flowchart TD
     service -->|"puede terminar mediante"| cancellation
     cancellation -->|"inicia"| equipmentRecovery
     equipmentRecovery -->|"recupera"| assetAssignment
+    equipmentRecovery -->|"envía a cuarentena"| asset
+    asset -->|"se revisa mediante"| maintenanceInspection
 ```

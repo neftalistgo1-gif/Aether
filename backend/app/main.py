@@ -1,6 +1,7 @@
 
 from fastapi import FastAPI
 
+from app.api.v1.endpoints.assets import router as assets_router
 from app.api.v1.endpoints.customers import router as customers_router
 from app.api.v1.endpoints.equipment_recovery import (
     router as equipment_recovery_router,
@@ -23,6 +24,7 @@ app = FastAPI(
 app.include_router(health_router)
 app.include_router(customers_router)
 app.include_router(services_router)
+app.include_router(assets_router)
 app.include_router(service_operations_router)
 app.include_router(equipment_recovery_router)
 app.include_router(maintenance_inspections_router)

@@ -99,6 +99,22 @@ Sólo `ready_for_reuse` marca el equipo como reutilizable. Tanto ese resultado
 como `discarded` cierran las inspecciones posteriores para evitar cambios
 accidentales.
 
+### Inventario y asignaciones
+
+Cada equipo físico se registra como `Asset` con un código interno permanente
+`AST-…`. El inventario conserva tipo, descripción, marca, modelo, serie, MAC,
+propietario y estado operativo.
+
+Una recuperación genera activos en `quarantine`. Si el equipo ya estaba
+registrado, se usa su código `AST-…` para cerrar la asignación anterior sin
+crear un duplicado. La inspección actualiza el mismo activo a
+`needs_repair`, `defective`, `ready_for_reuse` o `discarded`.
+
+`AssetAssignment` conserva el historial de entregas y devoluciones. Solamente
+un servicio activo puede recibir equipos, y únicamente se pueden asignar
+activos AMR en estado `available` o `ready_for_reuse`. Un activo no puede
+tener dos asignaciones abiertas al mismo tiempo.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:

@@ -1,4 +1,3 @@
-import re
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Self
@@ -7,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.maintenance_inspection import InspectionResult
+from app.schemas.asset import normalize_mac_address
 
 
 class InspectionState(str, Enum):
@@ -62,15 +62,7 @@ class MaintenanceInspectionCreate(BaseModel):
     @field_validator("mac_address")
     @classmethod
     def normalize_mac_address(cls, value: str | None) -> str | None:
-        if value is None or not value.strip():
-            return None
-        compact = re.sub(r"[^0-9A-Fa-f]", "", value)
-        if len(compact) != 12:
-            raise ValueError("mac_address must contain 12 hexadecimal digits")
-        return ":".join(
-            compact[index : index + 2].upper()
-            for index in range(0, 12, 2)
-        )
+        return normalize_mac_address(value)
 
     @field_validator("repairs_performed", "evidence_references")
     @classmethod
@@ -104,6 +96,7 @@ class MaintenanceInspectionRead(BaseModel):
 
     id: UUID
     equipment_recovery_id: UUID
+    asset_id: UUID
     equipment_name: str
     technician: str
     inspected_at: datetime
@@ -122,6 +115,8 @@ class MaintenanceInspectionRead(BaseModel):
 
 
 class EquipmentInspectionStatus(BaseModel):
+    asset_id: UUID
+    internal_code: str
     equipment_name: str
     state: InspectionState
     reusable: bool

@@ -6,6 +6,7 @@ from sqlalchemy import DateTime, Enum as SqlEnum, ForeignKey, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.asset import Asset
 from app.models.equipment_recovery import EquipmentRecovery
 
 
@@ -27,6 +28,11 @@ class MaintenanceInspection(Base):
     equipment_recovery_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("equipment_recoveries.id", ondelete="CASCADE"),
+        index=True,
+    )
+    asset_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("assets.id", ondelete="RESTRICT"),
         index=True,
     )
     equipment_name: Mapped[str] = mapped_column(String(150), index=True)
@@ -65,3 +71,4 @@ class MaintenanceInspection(Base):
     )
 
     equipment_recovery: Mapped[EquipmentRecovery] = relationship()
+    asset: Mapped[Asset] = relationship()

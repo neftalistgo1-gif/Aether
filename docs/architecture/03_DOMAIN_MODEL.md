@@ -218,8 +218,8 @@ Representa un equipo o material propiedad de Servicios AMR.
 
 - Disponible.
 - Asignado.
-- Recuperado.
-- En mantenimiento.
+- En cuarentena.
+- Requiere reparación.
 - Listo para reutilizarse.
 - Defectuoso.
 - Desechado.
@@ -232,6 +232,10 @@ Representa un equipo o material propiedad de Servicios AMR.
 - Los equipos vendidos al cliente no deben recuperarse.
 - Una antena, módem, PoE o tubo pueden reasignarse a otro servicio.
 - El código AMR### no debe ser el identificador permanente del equipo.
+- Cada equipo debe tener un código interno `AST-…` que permanezca durante
+  todas sus asignaciones.
+- Un equipo recuperado debe permanecer en cuarentena hasta aprobar su
+  inspección.
 
 ---
 
@@ -256,6 +260,9 @@ Representa la asignación de un equipo a un servicio.
 - Debe conservarse todo el historial de asignaciones.
 - La recuperación debe registrar quién entregó y quién recibió.
 - Los equipos no recuperados deben permanecer como pendientes.
+- Sólo los equipos disponibles o listos para reutilizarse pueden asignarse.
+- Al recuperar un equipo registrado debe usarse su código `AST-…` para evitar
+  crear un activo duplicado.
 
 ---
 

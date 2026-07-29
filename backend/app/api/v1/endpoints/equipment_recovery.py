@@ -1,13 +1,21 @@
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints.services import find_service_or_404
 from app.db.session import get_db
+from app.models.asset import (
+    Asset,
+    AssetAssignment,
+    AssetOwner,
+    AssetReturnOutcome,
+    AssetStatus,
+    AssetType,
+)
 from app.models.equipment_recovery import EquipmentRecovery
 from app.models.service_operations import (
     Cancellation,
@@ -27,6 +35,108 @@ FINAL_RECOVERY_STATUSES = {
     EquipmentRecoveryStatus.complete,
     EquipmentRecoveryStatus.unrecoverable,
 }
+
+
+def infer_asset_type(equipment_name: str) -> AssetType:
+    normalized = equipment_name.casefold()
+    if "antena" in normalized:
+        return AssetType.antenna
+    if "modem" in normalized or "módem" in normalized or "router" in normalized:
+        return AssetType.router_modem
+    if normalized == "poe" or "poe" in normalized:
+        return AssetType.poe
+    if "fuente" in normalized:
+        return AssetType.power_supply
+    if "tubo" in normalized or "mástil" in normalized or "mastil" in normalized:
+        return AssetType.mast
+    if "ethernet" in normalized or "cable" in normalized:
+        return AssetType.ethernet_cable
+    return AssetType.other
+
+
+def find_asset_by_internal_code(
+    equipment_name: str,
+    db: Session,
+) -> Asset | None:
+    return db.scalar(
+        select(Asset).where(
+            func.lower(Asset.internal_code) == equipment_name.casefold()
+        )
+    )
+
+
+def close_active_assignment(
+    asset: Asset,
+    service_id: UUID,
+    performed_by: str,
+    condition_notes: str,
+    outcome: AssetReturnOutcome,
+    db: Session,
+) -> AssetAssignment:
+    assignment = db.scalar(
+        select(AssetAssignment).where(
+            AssetAssignment.asset_id == asset.id,
+            AssetAssignment.service_id == service_id,
+            AssetAssignment.returned_at.is_(None),
+        )
+    )
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Asset {asset.internal_code} is not actively assigned "
+                "to this service"
+            ),
+        )
+    assignment.returned_at = datetime.now(UTC)
+    assignment.returned_by = performed_by
+    assignment.condition_on_return = condition_notes
+    assignment.return_outcome = outcome
+    return assignment
+
+
+def synchronize_recovery_inventory(
+    service_id: UUID,
+    recovery: EquipmentRecovery,
+    completion: EquipmentRecoveryComplete,
+    db: Session,
+) -> None:
+    for equipment_name in completion.recovered_equipment:
+        asset = find_asset_by_internal_code(equipment_name, db)
+        if asset is None:
+            asset = Asset(
+                internal_code=f"AST-{uuid4().hex[:12].upper()}",
+                asset_type=infer_asset_type(equipment_name),
+                description=equipment_name,
+                owner=AssetOwner.amr,
+            )
+            db.add(asset)
+        else:
+            close_active_assignment(
+                asset,
+                service_id,
+                completion.performed_by,
+                completion.condition_notes,
+                AssetReturnOutcome.recovered,
+                db,
+            )
+        asset.latest_recovery_id = recovery.id
+        asset.recovery_equipment_name = equipment_name
+        asset.status = AssetStatus.quarantine
+
+    for equipment_name in completion.missing_equipment:
+        asset = find_asset_by_internal_code(equipment_name, db)
+        if asset is None:
+            continue
+        close_active_assignment(
+            asset,
+            service_id,
+            completion.performed_by,
+            completion.condition_notes,
+            AssetReturnOutcome.not_recovered,
+            db,
+        )
+        asset.status = AssetStatus.not_recovered
 
 
 def find_cancellation_or_404(
@@ -174,6 +284,12 @@ def complete_equipment_recovery(
     recovery.receipt_reference = completion.receipt_reference
     recovery.notes = completion.notes
     cancellation.equipment_recovery_status = recovery_status
+    synchronize_recovery_inventory(
+        service_id,
+        recovery,
+        completion,
+        db,
+    )
 
     db.commit()
     db.refresh(recovery)
