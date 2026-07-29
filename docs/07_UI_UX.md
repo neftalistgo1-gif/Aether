@@ -91,6 +91,12 @@ correspondiente. El diálogo explica que no es una suspensión comercial, usa un
 clave de idempotencia nueva y fuerza `dry_run`. No existe en esta etapa un
 botón de ejecución real.
 
+Cada servicio ofrece registro de comunicaciones a `notifications.write`.
+Propósito, canal, resultado, destinatario, hora y resumen se conservan como
+datos operativos. Las entregas digitales requieren evidencia o referencia del
+proveedor; los intentos fallidos requieren explicación. La ubicación de la
+evidencia permanece privada.
+
 ## Implementación
 
 La superficie actual usa HTML, CSS y JavaScript modular sin dependencias. Se

@@ -106,6 +106,13 @@ class FrontendShellTestCase(unittest.TestCase):
             "MikroTik y el estado comercial no cambiaron",
             script,
         )
+        self.assertIn('hasCapability("notifications.write")', script)
+        self.assertIn('api("/api/v1/notifications"', script)
+        self.assertIn("evidence_reference: evidenceReference", script)
+        self.assertIn(
+            "La entrega quedó registrada y auditada",
+            script,
+        )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

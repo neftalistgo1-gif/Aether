@@ -77,6 +77,12 @@ de suspensión o reactivación para servicios activos o suspendidos. Siempre
 envía `dry_run: true`: valida asignación IP y router, genera un comando
 idempotente y auditado, pero no modifica MikroTik ni el estado comercial.
 
+Las cuentas con `notifications.write` registran desde cada servicio entregas o
+intentos fallidos por WhatsApp, SMS, correo, llamada o aviso presencial. Una
+entrega digital exige referencia del proveedor o evidencia privada; un intento
+fallido exige un motivo no vacío. Los avisos entregados de suspensión pueden
+usarse posteriormente en el flujo comercial coordinado.
+
 ## Primer administrador y acceso
 
 Todas las rutas de negocio requieren autenticación. Para preparar una

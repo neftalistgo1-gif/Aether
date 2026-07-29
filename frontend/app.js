@@ -159,7 +159,8 @@ function renderUser() {
     (column) => {
       column.hidden = !(
         hasCapability("installations.write") ||
-        hasCapability("network.control")
+        hasCapability("network.control") ||
+        hasCapability("notifications.write")
       );
     }
   );
@@ -392,7 +393,12 @@ function renderServices() {
   }
   const canScheduleInstallation = hasCapability("installations.write");
   const canControlNetwork = hasCapability("network.control");
-  const canShowActions = canScheduleInstallation || canControlNetwork;
+  const canWriteNotifications = hasCapability("notifications.write");
+  const canShowActions = (
+    canScheduleInstallation ||
+    canControlNetwork ||
+    canWriteNotifications
+  );
   body.innerHTML = state.services
     .map((service) => `
       <tr>
@@ -418,6 +424,13 @@ function renderServices() {
                 type="button"
                 data-service-id="${service.id}"
               >Simular ${service.status === "active" ? "suspensión" : "reactivación"}</button>
+            ` : ""}
+            ${canWriteNotifications ? `
+              <button
+                class="row-action record-notification"
+                type="button"
+                data-service-id="${service.id}"
+              >Registrar aviso</button>
             ` : ""}
           </td>
         ` : ""}
@@ -846,6 +859,111 @@ async function runNetworkSimulation(event) {
       command.status === "simulated"
         ? "La simulación fue correcta; MikroTik y el estado comercial no cambiaron."
         : `La simulación terminó con estado ${command.status}.`
+    );
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+function updateNotificationResultFields() {
+  const failed = $("#notification-status").value === "failed";
+  $("#notification-failure-field").hidden = !failed;
+  $("#notification-failure-reason").required = failed;
+  $("#notification-evidence-field").hidden = failed;
+  if (failed) $("#notification-evidence-reference").value = "";
+}
+
+function openNotificationDialog(service) {
+  state.selectedServiceId = service.id;
+  const customer = state.customers?.find(
+    (item) => item.id === service.current_customer_id
+  );
+  $("#notification-dialog-title").textContent =
+    `Registrar aviso · ${service.amr_code}`;
+  $("#notification-purpose").value = "suspension_warning";
+  $("#notification-channel").value = "whatsapp";
+  $("#notification-status").value = "delivered";
+  $("#notification-recipient").value =
+    customer?.phones?.[0] || customer?.email || "";
+  $("#notification-occurred-at").value = localDateTimeValue();
+  $("#notification-provider-reference").value = "";
+  $("#notification-summary").value =
+    "Aviso previo de suspensión por adeudo";
+  $("#notification-evidence-reference").value = "";
+  $("#notification-failure-reason").value = "";
+  $("#notification-form-error").textContent = "";
+  updateNotificationResultFields();
+  $("#notification-dialog").showModal();
+  $("#notification-recipient").focus();
+}
+
+function closeNotificationDialog() {
+  $("#notification-dialog").close();
+  state.selectedServiceId = null;
+}
+
+async function saveNotification(event) {
+  event.preventDefault();
+  const service = state.services?.find(
+    (item) => item.id === state.selectedServiceId
+  );
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const errorBox = $("#notification-form-error");
+  if (!service) return;
+  const channel = $("#notification-channel").value;
+  const status = $("#notification-status").value;
+  const providerReference =
+    $("#notification-provider-reference").value.trim() || null;
+  const evidenceReference =
+    $("#notification-evidence-reference").value.trim() || null;
+  const digital = ["whatsapp", "sms", "email"].includes(channel);
+  if (
+    status === "delivered" &&
+    digital &&
+    !providerReference &&
+    !evidenceReference
+  ) {
+    errorBox.textContent =
+      "Una entrega digital necesita referencia del proveedor o evidencia.";
+    return;
+  }
+  const occurredAt = new Date($("#notification-occurred-at").value);
+  if (Number.isNaN(occurredAt.getTime())) {
+    errorBox.textContent = "Indica una fecha y hora válidas.";
+    return;
+  }
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const saved = await api("/api/v1/notifications", {
+      method: "POST",
+      body: JSON.stringify({
+        customer_id: service.current_customer_id,
+        service_id: service.id,
+        channel,
+        purpose: $("#notification-purpose").value,
+        status,
+        recipient: $("#notification-recipient").value.trim(),
+        message_summary: $("#notification-summary").value.trim(),
+        provider_reference: providerReference,
+        evidence_reference: evidenceReference,
+        failure_reason:
+          status === "failed"
+            ? $("#notification-failure-reason").value.trim()
+            : null,
+        occurred_at: occurredAt.toISOString(),
+        recorded_by: state.user.display_name,
+      }),
+    });
+    closeNotificationDialog();
+    setNotice(
+      saved.status === "delivered"
+        ? "La entrega quedó registrada y auditada."
+        : "El intento fallido quedó registrado con su motivo."
     );
   } catch (error) {
     errorBox.textContent = error.message;
@@ -1626,12 +1744,16 @@ $("#cancel-service-dialog").addEventListener("click", closeServiceDialog);
 $("#services-body").addEventListener("click", (event) => {
   const button = event.target.closest(".assess-installation");
   const networkButton = event.target.closest(".simulate-network-control");
-  if (!button && !networkButton) return;
+  const notificationButton = event.target.closest(".record-notification");
+  if (!button && !networkButton && !notificationButton) return;
   const service = state.services?.find(
-    (item) => item.id === (button || networkButton).dataset.serviceId
+    (item) =>
+      item.id ===
+      (button || networkButton || notificationButton).dataset.serviceId
   );
   if (!service) return;
   if (networkButton) openNetworkSimulationDialog(service);
+  else if (notificationButton) openNotificationDialog(service);
   else openInstallationDialog(service);
 });
 $("#installation-coverage-result").addEventListener(
@@ -1690,6 +1812,19 @@ $("#close-network-simulation-dialog").addEventListener(
 $("#cancel-network-simulation").addEventListener(
   "click",
   closeNetworkSimulationDialog
+);
+$("#notification-status").addEventListener(
+  "change",
+  updateNotificationResultFields
+);
+$("#notification-form").addEventListener("submit", saveNotification);
+$("#close-notification-dialog").addEventListener(
+  "click",
+  closeNotificationDialog
+);
+$("#cancel-notification-dialog").addEventListener(
+  "click",
+  closeNotificationDialog
 );
 $("#new-payment-button").addEventListener("click", openPaymentDialog);
 $("#payment-customer").addEventListener("change", updatePaymentServices);

@@ -122,6 +122,9 @@ class NotificationTestCase(unittest.TestCase):
         values["evidence_reference"] = None
         with self.assertRaises(ValidationError):
             NotificationCreate(**values)
+        values["failure_reason"] = ""
+        with self.assertRaises(ValidationError):
+            NotificationCreate(**values)
 
 
 if __name__ == "__main__":

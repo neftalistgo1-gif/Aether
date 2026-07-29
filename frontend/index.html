@@ -1051,6 +1051,104 @@
       </form>
     </dialog>
 
+    <dialog
+      id="notification-dialog"
+      aria-labelledby="notification-dialog-title"
+    >
+      <form id="notification-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">COMUNICACIÓN VERIFICABLE</p>
+            <h2 id="notification-dialog-title">Registrar notificación</h2>
+          </div>
+          <button
+            id="close-notification-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Propósito
+            <select id="notification-purpose" required>
+              <option value="suspension_warning">Aviso de suspensión</option>
+              <option value="payment_reminder">Recordatorio de pago</option>
+              <option value="service_update">Actualización de servicio</option>
+              <option value="general">General</option>
+            </select>
+          </label>
+          <label>
+            Canal
+            <select id="notification-channel" required>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="sms">SMS</option>
+              <option value="email">Correo</option>
+              <option value="phone">Llamada</option>
+              <option value="in_person">En persona</option>
+            </select>
+          </label>
+          <label>
+            Resultado
+            <select id="notification-status" required>
+              <option value="delivered">Entregada</option>
+              <option value="failed">Fallida</option>
+            </select>
+          </label>
+          <label>
+            Destinatario
+            <input id="notification-recipient" minlength="3" maxlength="254" required>
+          </label>
+          <label>
+            Fecha y hora
+            <input id="notification-occurred-at" type="datetime-local" required>
+          </label>
+          <label>
+            Referencia del proveedor
+            <input id="notification-provider-reference" maxlength="250">
+          </label>
+          <label class="full-row">
+            Resumen del mensaje
+            <textarea
+              id="notification-summary"
+              rows="3"
+              minlength="3"
+              maxlength="500"
+              required
+            ></textarea>
+          </label>
+          <label id="notification-evidence-field" class="full-row">
+            Referencia privada de evidencia
+            <input id="notification-evidence-reference" maxlength="500">
+          </label>
+          <label id="notification-failure-field" class="full-row" hidden>
+            Motivo de la falla
+            <textarea
+              id="notification-failure-reason"
+              rows="3"
+              minlength="3"
+              maxlength="1000"
+            ></textarea>
+          </label>
+        </div>
+        <p class="form-help">
+          Una entrega digital exige referencia del proveedor o evidencia
+          privada. La evidencia nunca se expone en las respuestas públicas.
+        </p>
+        <p id="notification-form-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-notification-dialog"
+            class="text-button"
+            type="button"
+          >Volver</button>
+          <button class="primary-button" type="submit">
+            Registrar resultado
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="plan-price-dialog" aria-labelledby="plan-price-dialog-title">
       <form id="plan-price-form">
         <div class="dialog-heading">

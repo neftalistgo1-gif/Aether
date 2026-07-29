@@ -23,7 +23,11 @@ class NotificationCreate(BaseModel):
     message_summary: str = Field(min_length=3, max_length=500)
     provider_reference: str | None = Field(default=None, max_length=250)
     evidence_reference: str | None = Field(default=None, max_length=500)
-    failure_reason: str | None = Field(default=None, max_length=1000)
+    failure_reason: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=1000,
+    )
     occurred_at: datetime
     recorded_by: str = Field(min_length=2, max_length=150)
 
