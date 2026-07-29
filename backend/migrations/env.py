@@ -8,6 +8,7 @@ from app.db.base import Base
 from app.models.asset import Asset, AssetAssignment
 from app.models.audit import AuditEvent
 from app.models.charge import Charge
+from app.models.contract import Contract, ContractAmendment
 from app.models.customer import Customer
 from app.models.equipment_recovery import EquipmentRecovery
 from app.models.extension import Extension

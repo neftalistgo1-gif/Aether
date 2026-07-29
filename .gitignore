@@ -18,3 +18,7 @@ __pycache__/
 node_modules/
 dist/
 build/
+
+# Documentos privados y datos personales: nunca se versionan.
+/private_storage/
+/backend/private_storage/

@@ -128,6 +128,13 @@ Representa el acuerdo formal entre Servicios AMR y el suscriptor.
   contrato o servicio.
 - El contrato original con datos personales no debe almacenarse en un
   repositorio público o de código.
+- Sólo puede existir un contrato activo por Service.
+- Un contrato activo debe terminarse antes de transferir la titularidad.
+- Los cambios de domicilio y plan conservan anexos digitales sin reemplazar
+  el documento original ni su fecha inicial.
+- La API general no expone la referencia privada del archivo.
+- La evidencia digital conserva una huella SHA-256; la carga o descarga del
+  archivo requiere una futura capa de almacenamiento y autorización.
 
 ---
 

@@ -11,6 +11,7 @@ from app.api.v1.endpoints.plans import find_plan_or_404
 from app.api.v1.endpoints.services import find_service_or_404
 from app.db.session import get_db
 from app.models.charge import Charge, ChargeType
+from app.models.contract import ContractAmendmentType
 from app.models.plan import PlanStatus
 from app.models.service import (
     ServiceEvent,
@@ -23,6 +24,7 @@ from app.schemas.service_plan_change import (
     ServicePlanChangeRead,
 )
 from app.services.audit import record_audit_event
+from app.services.contracts import amend_active_contract
 
 router = APIRouter(prefix="/api/v1/services", tags=["service plan changes"])
 
@@ -137,6 +139,24 @@ def change_service_plan(
 
     try:
         db.flush()
+        amend_active_contract(
+            service=service,
+            amendment_type=ContractAmendmentType.plan_change,
+            before_data={
+                "plan_name": previous_plan_name,
+                "monthly_price": str(previous_price),
+            },
+            after_data={
+                "plan_name": plan.name,
+                "monthly_price": str(new_price),
+                "billing_effective_period": effective_period.isoformat(),
+            },
+            evidence_reference=f"service_plan_change:{change.id}",
+            amended_by=data.applied_by,
+            reason=data.reason,
+            effective_date=data.requested_on,
+            db=db,
+        )
         service.events.append(
             ServiceEvent(
                 event_type=ServiceEventType.details_updated,

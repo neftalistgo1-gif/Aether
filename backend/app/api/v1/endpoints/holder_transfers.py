@@ -23,6 +23,7 @@ from app.schemas.holder_transfer import (
     ServiceHolderRead,
 )
 from app.services.audit import record_audit_event
+from app.services.contracts import active_contract_for_service
 
 router = APIRouter(prefix="/api/v1/services", tags=["holder transfers"])
 
@@ -78,6 +79,11 @@ def transfer_service_holder(
         raise HTTPException(
             status_code=409,
             detail="Holder transfers must take effect today",
+        )
+    if active_contract_for_service(service.id, db, for_update=True) is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Terminate the active contract before changing holder",
         )
     new_customer = db.get(Customer, data.new_customer_id)
     if new_customer is None:

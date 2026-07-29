@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from app.api.v1.endpoints.audit import router as audit_router
 from app.api.v1.endpoints.assets import router as assets_router
 from app.api.v1.endpoints.charges import router as charges_router
+from app.api.v1.endpoints.contracts import router as contracts_router
 from app.api.v1.endpoints.customers import router as customers_router
 from app.api.v1.endpoints.equipment_recovery import (
     router as equipment_recovery_router,
@@ -47,6 +48,7 @@ app.include_router(incidents_router)
 app.include_router(installations_router)
 app.include_router(holder_transfers_router)
 app.include_router(customers_router)
+app.include_router(contracts_router)
 app.include_router(services_router)
 app.include_router(assets_router)
 app.include_router(charges_router)

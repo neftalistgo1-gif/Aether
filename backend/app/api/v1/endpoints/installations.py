@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.v1.endpoints.services import find_service_or_404
 from app.db.session import get_db
 from app.models.charge import Charge, ChargeStatus, ChargeType
+from app.models.contract import ContractAmendmentType
 from app.models.installation import (
     CoverageResult,
     Installation,
@@ -30,6 +31,7 @@ from app.schemas.installation import (
     InstallationReschedule,
 )
 from app.services.audit import record_audit_event
+from app.services.contracts import amend_active_contract
 
 router = APIRouter(prefix="/api/v1/services", tags=["installations"])
 
@@ -301,6 +303,17 @@ def complete_installation(
         )
     elif installation.installation_type == InstallationType.address_change:
         service.address = installation.new_address
+        amend_active_contract(
+            service=service,
+            amendment_type=ContractAmendmentType.address_change,
+            before_data={"address": previous_address},
+            after_data={"address": service.address},
+            evidence_reference=f"installation:{installation.id}",
+            amended_by=data.performed_by,
+            reason="Address change installation completed",
+            effective_date=data.completed_at.date(),
+            db=db,
+        )
         service.events.append(
             ServiceEvent(
                 event_type=ServiceEventType.details_updated,

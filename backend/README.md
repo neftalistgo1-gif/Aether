@@ -288,6 +288,20 @@ permanece con la persona responsable cuando se generó. El día efectivo de la
 transferencia ya pertenece al nuevo titular, por lo que los cargos creados
 desde ese día quedan a su nombre.
 
+### Contratos y anexos
+
+`Contract` conserva folio, titular, servicio, versión, fechas, estado y un
+snapshot de domicilio, plan, precio y día de pago. Puede pasar de borrador a
+activo, terminar con un folio propio o anularse mientras siga siendo borrador.
+Sólo puede existir un contrato activo por servicio y debe terminarse antes de
+un cambio de titular.
+
+Los cambios de domicilio y plan agregan `ContractAmendment` al contrato activo
+en la misma transacción del cambio real. El archivo firmado sigue fuera del
+repositorio: Aether almacena únicamente una referencia privada y, para
+evidencia digital, su huella SHA-256. Las respuestas públicas no exponen esa
+referencia y todavía no ofrecen carga, descarga o eliminación de documentos.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:
