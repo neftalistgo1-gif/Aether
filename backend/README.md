@@ -145,6 +145,20 @@ El saldo conserva deuda total, deuda vencida y número de cargos abiertos. Un
 cargo registrado por error se cancela con responsable y motivo; permanece en
 el historial y deja de sumar al saldo.
 
+### Recepción y verificación de pagos
+
+`Payment` registra el monto declarado, fecha, método, referencia, comprobante,
+titular de la cuenta de origen y persona que lo recibió. Todo pago inicia en
+`pending`: recibir un comprobante no confirma que el dinero haya ingresado.
+
+Una persona responsable puede verificar el monto realmente recibido, rechazar
+el comprobante o cancelar un registro pendiente. Si el monto confirmado es
+distinto al declarado, la explicación es obligatoria. Cada transición conserva
+responsable, motivo y fecha en `PaymentStatusEvent`.
+
+Los pagos verificados todavía no modifican cargos directamente; su aplicación
+a deuda y saldo a favor pertenece al siguiente módulo.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:

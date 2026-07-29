@@ -14,6 +14,7 @@ from app.api.v1.endpoints.maintenance_inspections import (
 from app.api.v1.endpoints.network_assignments import (
     router as network_assignments_router,
 )
+from app.api.v1.endpoints.payments import router as payments_router
 from app.api.v1.endpoints.service_operations import (
     router as service_operations_router,
 )
@@ -30,6 +31,7 @@ app.include_router(customers_router)
 app.include_router(services_router)
 app.include_router(assets_router)
 app.include_router(charges_router)
+app.include_router(payments_router)
 app.include_router(network_assignments_router)
 app.include_router(service_operations_router)
 app.include_router(equipment_recovery_router)

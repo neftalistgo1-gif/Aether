@@ -369,6 +369,10 @@ Representa dinero declarado o recibido por Servicios AMR.
 ## Reglas
 
 - Un comprobante no equivale automáticamente a dinero confirmado.
+- Todo Payment inicia pendiente de verificación.
+- Si el importe confirmado difiere del declarado, debe conservarse una
+  explicación.
+- Rechazado y cancelado son estados terminales.
 - Un Payment verificado puede aplicarse a uno o varios cargos.
 - Un pago puede ser parcial.
 - Un pago puede generar saldo a favor.
