@@ -20,6 +20,11 @@ from app.models.mikrotik import (
     NetworkControlAction,
     NetworkControlCommand,
 )
+from app.models.notification import (
+    CustomerNotification,
+    NotificationPurpose,
+    NotificationStatus,
+)
 from app.models.service import (
     Service,
     ServiceEvent,
@@ -80,7 +85,7 @@ def prepare_suspension(
     service_id: UUID,
     suspension_data: SuspensionCreate,
     db: Session,
-) -> tuple[Service, list[Charge]]:
+) -> tuple[Service, list[Charge], CustomerNotification]:
     service = find_service_or_404(service_id, db)
     if service.status != ServiceStatus.active:
         raise HTTPException(
@@ -116,10 +121,46 @@ def prepare_suspension(
             status_code=status.HTTP_409_CONFLICT,
             detail="A service with an active extension cannot be suspended",
         )
-    if not suspension_data.notification_sent:
+    notification = db.get(
+        CustomerNotification,
+        suspension_data.notification_id,
+    )
+    if notification is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Prior notification is required before suspension",
+            detail="Suspension notification was not found",
+        )
+    if (
+        notification.service_id != service.id
+        or notification.customer_id != service.current_customer_id
+        or notification.purpose != NotificationPurpose.suspension_warning
+        or notification.status != NotificationStatus.delivered
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "A delivered suspension warning for the current holder "
+                "and service is required"
+            ),
+        )
+    notification_time = notification.occurred_at
+    if notification_time.tzinfo is None:
+        notification_time = notification_time.replace(tzinfo=UTC)
+    if notification_time > datetime.now(UTC):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Suspension notification cannot be in the future",
+        )
+    used_notification = db.scalar(
+        select(Suspension).where(
+            Suspension.notification_id == notification.id,
+            Suspension.mikrotik_result.in_(SUCCESSFUL_NETWORK_RESULTS),
+        )
+    )
+    if used_notification is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Suspension notification was already used",
         )
 
     open_charges = list(
@@ -160,7 +201,7 @@ def prepare_suspension(
             status_code=status.HTTP_409_CONFLICT,
             detail="No monthly charge has completed its grace period",
         )
-    return service, open_charges
+    return service, open_charges, notification
 
 
 def record_suspension(
@@ -169,14 +210,20 @@ def record_suspension(
     db: Session,
     network_command_id: UUID | None = None,
 ) -> Suspension:
-    service, open_charges = prepare_suspension(
+    service, open_charges, notification = prepare_suspension(
         service_id,
         suspension_data,
         db,
     )
+    notification_time = notification.occurred_at
+    if notification_time.tzinfo is None:
+        notification_time = notification_time.replace(tzinfo=UTC)
     suspension = Suspension(
         service_id=service.id,
         network_command_id=network_command_id,
+        notification_id=suspension_data.notification_id,
+        notification_sent=True,
+        notification_sent_at=notification_time,
         debt_snapshot=[
             {
                 "charge_id": str(charge.id),
@@ -186,7 +233,7 @@ def record_suspension(
             }
             for charge in open_charges
         ],
-        **suspension_data.model_dump(),
+        **suspension_data.model_dump(exclude={"notification_id"}),
     )
     db.add(suspension)
     db.flush()
@@ -318,8 +365,7 @@ def coordinate_suspension(
         grace_period_elapsed=suspension_data.grace_period_elapsed,
         extension_checked=suspension_data.extension_checked,
         has_active_extension=suspension_data.has_active_extension,
-        notification_sent=suspension_data.notification_sent,
-        notification_sent_at=suspension_data.notification_sent_at,
+        notification_id=suspension_data.notification_id,
         performed_by=suspension_data.performed_by,
         mikrotik_result=NetworkOperationResult.success,
         mikrotik_details=None,

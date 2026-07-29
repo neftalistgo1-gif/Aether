@@ -104,6 +104,12 @@ def capability_for_operation(
             if is_read
             else Capability.operations_run
         )
+    if route_path.startswith("/api/v1/notifications"):
+        return (
+            Capability.notifications_read
+            if is_read
+            else Capability.notifications_write
+        )
     if "/network-control/" in route_path:
         return (
             Capability.network_read

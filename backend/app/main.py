@@ -28,6 +28,7 @@ from app.api.v1.endpoints.mikrotik import router as mikrotik_router
 from app.api.v1.endpoints.network_assignments import (
     router as network_assignments_router,
 )
+from app.api.v1.endpoints.notifications import router as notifications_router
 from app.api.v1.endpoints.payments import router as payments_router
 from app.api.v1.endpoints.plans import router as plans_router
 from app.api.v1.endpoints.payment_allocations import (
@@ -52,6 +53,7 @@ protected = [Depends(require_authorized_user)]
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(daily_operations_router, dependencies=protected)
+app.include_router(notifications_router, dependencies=protected)
 app.include_router(audit_router, dependencies=protected)
 app.include_router(incidents_router, dependencies=protected)
 app.include_router(installations_router, dependencies=protected)

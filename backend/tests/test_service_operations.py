@@ -24,6 +24,12 @@ from app.api.v1.endpoints.services import (
 )
 from app.db.base import Base
 from app.models.customer import Customer
+from app.models.notification import (
+    CustomerNotification,
+    NotificationChannel,
+    NotificationPurpose,
+    NotificationStatus,
+)
 from app.models.charge import Charge, ChargeStatus, ChargeType
 from app.models.service import ServiceStatus
 from app.models.service_operations import (
@@ -87,6 +93,19 @@ class ServiceOperationsTestCase(unittest.TestCase):
                 generated_by="Proceso mensual",
             )
         )
+        self.notification = CustomerNotification(
+            customer_id=self.customer.id,
+            service_id=self.service.id,
+            channel=NotificationChannel.whatsapp,
+            purpose=NotificationPurpose.suspension_warning,
+            status=NotificationStatus.delivered,
+            recipient=self.customer.phones[0],
+            message_summary="Aviso previo de suspensión por adeudo",
+            evidence_reference="private/notifications/amr301-warning",
+            occurred_at=datetime.now(UTC),
+            recorded_by="Atención a clientes",
+        )
+        self.db.add(self.notification)
         self.db.commit()
 
     def tearDown(self) -> None:
@@ -105,8 +124,7 @@ class ServiceOperationsTestCase(unittest.TestCase):
             grace_period_elapsed=True,
             extension_checked=True,
             has_active_extension=False,
-            notification_sent=True,
-            notification_sent_at=datetime.now(UTC),
+            notification_id=self.notification.id,
             performed_by="Técnico de red",
             mikrotik_result=result,
             mikrotik_details="Operación de prueba",
@@ -200,6 +218,34 @@ class ServiceOperationsTestCase(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 409)
         self.assertEqual(context.exception.detail["actual_debt"], "500.00")
+
+    def test_suspension_requires_a_delivered_notification(self) -> None:
+        self.notification.status = NotificationStatus.failed
+        self.notification.failure_reason = "No se pudo entregar"
+        self.db.commit()
+        with self.assertRaises(HTTPException) as context:
+            suspend_service(
+                self.service.id,
+                self.suspension_payload(),
+                self.db,
+            )
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_successful_notification_cannot_be_reused(self) -> None:
+        suspend_service(
+            self.service.id,
+            self.suspension_payload(),
+            self.db,
+        )
+        self.service.status = ServiceStatus.active
+        self.db.commit()
+        with self.assertRaises(HTTPException) as context:
+            suspend_service(
+                self.service.id,
+                self.suspension_payload(),
+                self.db,
+            )
+        self.assertEqual(context.exception.status_code, 409)
 
     def test_suspend_and_reactivate_with_retry(self) -> None:
         suspend_service(

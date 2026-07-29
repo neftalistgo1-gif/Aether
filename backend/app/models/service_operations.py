@@ -58,6 +58,12 @@ class Suspension(Base):
         unique=True,
         nullable=True,
     )
+    notification_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("customer_notifications.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     scheduled_for: Mapped[date] = mapped_column(Date)
     executed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -32,6 +32,12 @@ from app.models.mikrotik import (
     NetworkControlAction,
 )
 from app.models.network_assignment import NetworkAssignment
+from app.models.notification import (
+    CustomerNotification,
+    NotificationChannel,
+    NotificationPurpose,
+    NotificationStatus,
+)
 from app.models.service import ServiceStatus
 from app.schemas.mikrotik import (
     MikrotikRouterCreate,
@@ -103,6 +109,19 @@ class MikroTikControlTestCase(unittest.TestCase):
                 generated_by="Proceso mensual",
             )
         )
+        self.notification = CustomerNotification(
+            customer_id=customer.id,
+            service_id=self.service.id,
+            channel=NotificationChannel.whatsapp,
+            purpose=NotificationPurpose.suspension_warning,
+            status=NotificationStatus.delivered,
+            recipient=customer.phones[0],
+            message_summary="Aviso previo de suspensión por adeudo",
+            provider_reference="wa-message-amr901",
+            occurred_at=datetime.now(UTC),
+            recorded_by="Atención a clientes",
+        )
+        self.db.add(self.notification)
         self.db.commit()
         self.router = create_router(
             MikrotikRouterCreate(
@@ -335,8 +354,7 @@ class MikroTikControlTestCase(unittest.TestCase):
             grace_period_elapsed=True,
             extension_checked=True,
             has_active_extension=False,
-            notification_sent=True,
-            notification_sent_at=datetime.now(UTC),
+            notification_id=self.notification.id,
             performed_by="Tecnico de red",
             idempotency_key=key,
             dry_run=dry_run,

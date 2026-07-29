@@ -1,6 +1,7 @@
 import unittest
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import create_engine
@@ -116,8 +117,7 @@ class ExtensionTestCase(unittest.TestCase):
                     grace_period_elapsed=True,
                     extension_checked=True,
                     has_active_extension=False,
-                    notification_sent=True,
-                    notification_sent_at=datetime.now(UTC),
+                    notification_id=uuid4(),
                     performed_by="Tecnico de red",
                     mikrotik_result=NetworkOperationResult.manual,
                 ),

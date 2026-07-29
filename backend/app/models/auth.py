@@ -48,6 +48,8 @@ class Capability(str, Enum):
     audit_read = "audit.read"
     operations_read = "operations.read"
     operations_run = "operations.run"
+    notifications_read = "notifications.read"
+    notifications_write = "notifications.write"
 
 
 class OperatorUser(Base):

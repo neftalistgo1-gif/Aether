@@ -65,7 +65,8 @@ el campo `permissions`. Puede sustituirla posteriormente con
 Las capacidades separan lectura y escritura por área, además de reservar
 decisiones sensibles como `billing.approve`, `incidents.compensate` y
 `network.control`. Los procesos diarios usan `operations.read` y
-`operations.run`. El administrador tiene acceso total. Los demás usuarios
+`operations.run`; el historial de comunicación usa `notifications.read` y
+`notifications.write`. El administrador tiene acceso total. Los demás usuarios
 sólo pueden ejecutar lo que figure expresamente en su cuenta; una ruta nueva
 sin política queda denegada hasta que se clasifique.
 
@@ -74,6 +75,7 @@ sin política queda denegada hasta que se clasifique.
 - `Authentication`: bootstrap, login, logout, usuarios y permisos operativos.
 - `Daily operations`: simulación y ejecución idempotente de mensualidades y
   vencimientos.
+- `Notifications`: historial multicanal de entregas e intentos fallidos.
 - `Customers`: crear, listar, buscar, consultar y actualizar personas.
 - `Services`: crear, listar, buscar, consultar y actualizar conexiones.
 
@@ -106,8 +108,17 @@ suspendido. Un servicio cancelado es un estado terminal.
 ### Operación administrativa
 
 La suspensión exige confirmar que terminó el periodo de tolerancia, que se
-revisaron las prórrogas, que no existe una prórroga vigente y que se notificó
-al cliente. Conserva la deuda, responsable y resultado de MikroTik.
+revisaron las prórrogas y que no existe una prórroga vigente. También requiere
+el `notification_id` de un aviso de suspensión entregado al titular actual y
+vinculado al mismo servicio. Conserva la deuda, responsable, notificación y
+resultado de MikroTik; un aviso usado por una suspensión exitosa no puede
+reutilizarse.
+
+`POST /api/v1/notifications` registra WhatsApp, SMS, correo, llamada o aviso
+presencial. Las entregas digitales necesitan referencia del proveedor o
+evidencia privada. La API sólo indica si existe evidencia y nunca publica su
+ruta interna. Este módulo registra comunicaciones; todavía no envía mensajes
+por medio de un proveedor externo.
 
 La reactivación conserva autorización, responsable, deuda y resultado de red.
 Los intentos fallidos quedan registrados y pueden reintentarse.

@@ -51,3 +51,4 @@ def prevent_audit_mutation(*_args) -> None:
 
 from app.models.auth import AuthSession, OperatorUser, UserPermission
 from app.models.daily_operation import DailyOperationRun
+from app.models.notification import CustomerNotification

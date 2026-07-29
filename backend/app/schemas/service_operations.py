@@ -20,8 +20,7 @@ class SuspensionCreate(BaseModel):
     grace_period_elapsed: bool
     extension_checked: bool
     has_active_extension: bool
-    notification_sent: bool
-    notification_sent_at: datetime | None = None
+    notification_id: UUID
     performed_by: str = Field(min_length=2, max_length=150)
     mikrotik_result: NetworkOperationResult
     mikrotik_details: str | None = Field(default=None, max_length=1000)
@@ -32,10 +31,6 @@ class SuspensionCreate(BaseModel):
             raise ValueError(
                 "scheduled_for cannot be in the future when executing suspension"
             )
-        if self.notification_sent and self.notification_sent_at is None:
-            raise ValueError(
-                "notification_sent_at is required when notification was sent"
-            )
         return self
 
 
@@ -45,6 +40,9 @@ class SuspensionRead(SuspensionCreate):
     id: UUID
     service_id: UUID
     network_command_id: UUID | None
+    notification_id: UUID | None = None
+    notification_sent: bool
+    notification_sent_at: datetime | None
     executed_at: datetime
     debt_snapshot: list[dict[str, object]]
 
@@ -56,8 +54,7 @@ class CoordinatedSuspensionCreate(BaseModel):
     grace_period_elapsed: bool
     extension_checked: bool
     has_active_extension: bool
-    notification_sent: bool
-    notification_sent_at: datetime | None = None
+    notification_id: UUID
     performed_by: str = Field(min_length=2, max_length=150)
     idempotency_key: str = Field(min_length=8, max_length=100)
     dry_run: bool = True
@@ -67,10 +64,6 @@ class CoordinatedSuspensionCreate(BaseModel):
         if self.scheduled_for > date.today():
             raise ValueError(
                 "scheduled_for cannot be in the future when executing suspension"
-            )
-        if self.notification_sent and self.notification_sent_at is None:
-            raise ValueError(
-                "notification_sent_at is required when notification was sent"
             )
         return self
 

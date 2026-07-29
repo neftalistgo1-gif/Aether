@@ -20,6 +20,7 @@ from app.models.installation import Installation, InstallationScheduleChange
 from app.models.maintenance_inspection import MaintenanceInspection
 from app.models.mikrotik import MikrotikRouter, NetworkControlCommand
 from app.models.network_assignment import NetworkAssignment
+from app.models.notification import CustomerNotification
 from app.models.payment import Payment, PaymentStatusEvent
 from app.models.payment_allocation import CreditMovement, PaymentAllocation
 from app.models.plan import Plan, PlanPrice
