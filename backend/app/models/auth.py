@@ -46,6 +46,8 @@ class Capability(str, Enum):
     plans_read = "plans.read"
     plans_write = "plans.write"
     audit_read = "audit.read"
+    operations_read = "operations.read"
+    operations_run = "operations.run"
 
 
 class OperatorUser(Base):

@@ -49,4 +49,5 @@ def prevent_audit_mutation(*_args) -> None:
     raise ValueError("Audit events are immutable")
 
 
-from app.models.auth import AuthSession, OperatorUser
+from app.models.auth import AuthSession, OperatorUser, UserPermission
+from app.models.daily_operation import DailyOperationRun

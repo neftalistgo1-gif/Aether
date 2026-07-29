@@ -8,6 +8,9 @@ from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.charges import router as charges_router
 from app.api.v1.endpoints.contracts import router as contracts_router
 from app.api.v1.endpoints.customers import router as customers_router
+from app.api.v1.endpoints.daily_operations import (
+    router as daily_operations_router,
+)
 from app.api.v1.endpoints.equipment_recovery import (
     router as equipment_recovery_router,
 )
@@ -48,6 +51,7 @@ protected = [Depends(require_authorized_user)]
 
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(daily_operations_router, dependencies=protected)
 app.include_router(audit_router, dependencies=protected)
 app.include_router(incidents_router, dependencies=protected)
 app.include_router(installations_router, dependencies=protected)

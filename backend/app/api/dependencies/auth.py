@@ -98,6 +98,12 @@ def capability_for_operation(
 
     if route_path.startswith("/api/v1/audit-events"):
         return Capability.audit_read if is_read else None
+    if route_path.startswith("/api/v1/operations"):
+        return (
+            Capability.operations_read
+            if is_read
+            else Capability.operations_run
+        )
     if "/network-control/" in route_path:
         return (
             Capability.network_read

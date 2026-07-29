@@ -64,19 +64,34 @@ el campo `permissions`. Puede sustituirla posteriormente con
 
 Las capacidades separan lectura y escritura por área, además de reservar
 decisiones sensibles como `billing.approve`, `incidents.compensate` y
-`network.control`. El administrador tiene acceso total. Los demás usuarios
+`network.control`. Los procesos diarios usan `operations.read` y
+`operations.run`. El administrador tiene acceso total. Los demás usuarios
 sólo pueden ejecutar lo que figure expresamente en su cuenta; una ruta nueva
 sin política queda denegada hasta que se clasifique.
 
 ## Módulos disponibles
 
 - `Authentication`: bootstrap, login, logout, usuarios y permisos operativos.
+- `Daily operations`: simulación y ejecución idempotente de mensualidades y
+  vencimientos.
 - `Customers`: crear, listar, buscar, consultar y actualizar personas.
 - `Services`: crear, listar, buscar, consultar y actualizar conexiones.
 
 Cada Service conserva su precio mensual acordado y se relaciona con su
 titular mediante `ServiceHolder`, evitando que el código `AMR###` se use como
 identificador permanente de una persona.
+
+### Proceso diario
+
+`POST /api/v1/operations/daily` usa simulación de manera predeterminada. Para
+una ejecución real debe enviarse `dry_run: false`; Aether genera únicamente las
+mensualidades del mes correspondiente cuya fecha de pago ya llegó y marca las
+prórrogas prometidas que vencieron. Una fecha futura se rechaza.
+
+Cada fecha efectiva se ejecuta una sola vez. Repetirla devuelve el resultado
+guardado y no duplica cargos. `GET /api/v1/operations/daily` muestra el
+historial. Todavía no se conecta un programador externo: primero se valida este
+nuevo núcleo y después podrá llamarlo una tarea programada.
 
 Los cambios comerciales y de estado generan eventos auditables. El ciclo de
 vida permitido es:
