@@ -17,6 +17,7 @@ from app.schemas.payment import (
     PaymentStatusEventRead,
     PaymentVerify,
 )
+from app.services.audit import record_audit_event
 
 router = APIRouter(prefix="/api/v1/payments", tags=["payments"])
 
@@ -109,6 +110,22 @@ def create_payment(
         )
     )
     db.add(payment)
+    db.flush()
+    record_audit_event(
+        db,
+        actor=payment_data.received_by,
+        action="payment.received",
+        entity_type="Payment",
+        entity_id=payment.id,
+        reason="Payment received pending verification",
+        after_data={
+            "customer_id": payment.customer_id,
+            "service_id": payment.service_id,
+            "declared_amount": payment.declared_amount,
+            "status": payment.status,
+            "method": payment.method,
+        },
+    )
     db.commit()
     db.refresh(payment)
     return find_payment_or_404(payment.id, db)
@@ -169,6 +186,11 @@ def verify_payment(
 ) -> Payment:
     payment = find_payment_or_404(payment_id, db)
     ensure_pending(payment)
+    before_data = {
+        "status": payment.status,
+        "declared_amount": payment.declared_amount,
+        "confirmed_amount": payment.confirmed_amount,
+    }
     if (
         verification.confirmed_amount != payment.declared_amount
         and not verification.notes
@@ -190,6 +212,20 @@ def verify_payment(
         verification.verified_by,
         verification.notes or "Payment amount verified",
     )
+    record_audit_event(
+        db,
+        actor=verification.verified_by,
+        action="payment.verified",
+        entity_type="Payment",
+        entity_id=payment.id,
+        reason=verification.notes or "Payment amount verified",
+        before_data=before_data,
+        after_data={
+            "status": payment.status,
+            "declared_amount": payment.declared_amount,
+            "confirmed_amount": payment.confirmed_amount,
+        },
+    )
     db.commit()
     db.refresh(payment)
     return find_payment_or_404(payment.id, db)
@@ -203,11 +239,22 @@ def decide_pending_payment(
 ) -> Payment:
     payment = find_payment_or_404(payment_id, db)
     ensure_pending(payment)
+    previous_status = payment.status
     add_status_event(
         payment,
         target_status,
         decision.performed_by,
         decision.reason,
+    )
+    record_audit_event(
+        db,
+        actor=decision.performed_by,
+        action=f"payment.{target_status.value}",
+        entity_type="Payment",
+        entity_id=payment.id,
+        reason=decision.reason,
+        before_data={"status": previous_status},
+        after_data={"status": payment.status},
     )
     db.commit()
     db.refresh(payment)

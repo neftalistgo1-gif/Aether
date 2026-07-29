@@ -28,8 +28,33 @@ from app.schemas.mikrotik import (
     NetworkControlRetry,
     credentials_configured,
 )
+from app.services.audit import record_audit_event
 
 router = APIRouter(prefix="/api/v1", tags=["mikrotik"])
+
+
+def audit_network_command(
+    command: NetworkControlCommand,
+    db: Session,
+) -> None:
+    record_audit_event(
+        db,
+        actor=command.requested_by,
+        action=f"network.command.{command.status.value}",
+        entity_type="NetworkControlCommand",
+        entity_id=command.id,
+        reason=command.error_message or command.action.value,
+        after_data={
+            "service_id": command.service_id,
+            "router_id": command.router_id,
+            "target_ip": command.target_ip,
+            "desired_blocked": command.desired_blocked,
+            "dry_run": command.dry_run,
+            "status": command.status,
+            "attempt": command.attempts,
+            "verified_at": command.verified_at,
+        },
+    )
 
 
 def router_read(item: MikrotikRouter) -> MikrotikRouterRead:
@@ -117,6 +142,7 @@ def execute_command(
         command.verified_at = None
         command.error_message = None
         command.result_details = {"verified": False, "mode": "dry_run"}
+        audit_network_command(command, db)
         db.commit()
         db.refresh(command)
         return command
@@ -126,6 +152,7 @@ def execute_command(
         command.verified_at = None
         command.result_details = {"verified": False}
         command.error_message = "Router integration is disabled"
+        audit_network_command(command, db)
         db.commit()
         db.refresh(command)
         return command
@@ -150,6 +177,7 @@ def execute_command(
         command.verified_at = None
         command.result_details = {"verified": False}
         command.error_message = str(exc)
+    audit_network_command(command, db)
     db.commit()
     db.refresh(command)
     return command

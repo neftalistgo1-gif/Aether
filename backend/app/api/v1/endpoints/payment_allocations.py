@@ -26,6 +26,7 @@ from app.schemas.payment_allocation import (
     PaymentApply,
 )
 from app.services.billing import customer_credit_balance
+from app.services.audit import record_audit_event
 
 router = APIRouter(prefix="/api/v1", tags=["payment allocations"])
 
@@ -152,6 +153,23 @@ def apply_payment(
     payment.applied_at = datetime.now(UTC)
     payment.applied_by = application.applied_by
     payment.application_notes = application.reason
+    record_audit_event(
+        db,
+        actor=application.applied_by,
+        action="payment.applied",
+        entity_type="Payment",
+        entity_id=payment.id,
+        reason=application.reason or "Applied to oldest open charges",
+        before_data={
+            "applied_at": None,
+            "confirmed_amount": payment.confirmed_amount,
+        },
+        after_data={
+            "allocation_count": len(allocations),
+            "allocated_amount": payment.confirmed_amount - credit_generated,
+            "credit_generated": credit_generated,
+        },
+    )
     db.commit()
     for allocation in allocations:
         db.refresh(allocation)
@@ -301,6 +319,21 @@ def refund_credit(
         reason=refund.reason,
     )
     db.add(movement)
+    db.flush()
+    record_audit_event(
+        db,
+        actor=refund.performed_by,
+        action="credit.refunded",
+        entity_type="CreditMovement",
+        entity_id=movement.id,
+        reason=refund.reason,
+        before_data={"available_credit": balance},
+        after_data={
+            "customer_id": customer_id,
+            "service_id": refund.service_id,
+            "amount": movement.amount,
+        },
+    )
     db.commit()
     db.refresh(movement)
     return movement

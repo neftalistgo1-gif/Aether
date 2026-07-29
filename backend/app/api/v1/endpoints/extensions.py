@@ -13,6 +13,7 @@ from app.models.charge import Charge, ChargeStatus
 from app.models.extension import Extension, ExtensionStatus
 from app.models.service import ServiceStatus
 from app.schemas.extension import ExtensionCreate, ExtensionRead, ExtensionResolve
+from app.services.audit import record_audit_event
 
 router = APIRouter(prefix="/api/v1/services", tags=["payment extensions"])
 
@@ -30,9 +31,20 @@ def find_active_extension(
     )
     comparison_date = on_date or date.today()
     if extension is not None and extension.promised_date < comparison_date:
+        previous_status = extension.status
         extension.status = ExtensionStatus.expired
         extension.resolved_at = datetime.now(UTC)
         extension.resolution_reason = "Promised payment date elapsed"
+        record_audit_event(
+            db,
+            actor="system",
+            action="extension.expired",
+            entity_type="Extension",
+            entity_id=extension.id,
+            reason=extension.resolution_reason,
+            before_data={"status": previous_status},
+            after_data={"status": extension.status},
+        )
         return None
     return extension
 
@@ -68,6 +80,21 @@ def create_extension(
     )
     db.add(extension)
     try:
+        db.flush()
+        record_audit_event(
+            db,
+            actor=extension_data.authorized_by,
+            action="extension.created",
+            entity_type="Extension",
+            entity_id=extension.id,
+            reason=extension_data.reason,
+            after_data={
+                "service_id": service.id,
+                "original_due_date": extension.original_due_date,
+                "promised_date": extension.promised_date,
+                "status": extension.status,
+            },
+        )
         db.commit()
     except IntegrityError as error:
         db.rollback()
@@ -97,10 +124,21 @@ def resolve_extension(
         raise HTTPException(status_code=404, detail="Extension not found")
     if extension.status != ExtensionStatus.active:
         raise HTTPException(status_code=409, detail="Only an active extension can be resolved")
+    previous_status = extension.status
     extension.status = target
     extension.resolved_at = datetime.now(UTC)
     extension.resolved_by = resolution.performed_by
     extension.resolution_reason = resolution.reason
+    record_audit_event(
+        db,
+        actor=resolution.performed_by,
+        action=f"extension.{target.value}",
+        entity_type="Extension",
+        entity_id=extension.id,
+        reason=resolution.reason,
+        before_data={"status": previous_status},
+        after_data={"status": extension.status},
+    )
     db.commit()
     db.refresh(extension)
     return extension

@@ -25,6 +25,7 @@ from app.schemas.incident import (
     IncidentResolve,
     IncidentServiceImpactRead,
 )
+from app.services.audit import record_audit_event
 
 router = APIRouter(prefix="/api/v1/incidents", tags=["incidents"])
 
@@ -298,6 +299,22 @@ def compensate_incident_impact(
     db.flush()
     impact.compensation_amount = compensation.amount
     impact.compensation_movement_id = movement.id
+    record_audit_event(
+        db,
+        actor=compensation.authorized_by,
+        action="credit.incident_compensation",
+        entity_type="CreditMovement",
+        entity_id=movement.id,
+        reason=compensation.reason,
+        before_data={"compensation_amount": "0.00"},
+        after_data={
+            "incident_id": incident.id,
+            "impact_id": impact.id,
+            "customer_id": impact.customer_id,
+            "service_id": impact.service_id,
+            "compensation_amount": compensation.amount,
+        },
+    )
     db.commit()
     db.refresh(impact)
     db.refresh(movement)

@@ -21,6 +21,7 @@ from app.schemas.charge import (
     ServiceBalanceRead,
 )
 from app.services.billing import apply_credit_to_charge
+from app.services.audit import record_audit_event
 
 router = APIRouter(prefix="/api/v1", tags=["charges"])
 
@@ -278,11 +279,28 @@ def cancel_charge(
             status_code=status.HTTP_409_CONFLICT,
             detail="A charge with payment allocations cannot be cancelled",
         )
+    before_data = {
+        "status": charge.status,
+        "outstanding_balance": charge.outstanding_balance,
+    }
     charge.status = ChargeStatus.cancelled
     charge.outstanding_balance = Decimal("0.00")
     charge.cancelled_at = datetime.now(UTC)
     charge.cancelled_by = cancellation.cancelled_by
     charge.cancellation_reason = cancellation.reason
+    record_audit_event(
+        db,
+        actor=cancellation.cancelled_by,
+        action="balance.charge_cancelled",
+        entity_type="Charge",
+        entity_id=charge.id,
+        reason=cancellation.reason,
+        before_data=before_data,
+        after_data={
+            "status": charge.status,
+            "outstanding_balance": charge.outstanding_balance,
+        },
+    )
     db.commit()
     db.refresh(charge)
     return charge

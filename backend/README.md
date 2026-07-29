@@ -225,6 +225,17 @@ Una vez resuelto, una persona autorizada puede otorgar una sola bonificación
 por servicio afectado. La bonificación genera un `CreditMovement` positivo,
 queda vinculada al incidente y se incorpora al saldo a favor del titular.
 
+### Auditoría transversal
+
+`AuditEvent` permite consultar acciones críticas por actor, acción y entidad.
+Registra el motivo y snapshots mínimos anteriores y posteriores dentro de la
+misma transacción del cambio real.
+
+Los eventos confirmados son inmutables: la API sólo permite consultarlos y
+PostgreSQL bloquea actualizaciones o eliminaciones. Contraseñas, secretos,
+tokens, credenciales y contenido de archivos se excluyen o redactan
+automáticamente.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:

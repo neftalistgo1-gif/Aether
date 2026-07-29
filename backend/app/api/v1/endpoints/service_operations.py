@@ -48,6 +48,7 @@ from app.schemas.service_operations import (
     SuspensionRead,
 )
 from app.schemas.mikrotik import NetworkControlRequest
+from app.services.audit import record_audit_event
 
 router = APIRouter(prefix="/api/v1/services", tags=["service operations"])
 
@@ -190,8 +191,8 @@ def record_suspension(
     db.add(suspension)
     db.flush()
 
+    previous_status = service.status
     if suspension.mikrotik_result in SUCCESSFUL_NETWORK_RESULTS:
-        previous_status = service.status
         service.status = ServiceStatus.suspended
         add_status_event(
             service,
@@ -200,6 +201,23 @@ def record_suspension(
             suspension.reason,
             suspension.id,
         )
+    record_audit_event(
+        db,
+        actor=suspension.performed_by,
+        action="service.suspension",
+        entity_type="Suspension",
+        entity_id=suspension.id,
+        reason=suspension.reason,
+        before_data={
+            "service_status": previous_status,
+            "debt_amount": suspension.debt_amount,
+        },
+        after_data={
+            "service_status": service.status,
+            "network_result": suspension.mikrotik_result,
+            "network_command_id": network_command_id,
+        },
+    )
 
     db.commit()
     db.refresh(suspension)
@@ -411,8 +429,8 @@ def record_reactivation(
     db.add(reactivation)
     db.flush()
 
+    previous_status = service.status
     if reactivation.mikrotik_result in SUCCESSFUL_NETWORK_RESULTS:
-        previous_status = service.status
         service.status = ServiceStatus.active
         add_status_event(
             service,
@@ -421,6 +439,24 @@ def record_reactivation(
             reactivation.reason,
             reactivation.id,
         )
+    record_audit_event(
+        db,
+        actor=reactivation.performed_by,
+        action="service.reactivation",
+        entity_type="Reactivation",
+        entity_id=reactivation.id,
+        reason=reactivation.reason,
+        before_data={
+            "service_status": previous_status,
+            "debt_amount": reactivation.debt_amount,
+        },
+        after_data={
+            "service_status": service.status,
+            "network_result": reactivation.mikrotik_result,
+            "network_command_id": network_command_id,
+            "authorized_by": reactivation.authorized_by,
+        },
+    )
 
     db.commit()
     db.refresh(reactivation)
@@ -557,6 +593,19 @@ def execute_cancellation(
         cancellation.reason,
         cancellation.id,
     )
+    record_audit_event(
+        db,
+        actor=performed_by,
+        action="service.cancellation.executed",
+        entity_type="Cancellation",
+        entity_id=cancellation.id,
+        reason=cancellation.reason,
+        before_data={"service_status": previous_status},
+        after_data={
+            "service_status": service.status,
+            "effective_date": cancellation.effective_date,
+        },
+    )
 
 
 @router.post(
@@ -589,6 +638,21 @@ def create_cancellation(
     )
     db.add(cancellation)
     db.flush()
+    record_audit_event(
+        db,
+        actor=cancellation.registered_by,
+        action="service.cancellation.requested",
+        entity_type="Cancellation",
+        entity_id=cancellation.id,
+        reason=cancellation.reason,
+        after_data={
+            "service_id": service.id,
+            "effective_date": cancellation.effective_date,
+            "status": cancellation.status,
+            "pending_balance": cancellation.pending_balance,
+            "credit_balance": cancellation.credit_balance,
+        },
+    )
 
     if cancellation.effective_date <= date.today():
         execute_cancellation(

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import HTTPException
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -18,6 +18,7 @@ from app.api.v1.endpoints.payments import (
 from app.api.v1.endpoints.services import create_service
 from app.db.base import Base
 from app.models.customer import Customer
+from app.models.audit import AuditEvent
 from app.models.payment import PaymentMethod, PaymentStatus
 from app.schemas.payment import (
     PaymentCreate,
@@ -90,6 +91,14 @@ class PaymentTestCase(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertIsNone(events[0].from_status)
         self.assertEqual(events[0].to_status, PaymentStatus.pending)
+        audit = self.db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.entity_id == str(payment.id),
+                AuditEvent.action == "payment.received",
+            )
+        )
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit.actor, "Atencion a clientes")
 
     def test_verify_payment_confirms_amount_and_records_event(self) -> None:
         payment = create_payment(self.payment_data(), self.db)
@@ -106,6 +115,17 @@ class PaymentTestCase(unittest.TestCase):
         self.assertEqual(verified.confirmed_amount, Decimal("500.00"))
         self.assertIsNotNone(verified.verified_at)
         self.assertEqual(len(list_payment_events(payment.id, self.db)), 2)
+        actions = set(
+            self.db.scalars(
+                select(AuditEvent.action).where(
+                    AuditEvent.entity_id == str(payment.id)
+                )
+            )
+        )
+        self.assertEqual(
+            actions,
+            {"payment.received", "payment.verified"},
+        )
 
     def test_amount_difference_requires_verification_notes(self) -> None:
         payment = create_payment(self.payment_data(), self.db)
