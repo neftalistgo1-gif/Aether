@@ -308,6 +308,20 @@ sólo indican si existe. En la UI, `billing.read` consulta el historial,
 `billing.write` registra una prórroga y `billing.approve` permite marcarla como
 cumplida o cancelada.
 
+### Convenios de pago
+
+`PaymentAgreement` registra convenios flexibles sin exigir montos, fechas ni
+parcialidades que no fueron acordados. Requiere deuda abierta, términos
+conocidos y la persona que autorizó. Cuando se proporciona un monto, no puede
+superar el saldo calculado por Aether; una fecha prometida no puede estar en el
+pasado.
+
+Cada convenio conserva folio, titular actual, servicio, datos opcionales,
+estado y resolución. La evidencia es opcional y su referencia permanece
+privada. `billing.write` crea convenios; cumplirlos o cancelarlos requiere
+`billing.approve`. La UI se incorporará después de validar esta primera
+migración en PostgreSQL.
+
 La suspensión también calcula la deuda directamente desde los cargos abiertos,
 exige al menos una mensualidad cuyo periodo de tolerancia haya terminado y
 guarda una fotografía de los cargos usados para tomar la decisión. Un monto

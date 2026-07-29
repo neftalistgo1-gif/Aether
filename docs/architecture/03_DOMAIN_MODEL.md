@@ -486,7 +486,38 @@ Representa una prórroga de pago autorizada.
 
 ---
 
-# 15. Suspension
+# 15. PaymentAgreement
+
+Representa un convenio flexible para resolver deuda sin inventar condiciones
+que no fueron acordadas.
+
+## Información principal
+
+- Customer titular al momento del registro.
+- Service.
+- Folio.
+- Términos conocidos.
+- Monto prometido opcional.
+- Fecha prometida opcional.
+- Número de parcialidades opcional.
+- Persona que autorizó.
+- Evidencia opcional.
+- Estado y resolución.
+
+## Reglas
+
+- Requiere deuda abierta.
+- Sólo los términos y la persona autorizante son obligatorios.
+- Los campos opcionales se conservan como ausentes cuando no fueron acordados.
+- Un monto prometido no puede superar la deuda calculada por Aether.
+- Una fecha prometida, cuando existe, no puede estar en el pasado.
+- La evidencia permanece privada.
+- Cumplido y cancelado son estados terminales.
+- La resolución y su responsable deben conservarse.
+
+---
+
+# 16. Suspension
 
 Representa una suspensión administrativa por falta de pago.
 
@@ -516,7 +547,7 @@ Representa una suspensión administrativa por falta de pago.
 
 ---
 
-# 16. Cancellation
+# 17. Cancellation
 
 Representa la solicitud y ejecución de la baja definitiva.
 
@@ -544,7 +575,7 @@ Representa la solicitud y ejecución de la baja definitiva.
 
 ---
 
-# 17. EquipmentRecovery
+# 18. EquipmentRecovery
 
 Representa el proceso de recuperación de equipos después de una baja.
 
@@ -570,7 +601,7 @@ Representa el proceso de recuperación de equipos después de una baja.
 
 ---
 
-# 18. MaintenanceInspection
+# 19. MaintenanceInspection
 
 Representa la revisión de un equipo recuperado.
 
@@ -608,7 +639,7 @@ Representa la revisión de un equipo recuperado.
 
 ---
 
-# 19. Incident
+# 20. Incident
 
 Representa una interrupción o degradación técnica del servicio.
 
@@ -631,7 +662,7 @@ Representa una interrupción o degradación técnica del servicio.
 
 ---
 
-# 20. AuditEvent
+# 21. AuditEvent
 
 Representa una acción importante realizada dentro de Aether.
 

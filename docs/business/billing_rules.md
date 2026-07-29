@@ -173,6 +173,12 @@ definidas.
 Aether deberá permitir registrar convenios flexibles sin obligar a
 inventar información que no fue acordada.
 
+En Aether, los términos conocidos y la persona que autoriza son obligatorios.
+El monto prometido, la fecha, el número de parcialidades, las notas y la
+evidencia son opcionales. Un dato ausente debe conservarse como ausente, no
+estimarse. El convenio requiere deuda abierta y conserva un folio y su
+resolución.
+
 ## 11. Suspensión
 
 Un servicio puede suspenderse cuando:

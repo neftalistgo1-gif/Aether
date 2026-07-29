@@ -421,6 +421,24 @@ class AuthenticationTestCase(unittest.TestCase):
                     Capability.billing_approve,
                 )
 
+    def test_payment_agreements_follow_billing_capabilities(self) -> None:
+        base = "/api/v1/services/{service_id}/payment-agreements"
+        self.assertEqual(
+            capability_for_operation("GET", base),
+            Capability.billing_read,
+        )
+        self.assertEqual(
+            capability_for_operation("POST", base),
+            Capability.billing_write,
+        )
+        for action in ("fulfill", "cancel"):
+            path = f"{base}/{{agreement_id}}/{action}"
+            with self.subTest(path=path):
+                self.assertEqual(
+                    capability_for_operation("POST", path),
+                    Capability.billing_approve,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

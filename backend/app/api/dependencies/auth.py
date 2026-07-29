@@ -170,6 +170,7 @@ def capability_for_operation(
         or "/balance" in route_path
         or "/credit-" in route_path
         or "/extensions" in route_path
+        or "/payment-agreements" in route_path
     ):
         if (
             not is_read
@@ -180,7 +181,10 @@ def capability_for_operation(
                 or route_path.endswith("/apply")
                 or route_path.endswith("/credit-refunds")
                 or (
-                    "/extensions/" in route_path
+                    (
+                        "/extensions/" in route_path
+                        or "/payment-agreements/" in route_path
+                    )
                     and route_path.endswith("/fulfill")
                 )
             )
