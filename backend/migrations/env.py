@@ -9,6 +9,7 @@ from app.models.asset import Asset, AssetAssignment
 from app.models.customer import Customer
 from app.models.equipment_recovery import EquipmentRecovery
 from app.models.maintenance_inspection import MaintenanceInspection
+from app.models.network_assignment import NetworkAssignment
 from app.models.service import Service, ServiceEvent, ServiceHolder
 from app.models.service_operations import Cancellation, Reactivation, Suspension
 

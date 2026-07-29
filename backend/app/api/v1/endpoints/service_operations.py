@@ -7,6 +7,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints.services import find_service_or_404
+from app.api.v1.endpoints.network_assignments import (
+    close_current_network_assignment,
+)
 from app.db.session import get_db
 from app.models.service import (
     Service,
@@ -214,6 +217,7 @@ def execute_cancellation(
     service: Service,
     cancellation: Cancellation,
     performed_by: str,
+    db: Session,
 ) -> None:
     previous_status = service.status
     service.status = ServiceStatus.cancelled
@@ -221,6 +225,7 @@ def execute_cancellation(
     cancellation.status = CancellationStatus.executed
     cancellation.executed_by = performed_by
     cancellation.executed_at = datetime.now(UTC)
+    close_current_network_assignment(service.id, db)
     add_status_event(
         service,
         previous_status,
@@ -266,6 +271,7 @@ def create_cancellation(
             service,
             cancellation,
             cancellation.registered_by,
+            db,
         )
 
     try:
@@ -330,7 +336,12 @@ def execute_scheduled_cancellation(
             detail="The effective cancellation date has not arrived",
         )
 
-    execute_cancellation(service, cancellation, execution.performed_by)
+    execute_cancellation(
+        service,
+        cancellation,
+        execution.performed_by,
+        db,
+    )
     db.commit()
     db.refresh(cancellation)
     return cancellation

@@ -274,9 +274,11 @@ Representa la configuración técnica actual de un servicio.
 
 - Service.
 - IP fija.
+- Router MikroTik.
 - Torre.
 - AP.
 - Nombre configurado en la antena.
+- Frecuencia y señal observada.
 - Fecha de inicio.
 - Fecha de término.
 - Técnico responsable.
@@ -288,6 +290,10 @@ Representa la configuración técnica actual de un servicio.
   configuración anterior.
 - El historial puede conservarse aunque inicialmente solo se muestre
   la configuración actual.
+- Un servicio sólo puede tener una configuración de red vigente.
+- La combinación de router e IP debe ser única entre configuraciones vigentes.
+- La configuración no puede cambiar mientras el servicio esté suspendido.
+- La baja definitiva cierra la configuración vigente.
 
 ---
 

@@ -115,6 +115,21 @@ un servicio activo puede recibir equipos, y únicamente se pueden asignar
 activos AMR en estado `available` o `ready_for_reuse`. Un activo no puede
 tener dos asignaciones abiertas al mismo tiempo.
 
+### Configuración de red
+
+`NetworkAssignment` conserva la configuración técnica vigente de cada
+servicio: IP, router MikroTik, torre, AP, nombre de antena, frecuencia, señal
+y técnico responsable.
+
+Cada cambio cierra la configuración anterior y abre una nueva, manteniendo el
+historial. Un servicio sólo puede tener una configuración vigente y una misma
+combinación de router e IP no puede utilizarse simultáneamente en dos
+servicios.
+
+Para evitar inconsistencias con la lista de suspendidos, la configuración no
+puede cambiar mientras el servicio esté suspendido. Al ejecutar una baja
+definitiva se cierra automáticamente la asignación de red vigente.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:

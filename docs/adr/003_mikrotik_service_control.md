@@ -4,6 +4,9 @@
 
 Aceptado
 
+La asignación vigente de router e IP ya se conserva mediante
+`NetworkAssignment`. La conexión automática con MikroTik continúa pendiente.
+
 ## Fecha
 
 2026-07-28
