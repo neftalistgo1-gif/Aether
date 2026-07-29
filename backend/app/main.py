@@ -7,6 +7,7 @@ from app.api.v1.endpoints.customers import router as customers_router
 from app.api.v1.endpoints.equipment_recovery import (
     router as equipment_recovery_router,
 )
+from app.api.v1.endpoints.extensions import router as extensions_router
 from app.api.v1.endpoints.health import router as health_router
 from app.api.v1.endpoints.maintenance_inspections import (
     router as maintenance_inspections_router,
@@ -36,6 +37,7 @@ app.include_router(assets_router)
 app.include_router(charges_router)
 app.include_router(payments_router)
 app.include_router(payment_allocations_router)
+app.include_router(extensions_router)
 app.include_router(network_assignments_router)
 app.include_router(service_operations_router)
 app.include_router(equipment_recovery_router)

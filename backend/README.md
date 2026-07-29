@@ -170,6 +170,16 @@ nuevas mensualidades consumen automáticamente ese saldo mediante movimientos
 negativos, sin crear mensualidades futuras. Las devoluciones también quedan
 registradas y nunca pueden superar el saldo disponible.
 
+### Prórrogas de pago
+
+`Extension` registra la fecha original, nueva fecha prometida, motivo,
+autorización y evidencia escrita o digital. Requiere deuda abierta y sólo
+puede existir una prórroga activa por servicio.
+
+Una prórroga puede cumplirse, cancelarse o vencer. Antes de suspender, Aether
+consulta automáticamente sus registros y bloquea la operación si existe una
+prórroga vigente; la deuda no desaparece por concederla.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:

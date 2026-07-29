@@ -10,6 +10,7 @@ from app.api.v1.endpoints.services import find_service_or_404
 from app.api.v1.endpoints.network_assignments import (
     close_current_network_assignment,
 )
+from app.api.v1.endpoints.extensions import find_active_extension
 from app.db.session import get_db
 from app.models.service import (
     Service,
@@ -85,6 +86,20 @@ def suspend_service(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Active extensions must be checked before suspension",
+        )
+    active_extension = find_active_extension(
+        service_id,
+        db,
+        suspension_data.scheduled_for,
+    )
+    if active_extension is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "An active payment extension prevents suspension",
+                "extension_id": str(active_extension.id),
+                "promised_date": active_extension.promised_date.isoformat(),
+            },
         )
     if suspension_data.has_active_extension:
         raise HTTPException(

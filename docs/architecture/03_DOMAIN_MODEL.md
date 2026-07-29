@@ -458,6 +458,9 @@ Representa una prórroga de pago autorizada.
 
 - Una prórroga vigente puede impedir una suspensión.
 - La prórroga no elimina la deuda.
+- Sólo puede existir una prórroga vigente por Service.
+- Una prórroga requiere deuda abierta y una fecha prometida posterior.
+- Cumplida, vencida y cancelada son estados terminales.
 - La autorización y el motivo deben conservarse.
 - Los acuerdos verbales deben confirmarse por escrito o digitalmente.
 
