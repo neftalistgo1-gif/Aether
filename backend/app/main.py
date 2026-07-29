@@ -1,7 +1,7 @@
 
 from fastapi import Depends, FastAPI
 
-from app.api.dependencies.auth import require_authenticated_user
+from app.api.dependencies.auth import require_authorized_user
 from app.api.v1.endpoints.audit import router as audit_router
 from app.api.v1.endpoints.assets import router as assets_router
 from app.api.v1.endpoints.auth import router as auth_router
@@ -44,7 +44,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
-protected = [Depends(require_authenticated_user)]
+protected = [Depends(require_authorized_user)]
 
 app.include_router(health_router)
 app.include_router(auth_router)

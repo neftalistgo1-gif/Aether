@@ -55,9 +55,22 @@ posteriores se usa `POST /api/v1/auth/login`. Los tokens vencen después de
 `AUTH_SESSION_HOURS` y se almacenan únicamente como SHA-256; las contraseñas
 usan `scrypt` con una sal distinta por usuario.
 
+### Permisos operativos
+
+El rol describe el puesto, pero no concede acceso por sí solo. Al crear una
+cuenta, el administrador asigna una lista explícita de capacidades mediante
+el campo `permissions`. Puede sustituirla posteriormente con
+`PUT /api/v1/auth/users/{user_id}/permissions`, indicando el motivo.
+
+Las capacidades separan lectura y escritura por área, además de reservar
+decisiones sensibles como `billing.approve`, `incidents.compensate` y
+`network.control`. El administrador tiene acceso total. Los demás usuarios
+sólo pueden ejecutar lo que figure expresamente en su cuenta; una ruta nueva
+sin política queda denegada hasta que se clasifique.
+
 ## Módulos disponibles
 
-- `Authentication`: bootstrap, login, logout y usuarios operativos.
+- `Authentication`: bootstrap, login, logout, usuarios y permisos operativos.
 - `Customers`: crear, listar, buscar, consultar y actualizar personas.
 - `Services`: crear, listar, buscar, consultar y actualizar conexiones.
 

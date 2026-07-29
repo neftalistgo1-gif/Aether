@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.auth import UserRole
+from app.models.auth import Capability, UserRole
 
 
 class BootstrapAdminCreate(BaseModel):
@@ -42,6 +42,17 @@ class LoginRequest(BaseModel):
 
 class UserCreate(BootstrapAdminCreate):
     role: UserRole
+    permissions: list[Capability] = Field(default_factory=list)
+
+    @field_validator("permissions")
+    @classmethod
+    def unique_permissions(
+        cls,
+        value: list[Capability],
+    ) -> list[Capability]:
+        if len(value) != len(set(value)):
+            raise ValueError("Permissions must not be repeated")
+        return value
 
 
 class UserDeactivate(BaseModel):
@@ -53,6 +64,21 @@ class UserPasswordReset(BaseModel):
     reason: str = Field(min_length=3, max_length=1000)
 
 
+class UserPermissionReplace(BaseModel):
+    permissions: list[Capability] = Field(default_factory=list)
+    reason: str = Field(min_length=3, max_length=1000)
+
+    @field_validator("permissions")
+    @classmethod
+    def unique_permissions(
+        cls,
+        value: list[Capability],
+    ) -> list[Capability]:
+        if len(value) != len(set(value)):
+            raise ValueError("Permissions must not be repeated")
+        return value
+
+
 class OperatorUserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -60,6 +86,7 @@ class OperatorUserRead(BaseModel):
     username: str
     display_name: str
     role: UserRole
+    permissions: list[Capability]
     is_active: bool
     created_by_id: UUID | None
     created_at: datetime

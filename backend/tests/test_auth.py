@@ -10,8 +10,10 @@ from sqlalchemy.pool import StaticPool
 from starlette.requests import Request
 
 from app.api.dependencies.auth import (
+    capability_for_operation,
     require_administrator,
     require_authenticated_user,
+    require_authorized_user,
 )
 from app.api.v1.endpoints.auth import (
     bootstrap_administrator,
@@ -19,18 +21,20 @@ from app.api.v1.endpoints.auth import (
     deactivate_operator_user,
     login,
     logout,
+    replace_operator_permissions,
 )
 from app.api.v1.endpoints.plans import create_plan
 from app.core.security import hash_password, verify_password
 from app.db.base import Base
 from app.main import app
 from app.models.audit import AuditEvent
-from app.models.auth import AuthSession, OperatorUser
+from app.models.auth import AuthSession, Capability, OperatorUser, UserRole
 from app.schemas.auth import (
     BootstrapAdminCreate,
     LoginRequest,
     UserCreate,
     UserDeactivate,
+    UserPermissionReplace,
 )
 from app.schemas.plan import PlanCreate
 
@@ -47,6 +51,16 @@ def build_request() -> Request:
             "scheme": "http",
         }
     )
+
+
+def build_operation_request(method: str, route_path: str) -> Request:
+    class Route:
+        path = route_path
+
+    request = build_request()
+    request.scope["method"] = method
+    request.scope["route"] = Route()
+    return request
 
 
 class AuthenticationTestCase(unittest.TestCase):
@@ -280,6 +294,84 @@ class AuthenticationTestCase(unittest.TestCase):
             for method, operation in operations.items():
                 with self.subTest(path=path, method=method):
                     self.assertTrue(operation.get("security"))
+
+    def test_permissions_are_explicit_and_fail_closed(self) -> None:
+        admin_credentials = self.bootstrap()
+        dependency, _request, administrator = self.authenticate(
+            admin_credentials.access_token
+        )
+        try:
+            user = create_operator_user(
+                UserCreate(
+                    username="consulta",
+                    display_name="Consulta de clientes",
+                    password="Clave-Segura-Consulta-789",
+                    role=UserRole.read_only,
+                    permissions=[Capability.customers_read],
+                ),
+                administrator,
+                self.db,
+            )
+        finally:
+            dependency.close()
+
+        self.assertEqual(user.permissions, [Capability.customers_read])
+        allowed = require_authorized_user(
+            build_operation_request("GET", "/api/v1/customers"),
+            user,
+        )
+        self.assertEqual(allowed.id, user.id)
+        with self.assertRaises(HTTPException) as write_forbidden:
+            require_authorized_user(
+                build_operation_request("POST", "/api/v1/customers"),
+                user,
+            )
+        self.assertEqual(write_forbidden.exception.status_code, 403)
+        with self.assertRaises(HTTPException) as unknown_forbidden:
+            require_authorized_user(
+                build_operation_request("GET", "/api/v1/new-module"),
+                user,
+            )
+        self.assertEqual(unknown_forbidden.exception.status_code, 403)
+
+        replacement = replace_operator_permissions(
+            user.id,
+            UserPermissionReplace(
+                permissions=[Capability.services_read],
+                reason="Cambio de funciones para pruebas",
+            ),
+            administrator,
+            self.db,
+        )
+        self.assertEqual(replacement.permissions, [Capability.services_read])
+
+    def test_administrator_bypasses_capability_policy(self) -> None:
+        credentials = self.bootstrap()
+        dependency, _request, administrator = self.authenticate(
+            credentials.access_token
+        )
+        try:
+            allowed = require_authorized_user(
+                build_operation_request("DELETE", "/api/v1/new-module"),
+                administrator,
+            )
+        finally:
+            dependency.close()
+        self.assertEqual(allowed.id, administrator.id)
+
+    def test_every_business_operation_has_a_capability_policy(self) -> None:
+        for route in app.routes:
+            route_path = getattr(route, "path", "")
+            if not route_path.startswith("/api/v1/"):
+                continue
+            if route_path.startswith("/api/v1/auth"):
+                continue
+            methods = getattr(route, "methods", set())
+            for method in methods:
+                with self.subTest(path=route_path, method=method):
+                    self.assertIsNotNone(
+                        capability_for_operation(method, route_path)
+                    )
 
 
 if __name__ == "__main__":

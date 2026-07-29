@@ -18,7 +18,12 @@ from app.core.security import (
     verify_password,
 )
 from app.db.session import get_db
-from app.models.auth import AuthSession, OperatorUser, UserRole
+from app.models.auth import (
+    AuthSession,
+    OperatorUser,
+    UserPermission,
+    UserRole,
+)
 from app.schemas.auth import (
     BootstrapAdminCreate,
     LoginRequest,
@@ -27,6 +32,7 @@ from app.schemas.auth import (
     UserCreate,
     UserDeactivate,
     UserPasswordReset,
+    UserPermissionReplace,
 )
 from app.services.audit import record_audit_event
 
@@ -231,6 +237,16 @@ def create_operator_user(
     db.add(user)
     try:
         db.flush()
+        for capability in data.permissions:
+            db.add(
+                UserPermission(
+                    user_id=user.id,
+                    capability=capability,
+                    granted_by_id=administrator.id,
+                    reason="Permissions assigned when account was created",
+                )
+            )
+        db.flush()
         record_audit_event(
             db,
             actor=administrator.display_name,
@@ -242,6 +258,10 @@ def create_operator_user(
                 "username": user.username,
                 "display_name": user.display_name,
                 "role": user.role,
+                "permissions": [
+                    capability.value
+                    for capability in data.permissions
+                ],
                 "is_active": user.is_active,
             },
         )
@@ -252,6 +272,52 @@ def create_operator_user(
             status_code=409,
             detail="Username already exists",
         ) from exc
+    return user
+
+
+@router.put(
+    "/users/{user_id}/permissions",
+    response_model=OperatorUserRead,
+)
+def replace_operator_permissions(
+    user_id: UUID,
+    data: UserPermissionReplace,
+    administrator: OperatorUser = Depends(require_administrator),
+    db: Session = Depends(get_db),
+) -> OperatorUser:
+    user = db.get(OperatorUser, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Operator user not found")
+    before = sorted(capability.value for capability in user.permissions)
+    requested = set(data.permissions)
+    user.permission_grants[:] = [
+        grant
+        for grant in user.permission_grants
+        if grant.capability in requested
+    ]
+    current = {grant.capability for grant in user.permission_grants}
+    for capability in requested - current:
+        user.permission_grants.append(
+            UserPermission(
+                capability=capability,
+                granted_by_id=administrator.id,
+                reason=data.reason,
+            )
+        )
+    db.flush()
+    after = sorted(capability.value for capability in user.permissions)
+    record_audit_event(
+        db,
+        actor=administrator.display_name,
+        action="auth.permissions_replaced",
+        entity_type="OperatorUser",
+        entity_id=user.id,
+        reason=data.reason,
+        before_data={"permissions": before},
+        after_data={"permissions": after},
+    )
+    db.commit()
+    db.refresh(user)
     return user
 
 

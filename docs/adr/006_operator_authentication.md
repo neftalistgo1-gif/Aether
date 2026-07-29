@@ -35,9 +35,8 @@ por `AETHER_BOOTSTRAP_SECRET`. Después de crear el primer usuario, la operació
 queda bloqueada por el estado de la base de datos. El secreto debe eliminarse
 del entorno y la API debe reiniciarse.
 
-## Alcance pendiente
+## Evolución
 
-Los roles se registran desde ahora, pero este módulo sólo aplica autenticación
-global y administración exclusiva para administradores. La autorización fina
-por operación se implementará en un módulo posterior, después de documentar la
-matriz exacta de responsabilidades.
+La autorización fina se implementó posteriormente en ADR-007. Los roles
+continúan describiendo el puesto y las capacidades explícitas determinan el
+acceso real.

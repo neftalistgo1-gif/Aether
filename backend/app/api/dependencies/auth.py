@@ -12,7 +12,7 @@ from app.core.security import (
     set_authenticated_actor,
 )
 from app.db.session import get_db
-from app.models.auth import AuthSession, OperatorUser, UserRole
+from app.models.auth import AuthSession, Capability, OperatorUser, UserRole
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -85,5 +85,126 @@ def require_administrator(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Administrator role required",
+        )
+    return user
+
+
+def capability_for_operation(
+    method: str,
+    route_path: str,
+) -> Capability | None:
+    method = method.upper()
+    is_read = method in {"GET", "HEAD", "OPTIONS"}
+
+    if route_path.startswith("/api/v1/audit-events"):
+        return Capability.audit_read if is_read else None
+    if "/network-control/" in route_path:
+        return (
+            Capability.network_read
+            if is_read
+            else Capability.network_control
+        )
+    if (
+        "/network-assignments" in route_path
+        or "/network-assignment" in route_path
+        or route_path.startswith("/api/v1/mikrotik/routers")
+    ):
+        return (
+            Capability.network_read
+            if is_read
+            else Capability.network_control
+        )
+    if "/contracts" in route_path:
+        return (
+            Capability.contracts_read
+            if is_read
+            else Capability.contracts_write
+        )
+    if "/installations" in route_path:
+        return (
+            Capability.installations_read
+            if is_read
+            else Capability.installations_write
+        )
+    if (
+        "/assets" in route_path
+        or "/asset-assignments" in route_path
+        or "/equipment-recovery" in route_path
+    ):
+        return (
+            Capability.assets_read
+            if is_read
+            else Capability.assets_write
+        )
+    if route_path.startswith("/api/v1/incidents"):
+        if route_path.endswith("/compensation") and not is_read:
+            return Capability.incidents_compensate
+        return (
+            Capability.incidents_read
+            if is_read
+            else Capability.incidents_write
+        )
+    if route_path.startswith("/api/v1/plans"):
+        return Capability.plans_read if is_read else Capability.plans_write
+    if (
+        route_path.startswith("/api/v1/payments")
+        or route_path.startswith("/api/v1/charges")
+        or "/charges" in route_path
+        or "/balance" in route_path
+        or "/credit-" in route_path
+        or "/extensions" in route_path
+    ):
+        if (
+            not is_read
+            and (
+                route_path.endswith("/verify")
+                or route_path.endswith("/reject")
+                or route_path.endswith("/cancel")
+                or route_path.endswith("/credit-refunds")
+            )
+        ):
+            return Capability.billing_approve
+        return (
+            Capability.billing_read
+            if is_read
+            else Capability.billing_write
+        )
+    if route_path.startswith("/api/v1/customers"):
+        return (
+            Capability.customers_read
+            if is_read
+            else Capability.customers_write
+        )
+    if route_path.startswith("/api/v1/services"):
+        return (
+            Capability.services_read
+            if is_read
+            else Capability.services_write
+        )
+    return None
+
+
+def require_authorized_user(
+    request: Request,
+    user: OperatorUser = Depends(require_authenticated_user),
+) -> OperatorUser:
+    if user.role == UserRole.administrator:
+        return user
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", None)
+    capability = (
+        capability_for_operation(request.method, route_path)
+        if isinstance(route_path, str)
+        else None
+    )
+    if capability is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation has no authorization policy",
+        )
+    if capability not in user.permissions:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Capability required: {capability.value}",
         )
     return user
