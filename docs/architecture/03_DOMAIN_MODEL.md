@@ -317,6 +317,33 @@ Representa la configuración técnica actual de un servicio.
 
 ---
 
+# 9.1. NetworkControlCommand
+
+Representa una intención auditada de reflejar el estado comercial de un
+servicio en MikroTik.
+
+## Información principal
+
+- Service y NetworkAssignment vigentes.
+- Router e IP objetivo.
+- Acción e intención de bloqueo.
+- Modo simulado o real.
+- Responsable, clave de idempotencia, intentos y resultado verificado.
+- Preflight que autorizó la ejecución real.
+
+## Reglas
+
+- La simulación no modifica el router.
+- Una orden real requiere un preflight simulado, coincidente y de no más de
+  quince minutos.
+- Cada preflight sólo puede respaldar una orden real.
+- El reintento conserva el modo de la orden original.
+- Un cambio de asignación, router o IP invalida la operación pendiente.
+- Sólo una verificación positiva del router permite completar una suspensión o
+  reactivación coordinada.
+
+---
+
 # 10. Charge
 
 Representa una cantidad que una persona debe pagar.

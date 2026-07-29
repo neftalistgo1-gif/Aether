@@ -155,11 +155,30 @@ class MikroTikControlTestCase(unittest.TestCase):
         self,
         key: str = "mikrotik-test-001",
         dry_run: bool = True,
+        preflight_command_id=None,
     ) -> NetworkControlRequest:
         return NetworkControlRequest(
             requested_by="Operador de red",
             idempotency_key=key,
             dry_run=dry_run,
+            preflight_command_id=preflight_command_id,
+        )
+
+    def live_request(
+        self,
+        action: NetworkControlAction,
+        key: str,
+    ) -> NetworkControlRequest:
+        preflight = control_service_network(
+            self.service.id,
+            action,
+            self.request(f"{key}-preflight"),
+            self.db,
+        )
+        return self.request(
+            key,
+            dry_run=False,
+            preflight_command_id=preflight.id,
         )
 
     def test_router_requires_https(self) -> None:
@@ -234,11 +253,114 @@ class MikroTikControlTestCase(unittest.TestCase):
             )
         self.assertEqual(context.exception.status_code, 409)
 
+    def test_live_request_requires_a_preflight(self) -> None:
+        with self.assertRaises(ValidationError):
+            self.request(
+                "mikrotik-live-without-preflight",
+                dry_run=False,
+            )
+
+    def test_live_request_rejects_an_expired_preflight(self) -> None:
+        preflight = control_service_network(
+            self.service.id,
+            NetworkControlAction.suspend,
+            self.request("mikrotik-expired-preflight"),
+            self.db,
+        )
+        preflight.requested_at = datetime.now(UTC) - timedelta(minutes=16)
+        self.db.commit()
+
+        with self.assertRaises(HTTPException) as context:
+            control_service_network(
+                self.service.id,
+                NetworkControlAction.suspend,
+                self.request(
+                    "mikrotik-expired-live",
+                    dry_run=False,
+                    preflight_command_id=preflight.id,
+                ),
+                self.db,
+            )
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_preflight_can_authorize_only_one_live_command(self) -> None:
+        preflight = control_service_network(
+            self.service.id,
+            NetworkControlAction.suspend,
+            self.request("mikrotik-single-use-preflight"),
+            self.db,
+        )
+        first = control_service_network(
+            self.service.id,
+            NetworkControlAction.suspend,
+            self.request(
+                "mikrotik-single-use-live-1",
+                dry_run=False,
+                preflight_command_id=preflight.id,
+            ),
+            self.db,
+        )
+        self.assertEqual(first.preflight_command_id, preflight.id)
+
+        with self.assertRaises(HTTPException) as context:
+            control_service_network(
+                self.service.id,
+                NetworkControlAction.suspend,
+                self.request(
+                    "mikrotik-single-use-live-2",
+                    dry_run=False,
+                    preflight_command_id=preflight.id,
+                ),
+                self.db,
+            )
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_preflight_must_match_the_requested_action(self) -> None:
+        preflight = control_service_network(
+            self.service.id,
+            NetworkControlAction.suspend,
+            self.request("mikrotik-action-preflight"),
+            self.db,
+        )
+        with self.assertRaises(HTTPException) as context:
+            control_service_network(
+                self.service.id,
+                NetworkControlAction.reconcile,
+                self.request(
+                    "mikrotik-action-live",
+                    dry_run=False,
+                    preflight_command_id=preflight.id,
+                ),
+                self.db,
+            )
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_simulated_command_cannot_be_promoted_by_retry(self) -> None:
+        command = control_service_network(
+            self.service.id,
+            NetworkControlAction.suspend,
+            self.request("mikrotik-promote-preflight"),
+            self.db,
+        )
+        with self.assertRaises(HTTPException) as context:
+            retry_network_command(
+                command.id,
+                NetworkControlRetry(
+                    requested_by="Supervisor de red",
+                    dry_run=False,
+                ),
+                self.db,
+            )
+        self.assertEqual(context.exception.status_code, 409)
+
     def test_live_request_fails_closed_when_router_is_disabled(self) -> None:
         command = control_service_network(
             self.service.id,
             NetworkControlAction.suspend,
-            self.request("mikrotik-live-001", dry_run=False),
+            self.live_request(
+                NetworkControlAction.suspend,
+                "mikrotik-live-001",
+            ),
             self.db,
         )
         self.assertEqual(command.status, NetworkCommandStatus.failed)
@@ -270,7 +392,10 @@ class MikroTikControlTestCase(unittest.TestCase):
                 command = control_service_network(
                     self.service.id,
                     NetworkControlAction.suspend,
-                    self.request("mikrotik-live-002", dry_run=False),
+                    self.live_request(
+                        NetworkControlAction.suspend,
+                        "mikrotik-live-002",
+                    ),
                     self.db,
                 )
 
@@ -283,7 +408,10 @@ class MikroTikControlTestCase(unittest.TestCase):
         command = control_service_network(
             self.service.id,
             NetworkControlAction.suspend,
-            self.request("mikrotik-retry-001", dry_run=False),
+            self.live_request(
+                NetworkControlAction.suspend,
+                "mikrotik-retry-001",
+            ),
             self.db,
         )
         self.assertEqual(command.status, NetworkCommandStatus.failed)
@@ -336,7 +464,10 @@ class MikroTikControlTestCase(unittest.TestCase):
         command = control_service_network(
             self.service.id,
             NetworkControlAction.suspend,
-            self.request("mikrotik-stale-001", dry_run=False),
+            self.live_request(
+                NetworkControlAction.suspend,
+                "mikrotik-stale-001",
+            ),
             self.db,
         )
         command_assignment = command.network_assignment_id
@@ -349,7 +480,7 @@ class MikroTikControlTestCase(unittest.TestCase):
                 command.id,
                 NetworkControlRetry(
                     requested_by="Supervisor de red",
-                    dry_run=True,
+                    dry_run=False,
                 ),
                 self.db,
             )
@@ -359,6 +490,7 @@ class MikroTikControlTestCase(unittest.TestCase):
         self,
         key: str,
         dry_run: bool,
+        preflight_command_id=None,
     ) -> CoordinatedSuspensionCreate:
         return CoordinatedSuspensionCreate(
             scheduled_for=date.today(),
@@ -371,6 +503,25 @@ class MikroTikControlTestCase(unittest.TestCase):
             performed_by="Tecnico de red",
             idempotency_key=key,
             dry_run=dry_run,
+            preflight_command_id=preflight_command_id,
+        )
+
+    def coordinated_live_suspension(
+        self,
+        key: str,
+    ) -> CoordinatedSuspensionCreate:
+        preflight = coordinate_suspension(
+            self.service.id,
+            self.coordinated_suspension(
+                f"{key}-preflight",
+                dry_run=True,
+            ),
+            self.db,
+        )
+        return self.coordinated_suspension(
+            key,
+            dry_run=False,
+            preflight_command_id=preflight.command.id,
         )
 
     def test_coordinated_dry_run_does_not_suspend_service(self) -> None:
@@ -389,6 +540,37 @@ class MikroTikControlTestCase(unittest.TestCase):
         self.assertIsNone(result.suspension)
         self.db.refresh(self.service)
         self.assertEqual(self.service.status, ServiceStatus.active)
+
+    def test_coordinated_idempotency_key_cannot_change_execution_mode(
+        self,
+    ) -> None:
+        coordinate_suspension(
+            self.service.id,
+            self.coordinated_suspension(
+                "coordinated-fixed-mode",
+                dry_run=True,
+            ),
+            self.db,
+        )
+        second_preflight = coordinate_suspension(
+            self.service.id,
+            self.coordinated_suspension(
+                "coordinated-second-preflight",
+                dry_run=True,
+            ),
+            self.db,
+        )
+        with self.assertRaises(HTTPException) as context:
+            coordinate_suspension(
+                self.service.id,
+                self.coordinated_suspension(
+                    "coordinated-fixed-mode",
+                    dry_run=False,
+                    preflight_command_id=second_preflight.command.id,
+                ),
+                self.db,
+            )
+        self.assertEqual(context.exception.status_code, 409)
 
     def test_verified_command_and_commercial_suspension_are_linked(self) -> None:
         stored_router = self.db.get(MikrotikRouter, self.router.id)
@@ -412,9 +594,8 @@ class MikroTikControlTestCase(unittest.TestCase):
             ):
                 result = coordinate_suspension(
                     self.service.id,
-                    self.coordinated_suspension(
+                    self.coordinated_live_suspension(
                         "coordinated-live-001",
-                        dry_run=False,
                     ),
                     self.db,
                 )
@@ -455,7 +636,10 @@ class MikroTikControlTestCase(unittest.TestCase):
                 command = control_service_network(
                     self.service.id,
                     NetworkControlAction.suspend,
-                    self.request(key, dry_run=False),
+                    self.live_request(
+                        NetworkControlAction.suspend,
+                        key,
+                    ),
                     self.db,
                 )
         assignment = self.db.get(
@@ -468,7 +652,11 @@ class MikroTikControlTestCase(unittest.TestCase):
         with self.assertRaises(HTTPException) as context:
             coordinate_suspension(
                 self.service.id,
-                self.coordinated_suspension(key, dry_run=False),
+                self.coordinated_suspension(
+                    key,
+                    dry_run=False,
+                    preflight_command_id=command.preflight_command_id,
+                ),
                 self.db,
             )
         self.assertEqual(context.exception.status_code, 409)
@@ -476,9 +664,8 @@ class MikroTikControlTestCase(unittest.TestCase):
         self.assertEqual(self.service.status, ServiceStatus.active)
 
     def test_failed_command_can_finish_same_coordinated_operation(self) -> None:
-        payload = self.coordinated_suspension(
+        payload = self.coordinated_live_suspension(
             "coordinated-retry-001",
-            dry_run=False,
         )
         failed = coordinate_suspension(
             self.service.id,
@@ -557,9 +744,8 @@ class MikroTikControlTestCase(unittest.TestCase):
             ):
                 coordinate_suspension(
                     self.service.id,
-                    self.coordinated_suspension(
+                    self.coordinated_live_suspension(
                         "coordinated-cycle-suspend",
-                        dry_run=False,
                     ),
                     self.db,
                 )
@@ -571,6 +757,21 @@ class MikroTikControlTestCase(unittest.TestCase):
                     entry_count=0,
                 ),
             ):
+                preflight = coordinate_reactivation(
+                    self.service.id,
+                    CoordinatedReactivationCreate(
+                        reason="Pago verificado",
+                        authorized_by="Atencion a clientes",
+                        performed_by="Tecnico de red",
+                        debt_amount=Decimal("600.00"),
+                        payment_agreement_id=self.payment_agreement.id,
+                        idempotency_key=(
+                            "coordinated-cycle-reactivate-preflight"
+                        ),
+                        dry_run=True,
+                    ),
+                    self.db,
+                )
                 result = coordinate_reactivation(
                     self.service.id,
                     CoordinatedReactivationCreate(
@@ -581,6 +782,7 @@ class MikroTikControlTestCase(unittest.TestCase):
                         payment_agreement_id=self.payment_agreement.id,
                         idempotency_key="coordinated-cycle-reactivate",
                         dry_run=False,
+                        preflight_command_id=preflight.command.id,
                     ),
                     self.db,
                 )

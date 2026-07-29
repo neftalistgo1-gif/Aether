@@ -3,7 +3,13 @@ import re
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.models.mikrotik import NetworkCommandStatus, NetworkControlAction
 
@@ -63,6 +69,15 @@ class NetworkControlRequest(BaseModel):
     requested_by: str = Field(min_length=2, max_length=150)
     idempotency_key: str = Field(min_length=8, max_length=100)
     dry_run: bool = True
+    preflight_command_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def require_preflight_for_live_execution(self):
+        if self.dry_run and self.preflight_command_id is not None:
+            raise ValueError("Dry-run commands cannot reference a preflight")
+        if not self.dry_run and self.preflight_command_id is None:
+            raise ValueError("Live commands require a preflight command")
+        return self
 
 
 class NetworkControlRetry(BaseModel):
@@ -76,6 +91,7 @@ class NetworkControlCommandRead(BaseModel):
     id: UUID
     idempotency_key: str
     service_id: UUID
+    preflight_command_id: UUID | None
     network_assignment_id: UUID
     router_id: UUID
     action: NetworkControlAction

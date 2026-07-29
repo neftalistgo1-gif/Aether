@@ -91,6 +91,12 @@ correspondiente. El diálogo explica que no es una suspensión comercial, usa un
 clave de idempotencia nueva y fuerza `dry_run`. No existe en esta etapa un
 botón de ejecución real.
 
+El backend ya exige que cualquier ejecución futura utilice una simulación
+coincidente, de un solo uso y con antigüedad máxima de quince minutos. Cuando
+se incorpore el botón real, la interfaz deberá presentar la evidencia del
+preflight y una confirmación explícita; no podrá reutilizar simulaciones ni
+convertirlas mediante reintento.
+
 Cada servicio ofrece registro de comunicaciones a `notifications.write`.
 Propósito, canal, resultado, destinatario, hora y resumen se conservan como
 datos operativos. Las entregas digitales requieren evidencia o referencia del

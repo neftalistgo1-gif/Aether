@@ -73,9 +73,16 @@ auditoría y reconciliación periódica.
 - Modo `dry_run` predeterminado, sin cambios en MikroTik.
 - Habilitación explícita por router solamente cuando existen credenciales.
 - Claves de idempotencia para impedir ejecuciones duplicadas.
+- Preflight obligatorio: cada orden real referencia una simulación separada
+  realizada como máximo quince minutos antes.
+- Coincidencia exacta entre preflight y orden real en servicio, acción,
+  asignación vigente, router, IP e intención de bloqueo.
+- Uso único del preflight para evitar que una aprobación técnica autorice más
+  de una orden real.
 - Verificación de la address list después de agregar o retirar una IP.
 - Historial de intentos, resultado, responsable, fechas y errores.
-- Reintento del mismo comando sin perder la auditoría anterior.
+- Reintento del mismo comando sin perder la auditoría anterior ni cambiar su
+  modo; una simulación no puede promoverse a ejecución real.
 - Reconciliación tomando el estado comercial de Aether como fuente de verdad.
 
 El control de red no cambia por sí solo el estado comercial del servicio.

@@ -351,6 +351,12 @@ intentos y resultado. Aether consulta la address list después de cada cambio;
 sólo marca éxito cuando el estado real coincide. Los fallos pueden reintentarse
 y la reconciliación vuelve a aplicar el estado comercial que conserva Aether.
 
+Una orden real requiere una simulación independiente realizada durante los
+últimos quince minutos. La simulación debe coincidir con servicio, acción, IP,
+router y estado deseado, y sólo puede autorizar una orden real. Un reintento
+conserva el modo original: una simulación nunca puede convertirse en ejecución
+real mediante reintento.
+
 Las rutas coordinadas de suspensión y reactivación validan primero las reglas
 comerciales, ejecutan después el cambio de red y sólo actualizan el estado del
 servicio cuando MikroTik confirma el resultado. Una simulación o un fallo no

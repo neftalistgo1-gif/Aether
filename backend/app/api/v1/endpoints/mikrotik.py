@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -32,6 +32,14 @@ from app.services.audit import record_audit_event
 
 router = APIRouter(prefix="/api/v1", tags=["mikrotik"])
 
+PREFLIGHT_MAX_AGE = timedelta(minutes=15)
+
+
+def as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
 
 def audit_network_command(
     command: NetworkControlCommand,
@@ -46,6 +54,7 @@ def audit_network_command(
         reason=command.error_message or command.action.value,
         after_data={
             "service_id": command.service_id,
+            "preflight_command_id": command.preflight_command_id,
             "router_id": command.router_id,
             "target_ip": command.target_ip,
             "desired_blocked": command.desired_blocked,
@@ -55,6 +64,60 @@ def audit_network_command(
             "verified_at": command.verified_at,
         },
     )
+
+
+def validate_live_preflight(
+    control: NetworkControlRequest,
+    service_id: UUID,
+    action: NetworkControlAction,
+    assignment,
+    router_config: MikrotikRouter,
+    desired_blocked: bool,
+    db: Session,
+) -> NetworkControlCommand | None:
+    if control.dry_run:
+        return None
+    preflight = db.get(
+        NetworkControlCommand,
+        control.preflight_command_id,
+    )
+    now = datetime.now(UTC)
+    if (
+        preflight is None
+        or not preflight.dry_run
+        or preflight.status != NetworkCommandStatus.simulated
+        or preflight.preflight_command_id is not None
+        or preflight.service_id != service_id
+        or preflight.action != action
+        or preflight.network_assignment_id != assignment.id
+        or preflight.router_id != router_config.id
+        or preflight.target_ip != assignment.ip_address
+        or preflight.desired_blocked != desired_blocked
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Live command requires a matching simulated preflight "
+                "for the current network assignment"
+            ),
+        )
+    requested_at = as_utc(preflight.requested_at)
+    if requested_at > now or now - requested_at > PREFLIGHT_MAX_AGE:
+        raise HTTPException(
+            status_code=409,
+            detail="Network preflight expired; run a new simulation",
+        )
+    used = db.scalar(
+        select(NetworkControlCommand).where(
+            NetworkControlCommand.preflight_command_id == preflight.id
+        )
+    )
+    if used is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Network preflight was already used",
+        )
+    return preflight
 
 
 def router_read(item: MikrotikRouter) -> MikrotikRouterRead:
@@ -201,6 +264,15 @@ def control_service_network(
     if existing is not None:
         if existing.service_id != service_id or existing.action != action:
             raise HTTPException(status_code=409, detail="Idempotency key belongs to another command")
+        if (
+            existing.dry_run != control.dry_run
+            or existing.preflight_command_id
+            != control.preflight_command_id
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Idempotency key payload does not match",
+            )
         return existing
 
     service = find_service_or_404(service_id, db)
@@ -222,10 +294,22 @@ def control_service_network(
         desired_blocked = False
     else:
         desired_blocked = service.status == ServiceStatus.suspended
+    preflight = validate_live_preflight(
+        control,
+        service.id,
+        action,
+        assignment,
+        router_config,
+        desired_blocked,
+        db,
+    )
 
     command = NetworkControlCommand(
         idempotency_key=control.idempotency_key,
         service_id=service.id,
+        preflight_command_id=(
+            preflight.id if preflight is not None else None
+        ),
         network_assignment_id=assignment.id,
         router_id=router_config.id,
         action=action,
@@ -250,6 +334,9 @@ def control_service_network(
             existing is not None
             and existing.service_id == service_id
             and existing.action == action
+            and existing.dry_run == control.dry_run
+            and existing.preflight_command_id
+            == control.preflight_command_id
         ):
             return existing
         raise HTTPException(
@@ -295,6 +382,27 @@ def retry_network_command(
             status_code=409,
             detail="A successful command does not need a retry",
         )
+    if command.status == NetworkCommandStatus.simulated:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A simulated command cannot be promoted by retry; "
+                "create a live command linked to it"
+            ),
+        )
+    if retry.dry_run != command.dry_run:
+        raise HTTPException(
+            status_code=409,
+            detail="Retry cannot change the command execution mode",
+        )
+    if not command.dry_run and command.preflight_command_id is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Legacy live command has no preflight; "
+                "run a new simulation"
+            ),
+        )
     assignment = find_current_network_assignment(command.service_id, db)
     if (
         assignment is None
@@ -320,5 +428,4 @@ def retry_network_command(
             ),
         )
     command.requested_by = retry.requested_by
-    command.dry_run = retry.dry_run
     return execute_command(command, router_config, db)

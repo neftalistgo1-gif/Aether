@@ -334,6 +334,22 @@ def find_command_by_idempotency_key(
     return command
 
 
+def validate_coordinated_command_mode(
+    command: NetworkControlCommand | None,
+    *,
+    dry_run: bool,
+    preflight_command_id: UUID | None,
+) -> None:
+    if command is not None and (
+        command.dry_run != dry_run
+        or command.preflight_command_id != preflight_command_id
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Idempotency key payload does not match",
+        )
+
+
 def validate_command_assignment(
     command: NetworkControlCommand,
     db: Session,
@@ -380,6 +396,11 @@ def coordinate_suspension(
         NetworkControlAction.suspend,
         db,
     )
+    validate_coordinated_command_mode(
+        command,
+        dry_run=suspension_data.dry_run,
+        preflight_command_id=suspension_data.preflight_command_id,
+    )
     if command is None:
         prepare_suspension(service_id, operation_data, db)
         command = control_service_network(
@@ -389,6 +410,9 @@ def coordinate_suspension(
                 requested_by=suspension_data.performed_by,
                 idempotency_key=suspension_data.idempotency_key,
                 dry_run=suspension_data.dry_run,
+                preflight_command_id=(
+                    suspension_data.preflight_command_id
+                ),
             ),
             db,
         )
@@ -656,6 +680,11 @@ def coordinate_reactivation(
         NetworkControlAction.reactivate,
         db,
     )
+    validate_coordinated_command_mode(
+        command,
+        dry_run=reactivation_data.dry_run,
+        preflight_command_id=reactivation_data.preflight_command_id,
+    )
     if command is None:
         prepare_reactivation(service_id, operation_data, db)
         command = control_service_network(
@@ -665,6 +694,9 @@ def coordinate_reactivation(
                 requested_by=reactivation_data.performed_by,
                 idempotency_key=reactivation_data.idempotency_key,
                 dry_run=reactivation_data.dry_run,
+                preflight_command_id=(
+                    reactivation_data.preflight_command_id
+                ),
             ),
             db,
         )

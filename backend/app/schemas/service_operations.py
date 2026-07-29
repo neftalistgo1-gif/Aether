@@ -58,6 +58,7 @@ class CoordinatedSuspensionCreate(BaseModel):
     performed_by: str = Field(min_length=2, max_length=150)
     idempotency_key: str = Field(min_length=8, max_length=100)
     dry_run: bool = True
+    preflight_command_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_notification(self) -> Self:
@@ -65,6 +66,10 @@ class CoordinatedSuspensionCreate(BaseModel):
             raise ValueError(
                 "scheduled_for cannot be in the future when executing suspension"
             )
+        if self.dry_run and self.preflight_command_id is not None:
+            raise ValueError("Dry-run operations cannot reference a preflight")
+        if not self.dry_run and self.preflight_command_id is None:
+            raise ValueError("Live operations require a preflight command")
         return self
 
 
@@ -130,6 +135,7 @@ class CoordinatedReactivationCreate(BaseModel):
     payment_agreement_id: UUID | None = None
     idempotency_key: str = Field(min_length=8, max_length=100)
     dry_run: bool = True
+    preflight_command_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_authorization_basis(self) -> Self:
@@ -149,6 +155,10 @@ class CoordinatedReactivationCreate(BaseModel):
             raise ValueError(
                 "Settled balance reactivation cannot use a debt agreement"
             )
+        if self.dry_run and self.preflight_command_id is not None:
+            raise ValueError("Dry-run operations cannot reference a preflight")
+        if not self.dry_run and self.preflight_command_id is None:
+            raise ValueError("Live operations require a preflight command")
         return self
 
 

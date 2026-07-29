@@ -58,6 +58,16 @@ class NetworkControlCommand(Base):
         ForeignKey("services.id", ondelete="RESTRICT"),
         index=True,
     )
+    preflight_command_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "network_control_commands.id",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
     network_assignment_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("network_assignments.id", ondelete="RESTRICT"),
