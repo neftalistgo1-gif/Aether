@@ -1149,6 +1149,68 @@
       </form>
     </dialog>
 
+    <dialog
+      id="suspension-check-dialog"
+      aria-labelledby="suspension-check-dialog-title"
+    >
+      <form id="suspension-check-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">VALIDACIÓN COMERCIAL · DRY RUN</p>
+            <h2 id="suspension-check-dialog-title">
+              Simular suspensión completa
+            </h2>
+          </div>
+          <button
+            id="close-suspension-check-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div id="suspension-check-summary" class="decision-summary"></div>
+        <div class="form-grid">
+          <label class="full-row">
+            Aviso de suspensión entregado
+            <select id="suspension-notification" required></select>
+          </label>
+          <label class="full-row">
+            Motivo
+            <textarea
+              id="suspension-check-reason"
+              rows="3"
+              minlength="3"
+              maxlength="500"
+              required
+            >Falta de pago después del periodo de tolerancia</textarea>
+          </label>
+          <label class="checkbox-field full-row">
+            <input id="suspension-grace-confirmed" type="checkbox" required>
+            Confirmé que terminó el periodo de tolerancia
+          </label>
+          <label class="checkbox-field full-row">
+            <input id="suspension-extension-checked" type="checkbox" required>
+            Revisé que no existe una prórroga vigente
+          </label>
+        </div>
+        <p class="form-help">
+          La API recalcula deuda, vencimiento y prórrogas. Esta simulación no
+          cambia MikroTik ni suspende el servicio.
+        </p>
+        <p id="suspension-check-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-suspension-check"
+            class="text-button"
+            type="button"
+          >Volver</button>
+          <button class="primary-button" type="submit">
+            Validar en modo seguro
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="plan-price-dialog" aria-labelledby="plan-price-dialog-title">
       <form id="plan-price-form">
         <div class="dialog-heading">

@@ -11,6 +11,7 @@ const state = {
   selectedServiceId: null,
   selectedInstallation: null,
   selectedNetworkAction: null,
+  selectedSuspensionDebt: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -394,10 +395,16 @@ function renderServices() {
   const canScheduleInstallation = hasCapability("installations.write");
   const canControlNetwork = hasCapability("network.control");
   const canWriteNotifications = hasCapability("notifications.write");
+  const canCheckSuspension = (
+    hasCapability("network.control") &&
+    hasCapability("billing.read") &&
+    hasCapability("notifications.read")
+  );
   const canShowActions = (
     canScheduleInstallation ||
     canControlNetwork ||
-    canWriteNotifications
+    canWriteNotifications ||
+    canCheckSuspension
   );
   body.innerHTML = state.services
     .map((service) => `
@@ -431,6 +438,13 @@ function renderServices() {
                 type="button"
                 data-service-id="${service.id}"
               >Registrar aviso</button>
+            ` : ""}
+            ${canCheckSuspension && service.status === "active" ? `
+              <button
+                class="row-action check-commercial-suspension"
+                type="button"
+                data-service-id="${service.id}"
+              >Validar suspensión</button>
             ` : ""}
           </td>
         ` : ""}
@@ -964,6 +978,114 @@ async function saveNotification(event) {
       saved.status === "delivered"
         ? "La entrega quedó registrada y auditada."
         : "El intento fallido quedó registrado con su motivo."
+    );
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function openSuspensionCheckDialog(service) {
+  state.selectedServiceId = service.id;
+  state.selectedSuspensionDebt = null;
+  $("#suspension-check-dialog-title").textContent =
+    `Validar suspensión · ${service.amr_code}`;
+  $("#suspension-check-summary").innerHTML =
+    '<p class="empty-state">Consultando condiciones actuales…</p>';
+  $("#suspension-notification").innerHTML = "";
+  $("#suspension-check-reason").value =
+    "Falta de pago después del periodo de tolerancia";
+  $("#suspension-grace-confirmed").checked = false;
+  $("#suspension-extension-checked").checked = false;
+  $("#suspension-check-error").textContent = "";
+  $("#suspension-check-dialog").showModal();
+  try {
+    const [balance, notifications] = await Promise.all([
+      api(`/api/v1/services/${service.id}/balance`),
+      api(
+        `/api/v1/notifications?service_id=${service.id}` +
+        "&purpose=suspension_warning&status=delivered"
+      ),
+    ]);
+    state.selectedSuspensionDebt = balance.outstanding_balance;
+    $("#suspension-check-summary").innerHTML = `
+      <div>
+        <span>Deuda total</span>
+        <strong>${formatMoney(balance.outstanding_balance)}</strong>
+      </div>
+      <div>
+        <span>Deuda vencida</span>
+        <strong>${formatMoney(balance.overdue_balance)}</strong>
+      </div>
+      <div>
+        <span>Cargos abiertos</span>
+        <strong>${balance.open_charges}</strong>
+      </div>
+    `;
+    $("#suspension-notification").innerHTML = notifications
+      .map(
+        (item) =>
+          `<option value="${item.id}">${formatDate(item.occurred_at)} · ${escapeText(item.recipient)}</option>`
+      )
+      .join("");
+    if (!notifications.length) {
+      $("#suspension-check-error").textContent =
+        "Primero registra un aviso de suspensión entregado.";
+    }
+  } catch (error) {
+    $("#suspension-check-error").textContent = error.message;
+  }
+}
+
+function closeSuspensionCheckDialog() {
+  $("#suspension-check-dialog").close();
+  state.selectedServiceId = null;
+  state.selectedSuspensionDebt = null;
+}
+
+async function runSuspensionCheck(event) {
+  event.preventDefault();
+  const serviceId = state.selectedServiceId;
+  const notificationId = $("#suspension-notification").value;
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const errorBox = $("#suspension-check-error");
+  if (!serviceId || state.selectedSuspensionDebt === null) return;
+  if (!notificationId) {
+    errorBox.textContent =
+      "Selecciona un aviso de suspensión entregado.";
+    return;
+  }
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const result = await api(
+      `/api/v1/services/${serviceId}/suspensions/coordinated`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          scheduled_for: localDateValue(),
+          reason: $("#suspension-check-reason").value.trim(),
+          debt_amount: state.selectedSuspensionDebt,
+          grace_period_elapsed:
+            $("#suspension-grace-confirmed").checked,
+          extension_checked:
+            $("#suspension-extension-checked").checked,
+          has_active_extension: false,
+          notification_id: notificationId,
+          performed_by: state.user.display_name,
+          idempotency_key: `ui-suspension-${crypto.randomUUID()}`,
+          dry_run: true,
+        }),
+      }
+    );
+    closeSuspensionCheckDialog();
+    setNotice(
+      result.command.status === "simulated"
+        ? "La suspensión comercial pasó todas las validaciones en modo seguro."
+        : `La validación terminó con estado ${result.command.status}.`
     );
   } catch (error) {
     errorBox.textContent = error.message;
@@ -1745,15 +1867,29 @@ $("#services-body").addEventListener("click", (event) => {
   const button = event.target.closest(".assess-installation");
   const networkButton = event.target.closest(".simulate-network-control");
   const notificationButton = event.target.closest(".record-notification");
-  if (!button && !networkButton && !notificationButton) return;
+  const suspensionButton = event.target.closest(
+    ".check-commercial-suspension"
+  );
+  if (
+    !button &&
+    !networkButton &&
+    !notificationButton &&
+    !suspensionButton
+  ) return;
   const service = state.services?.find(
     (item) =>
       item.id ===
-      (button || networkButton || notificationButton).dataset.serviceId
+      (
+        button ||
+        networkButton ||
+        notificationButton ||
+        suspensionButton
+      ).dataset.serviceId
   );
   if (!service) return;
   if (networkButton) openNetworkSimulationDialog(service);
   else if (notificationButton) openNotificationDialog(service);
+  else if (suspensionButton) openSuspensionCheckDialog(service);
   else openInstallationDialog(service);
 });
 $("#installation-coverage-result").addEventListener(
@@ -1825,6 +1961,18 @@ $("#close-notification-dialog").addEventListener(
 $("#cancel-notification-dialog").addEventListener(
   "click",
   closeNotificationDialog
+);
+$("#suspension-check-form").addEventListener(
+  "submit",
+  runSuspensionCheck
+);
+$("#close-suspension-check-dialog").addEventListener(
+  "click",
+  closeSuspensionCheckDialog
+);
+$("#cancel-suspension-check").addEventListener(
+  "click",
+  closeSuspensionCheckDialog
 );
 $("#new-payment-button").addEventListener("click", openPaymentDialog);
 $("#payment-customer").addEventListener("change", updatePaymentServices);

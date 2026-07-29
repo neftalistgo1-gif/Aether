@@ -83,6 +83,12 @@ entrega digital exige referencia del proveedor o evidencia privada; un intento
 fallido exige un motivo no vacío. Los avisos entregados de suspensión pueden
 usarse posteriormente en el flujo comercial coordinado.
 
+La UI puede simular la suspensión comercial coordinada cuando la cuenta tiene
+`network.control`, `billing.read` y `notifications.read`. Consulta la deuda y
+los avisos entregados, confirma tolerancia y revisión de prórroga, y fuerza
+`dry_run`. La ruta coordinada exige ahora `network.control`; una cuenta con
+`services.write` no puede usarla como atajo.
+
 ## Primer administrador y acceso
 
 Todas las rutas de negocio requieren autenticación. Para preparar una

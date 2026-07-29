@@ -97,6 +97,12 @@ datos operativos. Las entregas digitales requieren evidencia o referencia del
 proveedor; los intentos fallidos requieren explicación. La ubicación de la
 evidencia permanece privada.
 
+La validación comercial de suspensión reúne el saldo calculado por la API y
+los avisos entregados del servicio. El operador confirma que revisó tolerancia
+y prórrogas, pero el backend vuelve a calcular todas las condiciones. La acción
+fuerza `dry_run`, por lo que una validación aprobada no corta internet ni cambia
+el estado del servicio.
+
 ## Implementación
 
 La superficie actual usa HTML, CSS y JavaScript modular sin dependencias. Se

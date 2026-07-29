@@ -113,6 +113,14 @@ class FrontendShellTestCase(unittest.TestCase):
             "La entrega quedó registrada y auditada",
             script,
         )
+        self.assertIn('hasCapability("notifications.read")', script)
+        self.assertIn("/suspensions/coordinated", script)
+        self.assertIn("grace_period_elapsed:", script)
+        self.assertIn("extension_checked:", script)
+        self.assertIn(
+            "pasó todas las validaciones en modo seguro",
+            script,
+        )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

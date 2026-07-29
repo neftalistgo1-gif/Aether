@@ -110,6 +110,11 @@ def capability_for_operation(
             if is_read
             else Capability.notifications_write
         )
+    if (
+        route_path.endswith("/suspensions/coordinated")
+        or route_path.endswith("/reactivations/coordinated")
+    ):
+        return Capability.network_control if not is_read else None
     if "/network-control/" in route_path:
         return (
             Capability.network_read

@@ -390,6 +390,17 @@ class AuthenticationTestCase(unittest.TestCase):
             Capability.billing_write,
         )
 
+    def test_coordinated_service_control_requires_network_control(self) -> None:
+        for path in (
+            "/api/v1/services/{service_id}/suspensions/coordinated",
+            "/api/v1/services/{service_id}/reactivations/coordinated",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    capability_for_operation("POST", path),
+                    Capability.network_control,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
