@@ -326,7 +326,15 @@ Representa una cantidad que una persona debe pagar.
 ## Reglas
 
 - Cada mensualidad debe existir como un cargo independiente.
+- La mensualidad utiliza el precio acordado vigente del Service al generarse.
+- La fecha de vencimiento mensual utiliza el día de pago del Service.
+- No deben generarse mensualidades futuras ni duplicadas para un mismo
+  periodo.
+- La primera mensualidad corresponde al mes posterior a la activación.
+- El Customer responsable se determina según la titularidad en la fecha del
+  cargo.
 - Los cargos no deben eliminarse después de pagarse.
+- Un cargo erróneo se cancela conservando responsable, fecha y motivo.
 - Los pagos parciales reducen el saldo del cargo.
 - Los cargos más antiguos se cubren primero cuando no hay instrucciones.
 

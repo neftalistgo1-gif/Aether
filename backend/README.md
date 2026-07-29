@@ -130,6 +130,21 @@ Para evitar inconsistencias con la lista de suspendidos, la configuración no
 puede cambiar mientras el servicio esté suspendido. Al ejecutar una baja
 definitiva se cierra automáticamente la asignación de red vigente.
 
+### Cargos y saldos
+
+`Charge` representa cada cantidad que debe pagar el titular responsable de un
+servicio. Admite instalación, mensualidad, cambio de domicilio, venta de
+equipo, servicio adicional, ajuste y otros conceptos.
+
+Las mensualidades se generan mediante una operación especializada que toma el
+precio acordado y el día de pago del servicio. No se permiten mensualidades
+futuras, anteriores al primer periodo facturable ni duplicadas para el mismo
+servicio y periodo.
+
+El saldo conserva deuda total, deuda vencida y número de cargos abiertos. Un
+cargo registrado por error se cancela con responsable y motivo; permanece en
+el historial y deja de sumar al saldo.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:
