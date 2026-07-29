@@ -91,6 +91,14 @@ class FrontendShellTestCase(unittest.TestCase):
             "el historial quedó conservado",
             script,
         )
+        self.assertIn("/complete", script)
+        self.assertIn("antenna_photos: antennaPhotos", script)
+        self.assertIn("modem_photos: modemPhotos", script)
+        self.assertIn("navigation_confirmed:", script)
+        self.assertIn(
+            "el servicio fue activado",
+            script,
+        )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

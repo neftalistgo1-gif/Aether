@@ -78,6 +78,13 @@ cancelarse con motivo. La interfaz deja estas decisiones separadas de la
 finalización técnica y refleja que el cargo acompaña la nueva fecha o la
 cancelación según las reglas del backend.
 
+El cierre técnico se abre desde una instalación programada. Exige hora real,
+técnicos, referencias privadas de las fotografías y la confirmación expresa de
+navegación del cliente. La interfaz valida los mínimos de evidencia, pero la
+API vuelve a comprobarlos y también bloquea el cierre si el cargo no está
+pagado. Sólo una instalación inicial completada por este flujo activa el
+servicio.
+
 ## Implementación
 
 La superficie actual usa HTML, CSS y JavaScript modular sin dependencias. Se

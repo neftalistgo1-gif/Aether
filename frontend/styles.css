@@ -38,6 +38,8 @@ button { color: inherit; }
 .login-copy { margin: 24px 0 34px; color: var(--muted); font-size: 1rem; }
 form { display: grid; gap: 18px; }
 label { display: grid; gap: 8px; color: #c7d5e5; font-size: 0.82rem; font-weight: 650; }
+.checkbox-field { grid-template-columns: auto 1fr; align-items: center; }
+.checkbox-field input { width: 18px; height: 18px; }
 input, textarea, select {
   width: 100%;
   border: 1px solid var(--line);

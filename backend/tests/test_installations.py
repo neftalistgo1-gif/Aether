@@ -30,6 +30,7 @@ from app.schemas.installation import (
     InstallationCancel,
     InstallationComplete,
     InstallationCreate,
+    InstallationRead,
     InstallationReschedule,
 )
 from app.schemas.service import ServiceCreate
@@ -126,6 +127,11 @@ class InstallationTestCase(unittest.TestCase):
             self.db,
         )
         self.assertEqual(completed.status, InstallationStatus.completed)
+        response = InstallationRead.model_validate(completed).model_dump()
+        self.assertEqual(response["antenna_photo_count"], 2)
+        self.assertEqual(response["modem_photo_count"], 1)
+        self.assertNotIn("antenna_photos", response)
+        self.assertNotIn("modem_photos", response)
         self.db.refresh(self.service)
         self.assertEqual(self.service.status, ServiceStatus.active)
         self.assertIsNotNone(self.service.activation_date)

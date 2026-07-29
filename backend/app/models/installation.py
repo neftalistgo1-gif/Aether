@@ -117,6 +117,14 @@ class Installation(Base):
         lazy="selectin",
     )
 
+    @property
+    def antenna_photo_count(self) -> int:
+        return len(self.antenna_photos or [])
+
+    @property
+    def modem_photo_count(self) -> int:
+        return len(self.modem_photos or [])
+
 
 class InstallationScheduleChange(Base):
     __tablename__ = "installation_schedule_changes"

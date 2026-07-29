@@ -909,8 +909,105 @@
               class="text-button"
               type="button"
             >Volver</button>
+            <button
+              id="open-installation-complete"
+              class="secondary-button"
+              type="button"
+            >Completar</button>
             <button class="primary-button" type="submit">Reprogramar</button>
           </div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      id="installation-complete-dialog"
+      aria-labelledby="installation-complete-dialog-title"
+    >
+      <form id="installation-complete-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">CIERRE TÉCNICO</p>
+            <h2 id="installation-complete-dialog-title">
+              Completar instalación
+            </h2>
+          </div>
+          <button
+            id="close-installation-complete-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Fecha y hora de finalización
+            <input id="installation-completed-at" type="datetime-local" required>
+          </label>
+          <label>
+            Confirmación de navegación por
+            <input
+              id="installation-navigation-by"
+              minlength="2"
+              maxlength="150"
+              placeholder="Nombre del cliente"
+              required
+            >
+          </label>
+          <label class="full-row">
+            Técnicos participantes
+            <textarea
+              id="installation-technicians"
+              rows="3"
+              placeholder="Uno por línea, máximo 3"
+              required
+            ></textarea>
+          </label>
+          <label>
+            Referencias privadas de antena
+            <textarea
+              id="installation-antenna-photos"
+              rows="4"
+              placeholder="2 a 4 referencias, una por línea"
+              required
+            ></textarea>
+          </label>
+          <label>
+            Referencias privadas de módem
+            <textarea
+              id="installation-modem-photos"
+              rows="4"
+              placeholder="1 a 4 referencias, una por línea"
+              required
+            ></textarea>
+          </label>
+          <label class="checkbox-field full-row">
+            <input id="installation-navigation-confirmed" type="checkbox" required>
+            El cliente confirmó que puede navegar correctamente
+          </label>
+          <label class="full-row">
+            Notas técnicas
+            <textarea
+              id="installation-complete-notes"
+              rows="3"
+              maxlength="2000"
+            ></textarea>
+          </label>
+        </div>
+        <p class="form-help">
+          Aether rechazará el cierre si el cargo de instalación no está pagado.
+          Las referencias de fotografías permanecen privadas.
+        </p>
+        <p id="installation-complete-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-installation-complete"
+            class="text-button"
+            type="button"
+          >Volver</button>
+          <button class="primary-button" type="submit">
+            Completar y activar
+          </button>
         </div>
       </form>
     </dialog>

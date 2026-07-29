@@ -66,6 +66,12 @@ cancelarla. Ambos caminos exigen motivo; reprogramar conserva el historial y
 mueve el vencimiento del cargo, mientras cancelar sólo procede si el cargo no
 tiene pagos aplicados.
 
+Completar una instalación inicial desde la UI exige cargo pagado, uno a tres
+técnicos, dos a cuatro evidencias de antena, una a cuatro de módem y
+confirmación de navegación. Sólo el cierre aprobado activa el servicio. Las
+referencias de evidencias permanecen privadas; la API únicamente devuelve sus
+conteos.
+
 ## Primer administrador y acceso
 
 Todas las rutas de negocio requieren autenticación. Para preparar una

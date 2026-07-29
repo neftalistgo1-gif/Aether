@@ -97,8 +97,8 @@ class InstallationRead(BaseModel):
     status: InstallationStatus
     cost: Decimal
     technicians: list[str] | None
-    antenna_photos: list[str] | None
-    modem_photos: list[str] | None
+    antenna_photo_count: int
+    modem_photo_count: int
     navigation_confirmed: bool | None
     navigation_confirmed_by: str | None
     new_address: str | None

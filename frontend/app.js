@@ -664,6 +664,115 @@ async function cancelSelectedInstallation() {
   }
 }
 
+function evidenceLines(selector) {
+  return $(selector).value
+    .split(/\n+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function openInstallationCompleteDialog() {
+  const service = state.services?.find(
+    (item) => item.id === state.selectedServiceId
+  );
+  if (!service || !state.selectedInstallation) return;
+  $("#installation-manage-dialog").close();
+  $("#installation-complete-dialog-title").textContent =
+    `Completar · ${service.amr_code}`;
+  $("#installation-completed-at").value = localDateTimeValue();
+  $("#installation-navigation-by").value = "";
+  $("#installation-technicians").value = "";
+  $("#installation-antenna-photos").value = "";
+  $("#installation-modem-photos").value = "";
+  $("#installation-navigation-confirmed").checked = false;
+  $("#installation-complete-notes").value = "";
+  $("#installation-complete-error").textContent = "";
+  $("#installation-complete-dialog").showModal();
+  $("#installation-navigation-by").focus();
+}
+
+function returnToInstallationManageDialog() {
+  const service = state.services?.find(
+    (item) => item.id === state.selectedServiceId
+  );
+  const installation = state.selectedInstallation;
+  $("#installation-complete-dialog").close();
+  if (service && installation) {
+    openInstallationManageDialog(service, installation);
+  }
+}
+
+async function completeSelectedInstallation(event) {
+  event.preventDefault();
+  const installation = state.selectedInstallation;
+  const serviceId = state.selectedServiceId;
+  const service = state.services?.find((item) => item.id === serviceId);
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const errorBox = $("#installation-complete-error");
+  if (!installation || !serviceId || !service) return;
+  const technicians = evidenceLines("#installation-technicians");
+  const antennaPhotos = evidenceLines("#installation-antenna-photos");
+  const modemPhotos = evidenceLines("#installation-modem-photos");
+  if (technicians.length < 1 || technicians.length > 3) {
+    errorBox.textContent = "Registra entre uno y tres técnicos.";
+    return;
+  }
+  if (antennaPhotos.length < 2 || antennaPhotos.length > 4) {
+    errorBox.textContent =
+      "Registra entre dos y cuatro referencias de la antena.";
+    return;
+  }
+  if (modemPhotos.length < 1 || modemPhotos.length > 4) {
+    errorBox.textContent =
+      "Registra entre una y cuatro referencias del módem.";
+    return;
+  }
+  const completedAt = new Date($("#installation-completed-at").value);
+  if (Number.isNaN(completedAt.getTime())) {
+    errorBox.textContent = "Indica una fecha y hora válidas.";
+    return;
+  }
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    await api(
+      `/api/v1/services/${serviceId}/installations/${installation.id}/complete`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          completed_at: completedAt.toISOString(),
+          technicians,
+          antenna_photos: antennaPhotos,
+          modem_photos: modemPhotos,
+          navigation_confirmed:
+            $("#installation-navigation-confirmed").checked,
+          navigation_confirmed_by:
+            $("#installation-navigation-by").value.trim(),
+          performed_by: state.user.display_name,
+          notes: $("#installation-complete-notes").value.trim() || null,
+        }),
+      }
+    );
+    service.status = "active";
+    service.activation_date = completedAt.toISOString().slice(0, 10);
+    service.has_scheduled_installation = false;
+    renderServices();
+    renderOverview();
+    $("#installation-complete-dialog").close();
+    state.selectedServiceId = null;
+    state.selectedInstallation = null;
+    setNotice(
+      "La instalación quedó completada y el servicio fue activado."
+    );
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 async function saveInstallation(event) {
   event.preventDefault();
   const service = state.services?.find(
@@ -1469,6 +1578,22 @@ $("#close-installation-manage-dialog").addEventListener(
 $("#dismiss-installation-manage").addEventListener(
   "click",
   closeInstallationManageDialog
+);
+$("#open-installation-complete").addEventListener(
+  "click",
+  openInstallationCompleteDialog
+);
+$("#installation-complete-form").addEventListener(
+  "submit",
+  completeSelectedInstallation
+);
+$("#close-installation-complete-dialog").addEventListener(
+  "click",
+  returnToInstallationManageDialog
+);
+$("#cancel-installation-complete").addEventListener(
+  "click",
+  returnToInstallationManageDialog
 );
 $("#new-payment-button").addEventListener("click", openPaymentDialog);
 $("#payment-customer").addEventListener("change", updatePaymentServices);
