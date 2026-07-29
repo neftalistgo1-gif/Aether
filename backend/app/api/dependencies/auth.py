@@ -179,6 +179,10 @@ def capability_for_operation(
                 or route_path.endswith("/cancel")
                 or route_path.endswith("/apply")
                 or route_path.endswith("/credit-refunds")
+                or (
+                    "/extensions/" in route_path
+                    and route_path.endswith("/fulfill")
+                )
             )
         ):
             return Capability.billing_approve

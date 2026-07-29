@@ -17,6 +17,8 @@ class ExtensionCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_dates(self) -> Self:
+        if self.original_due_date > date.today():
+            raise ValueError("original_due_date cannot be in the future")
         if self.promised_date <= self.original_due_date:
             raise ValueError("promised_date must be after original_due_date")
         if self.promised_date < date.today():
@@ -39,7 +41,7 @@ class ExtensionRead(BaseModel):
     promised_date: date
     reason: str
     authorized_by: str
-    evidence_reference: str
+    has_evidence: bool
     authorized_at: datetime
     status: ExtensionStatus
     resolved_at: datetime | None

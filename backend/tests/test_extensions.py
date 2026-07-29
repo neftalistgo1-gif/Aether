@@ -4,6 +4,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -23,7 +24,11 @@ from app.models.extension import ExtensionStatus
 from app.models.service import ServiceStatus
 from app.models.service_operations import NetworkOperationResult
 from app.schemas.charge import ChargeCreate
-from app.schemas.extension import ExtensionCreate, ExtensionResolve
+from app.schemas.extension import (
+    ExtensionCreate,
+    ExtensionRead,
+    ExtensionResolve,
+)
 from app.schemas.service import ServiceCreate, ServiceTransitionCreate
 from app.schemas.service_operations import SuspensionCreate
 
@@ -89,6 +94,14 @@ class ExtensionTestCase(unittest.TestCase):
             create_extension(self.service.id, self.extension_data(), self.db)
         self.assertEqual(context.exception.status_code, 409)
 
+    def test_original_due_date_cannot_be_in_the_future(self) -> None:
+        data = self.extension_data().model_dump()
+        data["original_due_date"] = date.today() + timedelta(days=1)
+        data["promised_date"] = date.today() + timedelta(days=2)
+
+        with self.assertRaises(ValidationError):
+            ExtensionCreate(**data)
+
     def test_only_one_active_extension_and_resolution_is_audited(self) -> None:
         self.add_debt()
         extension = create_extension(self.service.id, self.extension_data(), self.db)
@@ -103,6 +116,9 @@ class ExtensionTestCase(unittest.TestCase):
         )
         self.assertEqual(fulfilled.status, ExtensionStatus.fulfilled)
         self.assertIsNotNone(fulfilled.resolved_at)
+        public = ExtensionRead.model_validate(fulfilled).model_dump()
+        self.assertTrue(public["has_evidence"])
+        self.assertNotIn("evidence_reference", public)
 
     def test_active_extension_prevents_suspension_even_if_input_says_none(self) -> None:
         self.add_debt()

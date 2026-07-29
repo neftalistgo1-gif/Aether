@@ -13,6 +13,9 @@ const state = {
   selectedNetworkAction: null,
   selectedSuspensionDebt: null,
   selectedReactivationDebt: null,
+  selectedExtensions: [],
+  selectedExtensionBalance: null,
+  selectedExtensionDueDate: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -162,7 +165,8 @@ function renderUser() {
       column.hidden = !(
         hasCapability("installations.write") ||
         hasCapability("network.control") ||
-        hasCapability("notifications.write")
+        hasCapability("notifications.write") ||
+        hasCapability("billing.read")
       );
     }
   );
@@ -405,12 +409,14 @@ function renderServices() {
     hasCapability("network.control") &&
     hasCapability("billing.read")
   );
+  const canReadExtensions = hasCapability("billing.read");
   const canShowActions = (
     canScheduleInstallation ||
     canControlNetwork ||
     canWriteNotifications ||
     canCheckSuspension ||
-    canCheckReactivation
+    canCheckReactivation ||
+    canReadExtensions
   );
   body.innerHTML = state.services
     .map((service) => `
@@ -458,6 +464,13 @@ function renderServices() {
                 type="button"
                 data-service-id="${service.id}"
               >Validar reactivación</button>
+            ` : ""}
+            ${canReadExtensions ? `
+              <button
+                class="row-action manage-extensions"
+                type="button"
+                data-service-id="${service.id}"
+              >Prórrogas</button>
             ` : ""}
           </td>
         ` : ""}
@@ -1184,6 +1197,234 @@ async function runReactivationCheck(event) {
     );
   } catch (error) {
     errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+const extensionStatusLabels = {
+  active: "Vigente",
+  fulfilled: "Cumplida",
+  expired: "Vencida",
+  cancelled: "Cancelada",
+};
+
+function renderExtensionManagement() {
+  const service = state.services?.find(
+    (item) => item.id === state.selectedServiceId
+  );
+  if (!service) return;
+  const extensions = state.selectedExtensions || [];
+  const activeExtension = extensions.find(
+    (item) => item.status === "active"
+  );
+  const balance = Number(state.selectedExtensionBalance || 0);
+  $("#extension-summary").innerHTML = `
+    <div>
+      <span>Servicio</span>
+      <strong>${escapeText(service.amr_code)}</strong>
+    </div>
+    <div>
+      <span>Deuda actual</span>
+      <strong>${formatMoney(balance)}</strong>
+    </div>
+    <div>
+      <span>Prórroga vigente</span>
+      <strong>${activeExtension ? "Sí" : "No"}</strong>
+    </div>
+  `;
+  $("#extension-history").innerHTML = extensions.length
+    ? extensions
+        .slice()
+        .reverse()
+        .map(
+          (item) => `
+            <article class="history-item">
+              <div>
+                <strong>${escapeText(
+                  extensionStatusLabels[item.status] || item.status
+                )}</strong>
+                <span>${formatDate(item.original_due_date)} → ${formatDate(item.promised_date)}</span>
+              </div>
+              <p>${escapeText(item.reason)}</p>
+              <small>
+                Autorizó ${escapeText(item.authorized_by)} ·
+                Evidencia ${item.has_evidence ? "registrada" : "no registrada"}
+              </small>
+              ${item.resolution_reason ? `
+                <small>
+                  Resolución: ${escapeText(item.resolution_reason)}
+                </small>
+              ` : ""}
+            </article>
+          `
+        )
+        .join("")
+    : '<p class="empty-state">No hay prórrogas registradas.</p>';
+  const canCreate = (
+    hasCapability("billing.write") &&
+    ["active", "suspended"].includes(service.status) &&
+    balance > 0 &&
+    !activeExtension
+  );
+  $("#extension-create-form").hidden = !canCreate;
+  const createNote = $("#extension-create-note");
+  createNote.hidden = canCreate;
+  if (!hasCapability("billing.write")) {
+    createNote.textContent =
+      "Tu cuenta puede consultar el historial, pero no crear prórrogas.";
+  } else if (activeExtension) {
+    createNote.textContent =
+      "Ya existe una prórroga vigente; debe resolverse antes de crear otra.";
+  } else if (balance <= 0) {
+    createNote.textContent =
+      "No se puede crear una prórroga porque el servicio no tiene deuda.";
+  } else if (!["active", "suspended"].includes(service.status)) {
+    createNote.textContent =
+      "El estado actual del servicio no admite nuevas prórrogas.";
+  } else {
+    createNote.textContent = "";
+  }
+  const canResolve = (
+    hasCapability("billing.approve") && Boolean(activeExtension)
+  );
+  $("#extension-resolve-form").hidden = !canResolve;
+  $("#extension-resolve-note").hidden =
+    canResolve || !activeExtension;
+}
+
+async function openExtensionDialog(service) {
+  state.selectedServiceId = service.id;
+  state.selectedExtensions = [];
+  state.selectedExtensionBalance = null;
+  state.selectedExtensionDueDate = null;
+  $("#extension-dialog-title").textContent =
+    `Prórrogas · ${service.amr_code}`;
+  $("#extension-summary").innerHTML =
+    '<p class="empty-state">Consultando historial y deuda…</p>';
+  $("#extension-history").innerHTML = "";
+  $("#extension-create-form").hidden = true;
+  $("#extension-resolve-form").hidden = true;
+  $("#extension-create-note").hidden = true;
+  $("#extension-resolve-note").hidden = true;
+  $("#extension-dialog-status").textContent = "";
+  $("#extension-dialog").showModal();
+  try {
+    const [balance, charges, extensions] = await Promise.all([
+      api(`/api/v1/services/${service.id}/balance`),
+      api(`/api/v1/services/${service.id}/charges`),
+      api(`/api/v1/services/${service.id}/extensions`),
+    ]);
+    const openCharges = charges.filter(
+      (item) =>
+        ["pending", "partial"].includes(item.status) &&
+        Number(item.outstanding_balance) > 0
+    );
+    state.selectedExtensionBalance = balance.outstanding_balance;
+    state.selectedExtensionDueDate =
+      openCharges[0]?.due_date || localDateValue();
+    state.selectedExtensions = extensions;
+    $("#extension-original-due-date").value =
+      state.selectedExtensionDueDate;
+    $("#extension-original-due-date").max = localDateValue();
+    const promised = new Date();
+    promised.setDate(promised.getDate() + 3);
+    $("#extension-promised-date").value = localDateValue(promised);
+    $("#extension-promised-date").min = localDateValue();
+    $("#extension-reason").value =
+      "Cliente solicita tiempo adicional para realizar el pago";
+    $("#extension-authorized-by").value = state.user.display_name;
+    $("#extension-evidence-reference").value = "";
+    $("#extension-notes").value = "";
+    $("#extension-resolution-action").value = "fulfill";
+    $("#extension-resolution-reason").value = "";
+    renderExtensionManagement();
+  } catch (error) {
+    $("#extension-dialog-status").textContent = error.message;
+  }
+}
+
+function closeExtensionDialog() {
+  $("#extension-dialog").close();
+  state.selectedServiceId = null;
+  state.selectedExtensions = [];
+  state.selectedExtensionBalance = null;
+  state.selectedExtensionDueDate = null;
+}
+
+async function saveExtension(event) {
+  event.preventDefault();
+  const serviceId = state.selectedServiceId;
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const statusBox = $("#extension-dialog-status");
+  if (!serviceId) return;
+  submitButton.disabled = true;
+  statusBox.textContent = "";
+  try {
+    const saved = await api(
+      `/api/v1/services/${serviceId}/extensions`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          original_due_date: $("#extension-original-due-date").value,
+          promised_date: $("#extension-promised-date").value,
+          reason: $("#extension-reason").value.trim(),
+          authorized_by: $("#extension-authorized-by").value.trim(),
+          evidence_reference:
+            $("#extension-evidence-reference").value.trim(),
+          notes: $("#extension-notes").value.trim() || null,
+        }),
+      }
+    );
+    state.selectedExtensions.push(saved);
+    renderExtensionManagement();
+    statusBox.textContent =
+      "La prórroga quedó registrada y ya protege el servicio de una suspensión.";
+  } catch (error) {
+    statusBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function resolveExtension(event) {
+  event.preventDefault();
+  const serviceId = state.selectedServiceId;
+  const activeExtension = state.selectedExtensions.find(
+    (item) => item.status === "active"
+  );
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const statusBox = $("#extension-dialog-status");
+  if (!serviceId || !activeExtension) return;
+  const action = $("#extension-resolution-action").value;
+  submitButton.disabled = true;
+  statusBox.textContent = "";
+  try {
+    const saved = await api(
+      `/api/v1/services/${serviceId}/extensions/` +
+      `${activeExtension.id}/${action}`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          performed_by: state.user.display_name,
+          reason: $("#extension-resolution-reason").value.trim(),
+        }),
+      }
+    );
+    state.selectedExtensions = state.selectedExtensions.map(
+      (item) => item.id === saved.id ? saved : item
+    );
+    renderExtensionManagement();
+    statusBox.textContent =
+      action === "fulfill"
+        ? "La prórroga quedó marcada como cumplida."
+        : "La prórroga quedó cancelada y el historial se conservó.";
+  } catch (error) {
+    statusBox.textContent = error.message;
   } finally {
     submitButton.disabled = false;
   }
@@ -1968,12 +2209,14 @@ $("#services-body").addEventListener("click", (event) => {
   const reactivationButton = event.target.closest(
     ".check-commercial-reactivation"
   );
+  const extensionButton = event.target.closest(".manage-extensions");
   if (
     !button &&
     !networkButton &&
     !notificationButton &&
     !suspensionButton &&
-    !reactivationButton
+    !reactivationButton &&
+    !extensionButton
   ) return;
   const service = state.services?.find(
     (item) =>
@@ -1983,7 +2226,8 @@ $("#services-body").addEventListener("click", (event) => {
         networkButton ||
         notificationButton ||
         suspensionButton ||
-        reactivationButton
+        reactivationButton ||
+        extensionButton
       ).dataset.serviceId
   );
   if (!service) return;
@@ -1991,6 +2235,7 @@ $("#services-body").addEventListener("click", (event) => {
   else if (notificationButton) openNotificationDialog(service);
   else if (suspensionButton) openSuspensionCheckDialog(service);
   else if (reactivationButton) openReactivationCheckDialog(service);
+  else if (extensionButton) openExtensionDialog(service);
   else openInstallationDialog(service);
 });
 $("#installation-coverage-result").addEventListener(
@@ -2086,6 +2331,19 @@ $("#close-reactivation-check-dialog").addEventListener(
 $("#cancel-reactivation-check").addEventListener(
   "click",
   closeReactivationCheckDialog
+);
+$("#extension-create-form").addEventListener("submit", saveExtension);
+$("#extension-resolve-form").addEventListener(
+  "submit",
+  resolveExtension
+);
+$("#close-extension-dialog").addEventListener(
+  "click",
+  closeExtensionDialog
+);
+$("#dismiss-extension-dialog").addEventListener(
+  "click",
+  closeExtensionDialog
 );
 $("#new-payment-button").addEventListener("click", openPaymentDialog);
 $("#payment-customer").addEventListener("change", updatePaymentServices);

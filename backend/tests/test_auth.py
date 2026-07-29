@@ -401,6 +401,26 @@ class AuthenticationTestCase(unittest.TestCase):
                     Capability.network_control,
                 )
 
+    def test_extension_resolution_requires_billing_approval(self) -> None:
+        service_path = "/api/v1/services/{service_id}/extensions"
+        self.assertEqual(
+            capability_for_operation("GET", service_path),
+            Capability.billing_read,
+        )
+        self.assertEqual(
+            capability_for_operation("POST", service_path),
+            Capability.billing_write,
+        )
+        for action in ("fulfill", "cancel"):
+            path = (
+                f"{service_path}/{{extension_id}}/{action}"
+            )
+            with self.subTest(path=path):
+                self.assertEqual(
+                    capability_for_operation("POST", path),
+                    Capability.billing_approve,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

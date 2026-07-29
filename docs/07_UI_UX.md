@@ -110,6 +110,13 @@ compara nuevamente la deuda con sus cargos y la interfaz fuerza `dry_run`, de
 modo que una validación correcta tampoco modifica MikroTik ni el estado del
 servicio.
 
+La acción de prórrogas abre un historial por servicio y muestra el saldo
+actual. Una cuenta con `billing.write` puede registrar fecha original, nueva
+fecha prometida, autorización, motivo y evidencia privada cuando existe deuda
+y no hay otra prórroga vigente. Resolverla como cumplida o cancelada requiere
+`billing.approve`; su historial no se elimina y la referencia interna de
+evidencia nunca se presenta en pantalla.
+
 ## Implementación
 
 La superficie actual usa HTML, CSS y JavaScript modular sin dependencias. Se

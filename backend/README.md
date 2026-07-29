@@ -302,6 +302,12 @@ Una prórroga puede cumplirse, cancelarse o vencer. Antes de suspender, Aether
 consulta automáticamente sus registros y bloquea la operación si existe una
 prórroga vigente; la deuda no desaparece por concederla.
 
+La fecha original no puede estar en el futuro y la fecha prometida debe ser
+posterior. La referencia de evidencia se conserva internamente; las respuestas
+sólo indican si existe. En la UI, `billing.read` consulta el historial,
+`billing.write` registra una prórroga y `billing.approve` permite marcarla como
+cumplida o cancelada.
+
 La suspensión también calcula la deuda directamente desde los cargos abiertos,
 exige al menos una mensualidad cuyo periodo de tolerancia haya terminado y
 guarda una fotografía de los cargos usados para tomar la decisión. Un monto

@@ -56,3 +56,7 @@ class Extension(Base):
     resolved_by: Mapped[str | None] = mapped_column(String(150), nullable=True)
     resolution_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    @property
+    def has_evidence(self) -> bool:
+        return bool(self.evidence_reference)

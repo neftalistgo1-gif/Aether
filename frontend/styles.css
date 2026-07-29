@@ -178,6 +178,7 @@ dialog {
 }
 dialog::backdrop { background: rgba(2,8,17,.76); backdrop-filter: blur(5px); }
 dialog form { padding: 26px; }
+dialog form.embedded-form { padding: 0; }
 .dialog-content { padding: 26px; }
 .account-table { margin: 20px -26px -26px; }
 .dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
@@ -205,6 +206,32 @@ dialog form { padding: 26px; }
 }
 .decision-summary span { color: var(--muted); font-size: .68rem; }
 .decision-summary strong { font-size: .82rem; }
+.extension-section {
+  display: grid;
+  gap: 12px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+.extension-section h3 { margin: 0; font-size: .92rem; }
+.extension-history { display: grid; gap: 10px; }
+.history-item {
+  display: grid;
+  gap: 7px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(35,136,239,.04);
+}
+.history-item div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.history-item p,
+.history-item small { margin: 0; }
+.history-item span,
+.history-item small { color: var(--muted); }
+.history-item small { display: block; }
 .plan-summary { align-self: end; display: grid; gap: 6px; min-height: 68px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: rgba(35,136,239,.06); }
 .plan-summary span { color: var(--muted); font-size: .72rem; }
 .plan-summary strong { color: var(--cyan); font-size: 1.05rem; }

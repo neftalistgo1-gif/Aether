@@ -1272,6 +1272,141 @@
       </form>
     </dialog>
 
+    <dialog id="extension-dialog" aria-labelledby="extension-dialog-title">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">ACUERDO DE PAGO AUDITABLE</p>
+            <h2 id="extension-dialog-title">Prórrogas</h2>
+          </div>
+          <button
+            id="close-extension-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div id="extension-summary" class="decision-summary"></div>
+
+        <section class="extension-section">
+          <h3>Historial</h3>
+          <div id="extension-history" class="extension-history"></div>
+        </section>
+
+        <p id="extension-create-note" class="form-help" hidden></p>
+        <form id="extension-create-form" class="embedded-form" hidden>
+          <section class="extension-section">
+            <h3>Nueva prórroga</h3>
+            <div class="form-grid">
+              <label>
+                Fecha original de pago
+                <input
+                  id="extension-original-due-date"
+                  type="date"
+                  required
+                >
+              </label>
+              <label>
+                Nueva fecha prometida
+                <input id="extension-promised-date" type="date" required>
+              </label>
+              <label>
+                Autorizada por
+                <input
+                  id="extension-authorized-by"
+                  minlength="2"
+                  maxlength="150"
+                  required
+                >
+              </label>
+              <label>
+                Referencia privada de evidencia
+                <input
+                  id="extension-evidence-reference"
+                  minlength="3"
+                  maxlength="500"
+                  required
+                >
+              </label>
+              <label class="full-row">
+                Motivo
+                <textarea
+                  id="extension-reason"
+                  rows="3"
+                  minlength="3"
+                  maxlength="1000"
+                  required
+                ></textarea>
+              </label>
+              <label class="full-row">
+                Notas
+                <textarea
+                  id="extension-notes"
+                  rows="2"
+                  maxlength="1000"
+                ></textarea>
+              </label>
+            </div>
+            <p class="form-help">
+              La evidencia se almacena de forma privada. La prórroga no elimina
+              la deuda y sólo evita la suspensión hasta la fecha prometida.
+            </p>
+            <div class="dialog-actions">
+              <button class="primary-button" type="submit">
+                Registrar prórroga
+              </button>
+            </div>
+          </section>
+        </form>
+
+        <p id="extension-resolve-note" class="form-help" hidden>
+          Existe una prórroga vigente, pero tu cuenta no puede resolverla.
+        </p>
+        <form id="extension-resolve-form" class="embedded-form" hidden>
+          <section class="extension-section">
+            <h3>Resolver prórroga vigente</h3>
+            <div class="form-grid">
+              <label>
+                Resultado
+                <select id="extension-resolution-action" required>
+                  <option value="fulfill">Cumplida</option>
+                  <option value="cancel">Cancelada</option>
+                </select>
+              </label>
+              <label class="full-row">
+                Motivo de resolución
+                <textarea
+                  id="extension-resolution-reason"
+                  rows="3"
+                  minlength="3"
+                  maxlength="1000"
+                  required
+                ></textarea>
+              </label>
+            </div>
+            <div class="dialog-actions">
+              <button class="primary-button" type="submit">
+                Guardar resolución
+              </button>
+            </div>
+          </section>
+        </form>
+
+        <p
+          id="extension-dialog-status"
+          class="form-error"
+          role="status"
+        ></p>
+        <div class="dialog-actions">
+          <button
+            id="dismiss-extension-dialog"
+            class="text-button"
+            type="button"
+          >Cerrar</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="plan-price-dialog" aria-labelledby="plan-price-dialog-title">
       <form id="plan-price-form">
         <div class="dialog-heading">

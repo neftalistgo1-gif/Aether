@@ -28,6 +28,9 @@ class FrontendShellTestCase(unittest.TestCase):
         script = (frontend_directory / "app.js").read_text(
             encoding="utf-8"
         )
+        page = (frontend_directory / "index.html").read_text(
+            encoding="utf-8"
+        )
         for endpoint in (
             "/api/v1/auth/login",
             "/api/v1/auth/me",
@@ -137,6 +140,24 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn(
             "La reactivación comercial pasó todas las validaciones",
             script,
+        )
+        self.assertIn(".manage-extensions", script)
+        self.assertIn("/extensions`", script)
+        self.assertIn(
+            "original_due_date:",
+            script,
+        )
+        self.assertIn(
+            "evidence_reference:",
+            script,
+        )
+        self.assertIn(
+            '${activeExtension.id}/${action}',
+            script,
+        )
+        self.assertIn(
+            "La prórroga no elimina",
+            page,
         )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
