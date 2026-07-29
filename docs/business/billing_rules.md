@@ -84,6 +84,16 @@ cliente.
 Los cambios en el precio general de un plan no deben modificar
 automáticamente los precios de servicios existentes.
 
+Cuando un cliente solicita un cambio de plan:
+
+- La velocidad operativa se aplica el día de la solicitud.
+- El precio nuevo comienza en la siguiente mensualidad aún no generada.
+- Una mensualidad ya generada no se modifica.
+- Una mensualidad atrasada usa el precio que correspondía a su periodo.
+- Un precio distinto al publicado requiere un motivo comercial.
+- El historial debe conservar plan, precio, solicitante, responsable técnico
+  y periodo de inicio del cobro.
+
 ## 6. Generación de mensualidades
 
 Las mensualidades continúan generándose mientras el servicio esté
@@ -346,10 +356,10 @@ Cuando se cambia de domicilio, ¿se hace una revisión de cobertura antes de cob
 Si, al cliente se le pregunta su nuevo domicilio, se hace una revision, en caso de no tener cobertura se da por finalizado el servicio y se recuperan los equipos de igual forma. si tenemos cobertura se deberia actualizar el contrato con la nueva direccion conservando fechas y todo lo demas
 
 ¿El tubo instalado también pertenece a AMR y normalmente se recupera?
-Si, el tubo se coloca sobre la zotea y en la punta la antena 
+Si, el tubo se coloca sobre la zotea y en la punta la antena
 
 ¿Quién determina que un equipo recuperado está listo, necesita reparación o debe desecharse?
 El tecnico instalador hace la limpieza de equipos y varias pruebas de conexion, al igual con las fuentes de poder; si la antena no logra pasar alguna prueba de conexion despues de darle mantenimiento se considera defectuosa y se desecha. es el mismo proceso para los modems y fuentes de poder
 
 ¿La confirmación verbal de navegación la registra alguien o bastará inicialmente una casilla de aceptación marcada por el técnico?
-Solo el tecnico y a veces atencion al cliente llama al cliente para confirmar que quedo activo su servicio 
+Solo el tecnico y a veces atencion al cliente llama al cliente para confirmar que quedo activo su servicio

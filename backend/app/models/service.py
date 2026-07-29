@@ -62,6 +62,12 @@ class Service(Base):
         default=uuid4,
     )
     amr_code: Mapped[str] = mapped_column(String(9), index=True)
+    plan_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("plans.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     address: Mapped[str] = mapped_column(String(250))
     plan_name: Mapped[str] = mapped_column(String(100))
     monthly_price: Mapped[Decimal] = mapped_column(Numeric(10, 2))

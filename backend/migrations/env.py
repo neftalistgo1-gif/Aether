@@ -21,6 +21,7 @@ from app.models.payment import Payment, PaymentStatusEvent
 from app.models.payment_allocation import CreditMovement, PaymentAllocation
 from app.models.plan import Plan, PlanPrice
 from app.models.service import Service, ServiceEvent, ServiceHolder
+from app.models.service_plan_change import ServicePlanChange
 from app.models.service_operations import Cancellation, Reactivation, Suspension
 
 config = context.config

@@ -3,6 +3,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -120,27 +121,40 @@ class ServiceEndpointsTestCase(unittest.TestCase):
         updated = update_service(
             service.id,
             ServiceUpdate(
-                reason="El cliente solicitó un plan nuevo",
-                plan_name="Hogar 30 Mbps",
-                monthly_price=Decimal("600.00"),
+                reason="Ajuste autorizado de fecha de pago",
+                payment_day=15,
+                grace_days=7,
             ),
             self.db,
         )
 
-        self.assertEqual(updated.plan_name, "Hogar 30 Mbps")
-        self.assertEqual(updated.monthly_price, Decimal("600.00"))
+        self.assertEqual(updated.payment_day, 15)
+        self.assertEqual(updated.grace_days, 7)
 
         events = list_service_events(service.id, self.db)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[-1].event_type, ServiceEventType.details_updated)
         self.assertEqual(
             events[-1].reason,
-            "El cliente solicitó un plan nuevo",
+            "Ajuste autorizado de fecha de pago",
         )
         self.assertEqual(
-            events[-1].changes["monthly_price"],
-            {"from": "500.00", "to": "600.00"},
+            events[-1].changes["payment_day"],
+            {"from": 5, "to": 15},
         )
+
+    def test_specialized_fields_are_not_accepted_by_generic_update(self) -> None:
+        for field_name, value in (
+            ("address", "Calle Nueva 200"),
+            ("plan_name", "Hogar 30 Mbps"),
+            ("monthly_price", Decimal("600.00")),
+        ):
+            with self.subTest(field_name=field_name):
+                with self.assertRaises(ValidationError):
+                    ServiceUpdate(
+                        reason="Debe usar el flujo especializado",
+                        **{field_name: value},
+                    )
 
     def test_generic_transition_only_activates_service(self) -> None:
         service = create_service(self.service_payload(), self.db)

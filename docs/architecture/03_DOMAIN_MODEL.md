@@ -63,6 +63,10 @@ domicilio específico.
 - Un Service puede cambiar de titular.
 - Un Service puede cambiar de domicilio.
 - Un Service puede cambiar de plan, precio, IP, torre o AP.
+- Los cambios de plan conservan el precio por periodo de facturación; no
+  recalculan cargos ya generados.
+- Plan, precio y domicilio no se modifican mediante la actualización genérica
+  del Service.
 - La suspensión no equivale a cancelación.
 - Las mensualidades continúan mientras el contrato siga vigente.
 - La baja definitiva detiene la generación de nuevas mensualidades.

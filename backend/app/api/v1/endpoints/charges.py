@@ -22,6 +22,7 @@ from app.schemas.charge import (
 )
 from app.services.billing import apply_credit_to_charge
 from app.services.audit import record_audit_event
+from app.services.pricing import agreed_price_for_period
 
 router = APIRouter(prefix="/api/v1", tags=["charges"])
 
@@ -166,6 +167,12 @@ def create_monthly_charge(
             detail="Billing period is after the effective cancellation",
         )
 
+    agreed_price = agreed_price_for_period(
+        service.id,
+        period,
+        service.monthly_price,
+        db,
+    )
     charge = Charge(
         customer_id=responsible_customer_id(service, due_date),
         service_id=service.id,
@@ -174,8 +181,8 @@ def create_monthly_charge(
             charge_data.description
             or f"Monthly service {period:%Y-%m}"
         ),
-        amount=service.monthly_price,
-        outstanding_balance=service.monthly_price,
+        amount=agreed_price,
+        outstanding_balance=agreed_price,
         due_date=due_date,
         billing_period=period,
         status=ChargeStatus.pending,

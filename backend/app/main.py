@@ -30,6 +30,9 @@ from app.api.v1.endpoints.payment_allocations import (
 from app.api.v1.endpoints.service_operations import (
     router as service_operations_router,
 )
+from app.api.v1.endpoints.service_plan_changes import (
+    router as service_plan_changes_router,
+)
 from app.api.v1.endpoints.services import router as services_router
 
 app = FastAPI(
@@ -53,6 +56,7 @@ app.include_router(payment_allocations_router)
 app.include_router(extensions_router)
 app.include_router(network_assignments_router)
 app.include_router(service_operations_router)
+app.include_router(service_plan_changes_router)
 app.include_router(equipment_recovery_router)
 app.include_router(maintenance_inspections_router)
 app.include_router(mikrotik_router)

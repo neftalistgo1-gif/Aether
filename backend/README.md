@@ -247,6 +247,20 @@ El catálogo y los acuerdos individuales son independientes. Cada `Service`
 continúa usando su `monthly_price` acordado, por lo que modificar o desactivar
 un plan nunca cambia automáticamente lo que pagan los clientes existentes.
 
+### Cambios de plan por servicio
+
+`ServicePlanChange` registra el plan y precio anteriores, el nuevo acuerdo,
+quién lo solicitó, quién aplicó la velocidad y desde qué periodo se cobrará.
+El plan operativo cambia el mismo día de la solicitud, pero la nueva tarifa
+sólo se usa en la siguiente mensualidad que todavía no haya sido generada.
+
+Cada mensualidad consulta el precio correspondiente a su propio periodo. Una
+mensualidad atrasada conserva el precio anterior y un cargo ya creado nunca se
+recalcula. Los precios especiales siguen permitidos, pero exigen un motivo
+documentado. El endpoint genérico de servicios no acepta cambios de plan,
+precio o domicilio; esos campos sólo se modifican mediante sus flujos
+especializados.
+
 ### Instalaciones y cambios de domicilio
 
 `Installation` administra instalaciones iniciales, reinstalaciones y cambios

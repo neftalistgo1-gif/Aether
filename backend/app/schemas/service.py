@@ -31,15 +31,9 @@ class ServiceCreate(BaseModel):
 
 
 class ServiceUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     reason: str = Field(min_length=3, max_length=500)
-    address: str | None = Field(default=None, min_length=5, max_length=250)
-    plan_name: str | None = Field(default=None, min_length=2, max_length=100)
-    monthly_price: Decimal | None = Field(
-        default=None,
-        gt=0,
-        max_digits=10,
-        decimal_places=2,
-    )
     payment_day: int | None = Field(default=None, ge=1, le=28)
     grace_days: int | None = Field(default=None, ge=0, le=30)
 
@@ -66,6 +60,7 @@ class ServiceRead(BaseModel):
 
     id: UUID
     current_customer_id: UUID
+    plan_id: UUID | None
     amr_code: str
     address: str
     plan_name: str
