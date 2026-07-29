@@ -56,6 +56,12 @@ pueden crear ofertas, publicar una nueva tarifa y desactivar planes. Cada
 cambio exige motivo y conserva el historial; nunca modifica automáticamente
 los precios acordados de servicios existentes.
 
+Las cuentas con `installations.write` pueden registrar desde la UI la
+evaluación de cobertura de un servicio pendiente. Una evaluación viable se
+agenda y genera el cargo correspondiente cuando el costo es mayor que cero;
+un resultado fuera de cobertura no se agenda ni cobra. Completar el trabajo y
+activar el servicio permanece en un flujo posterior con evidencias obligatorias.
+
 ## Primer administrador y acceso
 
 Todas las rutas de negocio requieren autenticación. Para preparar una

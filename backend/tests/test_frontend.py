@@ -74,6 +74,14 @@ class FrontendShellTestCase(unittest.TestCase):
             "los servicios existentes no fueron modificados",
             script,
         )
+        self.assertIn('hasCapability("installations.write")', script)
+        self.assertIn('hasCapability("installations.read")', script)
+        self.assertIn('installation_type: "installation"', script)
+        self.assertIn("coverage_result: result", script)
+        self.assertIn(
+            "su cargo fue generado",
+            script,
+        )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

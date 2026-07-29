@@ -8,6 +8,7 @@ const state = {
   editingCustomerId: null,
   selectedPaymentId: null,
   selectedPlanId: null,
+  selectedServiceId: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -152,6 +153,11 @@ function renderUser() {
   document.querySelectorAll(".plan-action-column").forEach((column) => {
     column.hidden = !canWritePlans;
   });
+  document.querySelectorAll(".installation-action-column").forEach(
+    (column) => {
+      column.hidden = !hasCapability("installations.write");
+    }
+  );
 }
 
 function hasCapability(capability) {
@@ -379,6 +385,7 @@ function renderServices() {
     empty.hidden = false;
     return;
   }
+  const canScheduleInstallation = hasCapability("installations.write");
   body.innerHTML = state.services
     .map((service) => `
       <tr>
@@ -387,6 +394,17 @@ function renderServices() {
         <td>${escapeText(service.address)}</td>
         <td>Día ${service.payment_day} · ${formatMoney(service.monthly_price)}</td>
         <td><span class="badge ${service.status}">${escapeText(service.status)}</span></td>
+        ${canScheduleInstallation ? `
+          <td>
+            ${service.status === "pending" && !service.has_scheduled_installation ? `
+              <button
+                class="row-action assess-installation"
+                type="button"
+                data-service-id="${service.id}"
+              >Cobertura y agenda</button>
+            ` : "—"}
+          </td>
+        ` : ""}
       </tr>
     `)
     .join("");
@@ -473,6 +491,110 @@ async function saveService(event) {
     }
     closeServiceDialog();
     setNotice("El servicio quedó registrado como pendiente.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+function updateInstallationFields() {
+  const result = $("#installation-coverage-result").value;
+  const rejected = result === "out_of_coverage";
+  const special = result === "special_equipment";
+  $("#installation-date-field").hidden = rejected;
+  $("#installation-cost-field").hidden = rejected;
+  $("#installation-scheduled-for").required = !rejected;
+  $("#installation-cost").required = !rejected;
+  $("#installation-special-equipment-field").hidden = !special;
+  $("#installation-special-equipment").required = special;
+  if (rejected) $("#installation-cost").value = "0";
+}
+
+async function openInstallationDialog(service) {
+  if (hasCapability("installations.read")) {
+    try {
+      const installations = await api(
+        `/api/v1/services/${service.id}/installations`
+      );
+      if (installations.some((item) => item.status === "scheduled")) {
+        service.has_scheduled_installation = true;
+        renderServices();
+        setNotice("Este servicio ya tiene una instalación programada.");
+        return;
+      }
+    } catch (error) {
+      setNotice(error.message);
+      return;
+    }
+  }
+  state.selectedServiceId = service.id;
+  $("#installation-dialog-title").textContent =
+    `Evaluar instalación · ${service.amr_code}`;
+  $("#installation-coverage-result").value = "viable";
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  $("#installation-scheduled-for").value = localDateValue(tomorrow);
+  $("#installation-cost").value = "0";
+  $("#installation-special-equipment").value = "";
+  $("#installation-notes").value = "";
+  $("#installation-form-error").textContent = "";
+  updateInstallationFields();
+  $("#installation-dialog").showModal();
+  $("#installation-coverage-result").focus();
+}
+
+function closeInstallationDialog() {
+  $("#installation-dialog").close();
+  state.selectedServiceId = null;
+}
+
+async function saveInstallation(event) {
+  event.preventDefault();
+  const service = state.services?.find(
+    (item) => item.id === state.selectedServiceId
+  );
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const errorBox = $("#installation-form-error");
+  if (!service) return;
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const result = $("#installation-coverage-result").value;
+    const rejected = result === "out_of_coverage";
+    const saved = await api(
+      `/api/v1/services/${service.id}/installations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          installation_type: "installation",
+          coverage_result: result,
+          coverage_checked_by: state.user.display_name,
+          coverage_checked_at: new Date().toISOString(),
+          special_equipment_notes:
+            $("#installation-special-equipment").value.trim() || null,
+          scheduled_for: rejected
+            ? null
+            : $("#installation-scheduled-for").value,
+          cost: rejected ? "0" : $("#installation-cost").value,
+          new_address: null,
+          registered_by: state.user.display_name,
+          notes: $("#installation-notes").value.trim() || null,
+        }),
+      }
+    );
+    service.has_scheduled_installation = saved.status === "scheduled";
+    renderServices();
+    closeInstallationDialog();
+    setNotice(
+      saved.status === "scheduled"
+        ? saved.charge_id
+          ? "La instalación quedó programada y su cargo fue generado."
+          : "La instalación quedó programada sin cargo."
+        : "La evaluación fuera de cobertura quedó registrada sin agenda ni cargo."
+    );
   } catch (error) {
     errorBox.textContent = error.message;
   } finally {
@@ -1196,6 +1318,27 @@ $("#service-plan").addEventListener("change", updateSelectedPlanPrice);
 $("#service-form").addEventListener("submit", saveService);
 $("#close-service-dialog").addEventListener("click", closeServiceDialog);
 $("#cancel-service-dialog").addEventListener("click", closeServiceDialog);
+$("#services-body").addEventListener("click", (event) => {
+  const button = event.target.closest(".assess-installation");
+  if (!button) return;
+  const service = state.services?.find(
+    (item) => item.id === button.dataset.serviceId
+  );
+  if (service) openInstallationDialog(service);
+});
+$("#installation-coverage-result").addEventListener(
+  "change",
+  updateInstallationFields
+);
+$("#installation-form").addEventListener("submit", saveInstallation);
+$("#close-installation-dialog").addEventListener(
+  "click",
+  closeInstallationDialog
+);
+$("#cancel-installation-dialog").addEventListener(
+  "click",
+  closeInstallationDialog
+);
 $("#new-payment-button").addEventListener("click", openPaymentDialog);
 $("#payment-customer").addEventListener("change", updatePaymentServices);
 $("#payment-form").addEventListener("submit", savePayment);

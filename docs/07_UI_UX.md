@@ -66,6 +66,12 @@ publicado desde una fecha válida o retirar la oferta. La interfaz explica que
 ninguna de estas acciones cambia el acuerdo de clientes existentes y conserva
 los motivos exigidos por la API.
 
+Para servicios pendientes, `installations.write` habilita la evaluación de
+cobertura y la agenda inicial. El formulario distingue cobertura viable,
+equipo especial y fuera de cobertura; sólo los resultados viables aceptan
+fecha y costo. Registrar esta etapa nunca activa el servicio. Si hay costo, la
+API crea el cargo que deberá pagarse antes de completar la instalación.
+
 ## Implementación
 
 La superficie actual usa HTML, CSS y JavaScript modular sin dependencias. Se

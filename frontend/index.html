@@ -219,6 +219,7 @@
                     <th>Domicilio</th>
                     <th>Pago</th>
                     <th>Estado</th>
+                    <th class="installation-action-column" hidden>Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="services-body"></tbody>
@@ -771,6 +772,86 @@
             Volver
           </button>
           <button class="primary-button" type="submit">Crear plan</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      id="installation-dialog"
+      aria-labelledby="installation-dialog-title"
+    >
+      <form id="installation-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">COBERTURA Y AGENDA</p>
+            <h2 id="installation-dialog-title">Evaluar instalación</h2>
+          </div>
+          <button
+            id="close-installation-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Resultado de cobertura
+            <select id="installation-coverage-result" required>
+              <option value="viable">Viable</option>
+              <option value="special_equipment">Requiere equipo especial</option>
+              <option value="out_of_coverage">Fuera de cobertura</option>
+            </select>
+          </label>
+          <label id="installation-date-field">
+            Fecha programada
+            <input id="installation-scheduled-for" type="date" required>
+          </label>
+          <label id="installation-cost-field">
+            Costo de instalación
+            <input
+              id="installation-cost"
+              type="number"
+              min="0"
+              step="0.01"
+              value="0"
+              required
+            >
+          </label>
+          <label
+            id="installation-special-equipment-field"
+            class="full-row"
+            hidden
+          >
+            Equipo especial requerido
+            <textarea
+              id="installation-special-equipment"
+              rows="3"
+              maxlength="2000"
+            ></textarea>
+          </label>
+          <label class="full-row">
+            Notas de evaluación
+            <textarea
+              id="installation-notes"
+              rows="3"
+              maxlength="2000"
+            ></textarea>
+          </label>
+        </div>
+        <p class="form-help">
+          Una cobertura viable se agenda. Si existe costo, Aether genera un
+          cargo que deberá liquidarse antes de completar la instalación.
+        </p>
+        <p id="installation-form-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-installation-dialog"
+            class="text-button"
+            type="button"
+          >Volver</button>
+          <button class="primary-button" type="submit">
+            Guardar evaluación
+          </button>
         </div>
       </form>
     </dialog>
