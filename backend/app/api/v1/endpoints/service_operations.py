@@ -15,6 +15,10 @@ from app.api.v1.endpoints.network_assignments import (
 from app.api.v1.endpoints.extensions import find_active_extension
 from app.api.v1.endpoints.mikrotik import control_service_network
 from app.db.session import get_db
+from app.models.payment_agreement import (
+    PaymentAgreement,
+    PaymentAgreementStatus,
+)
 from app.models.mikrotik import (
     NetworkCommandStatus,
     NetworkControlAction,
@@ -474,6 +478,62 @@ def prepare_reactivation(
                 "actual_debt": str(actual_debt),
             },
         )
+    if actual_debt > 0:
+        authorization = None
+        authorization_type = None
+        if reactivation_data.extension_id is not None:
+            authorization = find_active_extension(service_id, db)
+            authorization_type = "extension"
+            if (
+                authorization is None
+                or authorization.id != reactivation_data.extension_id
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Selected payment extension is not active",
+                )
+        elif reactivation_data.payment_agreement_id is not None:
+            authorization = db.get(
+                PaymentAgreement,
+                reactivation_data.payment_agreement_id,
+            )
+            authorization_type = "payment agreement"
+            if (
+                authorization is None
+                or authorization.service_id != service.id
+                or authorization.status
+                != PaymentAgreementStatus.active
+                or (
+                    authorization.promised_date is not None
+                    and authorization.promised_date < date.today()
+                )
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Selected payment agreement is not active",
+                )
+        if (
+            authorization is None
+            or authorization.customer_id != service.current_customer_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Selected {authorization_type} does not belong "
+                    "to the current service holder"
+                ),
+            )
+        if (
+            authorization.authorized_by.strip()
+            != reactivation_data.authorized_by.strip()
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Reactivation authorizer does not match the selected "
+                    f"{authorization_type}"
+                ),
+            )
     return service, effective_suspension
 
 
@@ -522,6 +582,8 @@ def record_reactivation(
             "network_result": reactivation.mikrotik_result,
             "network_command_id": network_command_id,
             "authorized_by": reactivation.authorized_by,
+            "extension_id": reactivation.extension_id,
+            "payment_agreement_id": reactivation.payment_agreement_id,
         },
     )
 
@@ -583,6 +645,8 @@ def coordinate_reactivation(
         authorized_by=reactivation_data.authorized_by,
         performed_by=reactivation_data.performed_by,
         debt_amount=reactivation_data.debt_amount,
+        extension_id=reactivation_data.extension_id,
+        payment_agreement_id=reactivation_data.payment_agreement_id,
         mikrotik_result=NetworkOperationResult.success,
         mikrotik_details=None,
     )

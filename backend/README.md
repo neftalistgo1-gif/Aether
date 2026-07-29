@@ -175,7 +175,10 @@ por medio de un proveedor externo.
 La reactivación conserva autorización, responsable, deuda y resultado de red.
 Antes de iniciar una operación coordinada, la API vuelve a calcular los cargos
 abiertos y rechaza cualquier deuda declarada que no coincida con el saldo de
-Aether. Los intentos fallidos quedan registrados y pueden reintentarse.
+Aether. Con deuda exige exactamente una prórroga o un convenio vigente del
+mismo servicio y titular; también comprueba que la persona autorizante
+coincida. Con saldo liquidado no permite adjuntar un respaldo innecesario. Los
+intentos fallidos quedan registrados y pueden reintentarse.
 
 La baja definitiva puede ejecutarse inmediatamente o programarse para una
 fecha futura. Conserva titular solicitante, folio, saldos y estado de
@@ -356,8 +359,10 @@ modifica el estado comercial. La orden verificada queda enlazada de forma
 
 La UI permite validar una reactivación coordinada para servicios suspendidos
 cuando la cuenta reúne `network.control` y `billing.read`. Consulta el saldo
-autoritativo, exige autorización y motivo, y fuerza siempre `dry_run: true`;
-por tanto, esta pantalla no retira el bloqueo ni reactiva el servicio.
+autoritativo y, si existe deuda, carga únicamente prórrogas y convenios vigentes
+del titular actual. El autorizante se obtiene del respaldo seleccionado. La UI
+fuerza siempre `dry_run: true`; por tanto, esta pantalla no retira el bloqueo ni
+reactiva el servicio.
 
 Las operaciones manuales continúan disponibles para contingencias y quedan
 identificadas como `manual`. Ya no es posible declarar un resultado automático

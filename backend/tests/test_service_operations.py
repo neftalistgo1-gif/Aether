@@ -17,6 +17,11 @@ from app.api.v1.endpoints.service_operations import (
     reactivate_service,
     suspend_service,
 )
+from app.api.v1.endpoints.payment_agreements import (
+    cancel_payment_agreement,
+    create_payment_agreement,
+)
+from app.api.v1.endpoints.extensions import create_extension
 from app.api.v1.endpoints.services import (
     create_service,
     get_service,
@@ -41,8 +46,14 @@ from app.schemas.service_operations import (
     CancellationCreate,
     CancellationExecute,
     ReactivationCreate,
+    ReactivationRead,
     SuspensionCreate,
 )
+from app.schemas.payment_agreement import (
+    PaymentAgreementCreate,
+    PaymentAgreementResolve,
+)
+from app.schemas.extension import ExtensionCreate
 
 
 class ServiceOperationsTestCase(unittest.TestCase):
@@ -79,20 +90,19 @@ class ServiceOperationsTestCase(unittest.TestCase):
             ),
             self.db,
         )
-        self.db.add(
-            Charge(
-                customer_id=self.customer.id,
-                service_id=self.service.id,
-                charge_type=ChargeType.monthly,
-                description="Mensualidad vencida",
-                amount=Decimal("500.00"),
-                outstanding_balance=Decimal("500.00"),
-                due_date=date.today() - timedelta(days=5),
-                billing_period=date.today().replace(day=1),
-                status=ChargeStatus.pending,
-                generated_by="Proceso mensual",
-            )
+        self.charge = Charge(
+            customer_id=self.customer.id,
+            service_id=self.service.id,
+            charge_type=ChargeType.monthly,
+            description="Mensualidad vencida",
+            amount=Decimal("500.00"),
+            outstanding_balance=Decimal("500.00"),
+            due_date=date.today() - timedelta(days=5),
+            billing_period=date.today().replace(day=1),
+            status=ChargeStatus.pending,
+            generated_by="Proceso mensual",
         )
+        self.db.add(self.charge)
         self.notification = CustomerNotification(
             customer_id=self.customer.id,
             service_id=self.service.id,
@@ -107,6 +117,15 @@ class ServiceOperationsTestCase(unittest.TestCase):
         )
         self.db.add(self.notification)
         self.db.commit()
+        self.payment_agreement = create_payment_agreement(
+            self.service.id,
+            PaymentAgreementCreate(
+                terms="Convenio vigente para conservar el servicio",
+                authorized_by="Atención a clientes",
+                evidence_reference="private/agreements/amr301",
+            ),
+            self.db,
+        )
 
     def tearDown(self) -> None:
         self.db.close()
@@ -139,6 +158,7 @@ class ServiceOperationsTestCase(unittest.TestCase):
             authorized_by="Atención a clientes",
             performed_by="Técnico de red",
             debt_amount=Decimal("500.00"),
+            payment_agreement_id=self.payment_agreement.id,
             mikrotik_result=result,
             mikrotik_details="Operación de prueba",
         )
@@ -302,6 +322,146 @@ class ServiceOperationsTestCase(unittest.TestCase):
         self.assertEqual(
             get_service(self.service.id, self.db).status,
             ServiceStatus.suspended,
+        )
+
+    def test_debt_reactivation_requires_active_authorization(self) -> None:
+        suspend_service(
+            self.service.id,
+            self.suspension_payload(),
+            self.db,
+        )
+        cancel_payment_agreement(
+            self.service.id,
+            self.payment_agreement.id,
+            PaymentAgreementResolve(
+                performed_by="Supervisor de cobranza",
+                reason="Convenio retirado antes de reactivar",
+            ),
+            self.db,
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            reactivate_service(
+                self.service.id,
+                self.reactivation_payload(),
+                self.db,
+            )
+
+        self.assertEqual(context.exception.status_code, 409)
+        self.assertEqual(
+            get_service(self.service.id, self.db).status,
+            ServiceStatus.suspended,
+        )
+
+    def test_reactivation_authorizer_must_match_selected_basis(self) -> None:
+        suspend_service(
+            self.service.id,
+            self.suspension_payload(),
+            self.db,
+        )
+        payload = self.reactivation_payload()
+        payload.authorized_by = "Persona distinta"
+
+        with self.assertRaises(HTTPException) as context:
+            reactivate_service(self.service.id, payload, self.db)
+
+        self.assertEqual(context.exception.status_code, 409)
+        self.assertIn("authorizer", context.exception.detail)
+
+    def test_debt_reactivation_requires_exactly_one_basis(self) -> None:
+        values = self.reactivation_payload().model_dump()
+        values["payment_agreement_id"] = None
+        with self.assertRaises(ValidationError):
+            ReactivationCreate(**values)
+
+        values["payment_agreement_id"] = self.payment_agreement.id
+        values["extension_id"] = uuid4()
+        with self.assertRaises(ValidationError):
+            ReactivationCreate(**values)
+
+        values["debt_amount"] = Decimal("0.00")
+        values["extension_id"] = None
+        with self.assertRaises(ValidationError):
+            ReactivationCreate(**values)
+
+    def test_legacy_reactivation_without_basis_remains_readable(self) -> None:
+        legacy = ReactivationRead(
+            id=uuid4(),
+            suspension_id=uuid4(),
+            network_command_id=None,
+            executed_at=datetime.now(UTC),
+            reason="Registro anterior a respaldos vinculados",
+            authorized_by="Atención a clientes",
+            performed_by="Técnico de red",
+            debt_amount=Decimal("500.00"),
+            extension_id=None,
+            payment_agreement_id=None,
+            mikrotik_result=NetworkOperationResult.manual,
+            mikrotik_details="Histórico",
+        )
+
+        self.assertEqual(legacy.debt_amount, Decimal("500.00"))
+        self.assertIsNone(legacy.payment_agreement_id)
+
+    def test_settled_balance_needs_no_debt_agreement(self) -> None:
+        suspend_service(
+            self.service.id,
+            self.suspension_payload(),
+            self.db,
+        )
+        self.charge.outstanding_balance = Decimal("0.00")
+        self.charge.status = ChargeStatus.paid
+        self.db.commit()
+        values = self.reactivation_payload().model_dump()
+        values["debt_amount"] = Decimal("0.00")
+        values["payment_agreement_id"] = None
+
+        reactivation = reactivate_service(
+            self.service.id,
+            ReactivationCreate(**values),
+            self.db,
+        )
+
+        self.assertIsNone(reactivation.extension_id)
+        self.assertIsNone(reactivation.payment_agreement_id)
+        self.assertEqual(
+            get_service(self.service.id, self.db).status,
+            ServiceStatus.active,
+        )
+
+    def test_active_extension_can_authorize_debt_reactivation(self) -> None:
+        suspend_service(
+            self.service.id,
+            self.suspension_payload(),
+            self.db,
+        )
+        extension = create_extension(
+            self.service.id,
+            ExtensionCreate(
+                original_due_date=date.today(),
+                promised_date=date.today() + timedelta(days=3),
+                reason="Tiempo adicional autorizado",
+                authorized_by="Supervisor de cobranza",
+                evidence_reference="private/extensions/amr301",
+            ),
+            self.db,
+        )
+        values = self.reactivation_payload().model_dump()
+        values["payment_agreement_id"] = None
+        values["extension_id"] = extension.id
+        values["authorized_by"] = extension.authorized_by
+
+        reactivation = reactivate_service(
+            self.service.id,
+            ReactivationCreate(**values),
+            self.db,
+        )
+
+        self.assertEqual(reactivation.extension_id, extension.id)
+        self.assertIsNone(reactivation.payment_agreement_id)
+        self.assertEqual(
+            get_service(self.service.id, self.db).status,
+            ServiceStatus.active,
         )
 
     def test_immediate_cancellation_is_final(self) -> None:

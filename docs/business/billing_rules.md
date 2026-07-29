@@ -202,6 +202,11 @@ Debe registrarse:
 Un servicio puede reactivarse aun cuando el cliente conserve deuda,
 si existe una prórroga o convenio autorizado.
 
+Cuando existe deuda, la reactivación debe enlazarse exactamente con una
+prórroga vigente o un convenio vigente del mismo servicio y titular. La persona
+que autorizó debe coincidir con ese respaldo. Si la deuda ya fue liquidada, no
+se requiere ni debe inventarse una prórroga o convenio.
+
 La reactivación no cambia automáticamente el día mensual de pago.
 
 Debe registrarse:

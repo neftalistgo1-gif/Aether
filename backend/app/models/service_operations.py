@@ -122,6 +122,18 @@ class Reactivation(Base):
         unique=True,
         nullable=True,
     )
+    extension_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("extensions.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    payment_agreement_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("payment_agreements.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     executed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),

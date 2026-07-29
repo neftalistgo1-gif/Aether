@@ -547,7 +547,34 @@ Representa una suspensión administrativa por falta de pago.
 
 ---
 
-# 17. Cancellation
+# 17. Reactivation
+
+Representa el intento de devolver un servicio suspendido al estado activo.
+
+## Información principal
+
+- Suspension abierta.
+- Fecha y hora.
+- Motivo.
+- Persona que autorizó.
+- Persona que ejecutó.
+- Deuda calculada.
+- Extension o PaymentAgreement opcional según la deuda.
+- Orden y resultado de red.
+
+## Reglas
+
+- Sólo aplica a un Service suspendido con una suspensión exitosa abierta.
+- La deuda declarada debe coincidir con los cargos abiertos.
+- Con deuda exige exactamente una Extension o PaymentAgreement vigente.
+- El respaldo debe pertenecer al mismo Service y titular actual.
+- La persona autorizante debe coincidir con el respaldo.
+- Con saldo cero no se adjunta respaldo comercial.
+- Sólo una orden de red verificada cambia el estado a activo.
+
+---
+
+# 18. Cancellation
 
 Representa la solicitud y ejecución de la baja definitiva.
 
@@ -575,7 +602,7 @@ Representa la solicitud y ejecución de la baja definitiva.
 
 ---
 
-# 18. EquipmentRecovery
+# 19. EquipmentRecovery
 
 Representa el proceso de recuperación de equipos después de una baja.
 
@@ -601,7 +628,7 @@ Representa el proceso de recuperación de equipos después de una baja.
 
 ---
 
-# 19. MaintenanceInspection
+# 20. MaintenanceInspection
 
 Representa la revisión de un equipo recuperado.
 
@@ -639,7 +666,7 @@ Representa la revisión de un equipo recuperado.
 
 ---
 
-# 20. Incident
+# 21. Incident
 
 Representa una interrupción o degradación técnica del servicio.
 
@@ -662,7 +689,7 @@ Representa una interrupción o degradación técnica del servicio.
 
 ---
 
-# 21. AuditEvent
+# 22. AuditEvent
 
 Representa una acción importante realizada dentro de Aether.
 

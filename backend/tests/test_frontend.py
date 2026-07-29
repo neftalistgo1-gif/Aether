@@ -141,6 +141,22 @@ class FrontendShellTestCase(unittest.TestCase):
             "La reactivación comercial pasó todas las validaciones",
             script,
         )
+        self.assertIn(
+            "selectedReactivationAuthorizations",
+            script,
+        )
+        self.assertIn(
+            "extension_id:",
+            script,
+        )
+        self.assertIn(
+            "payment_agreement_id:",
+            script,
+        )
+        self.assertIn(
+            "o un convenio vigente del titular actual",
+            page,
+        )
         self.assertIn(".manage-extensions", script)
         self.assertIn("/extensions`", script)
         self.assertIn(

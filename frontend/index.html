@@ -1232,6 +1232,13 @@
         </div>
         <div id="reactivation-check-summary" class="decision-summary"></div>
         <div class="form-grid">
+          <label id="reactivation-basis-field" class="full-row" hidden>
+            Prórroga o convenio que autoriza conservar deuda
+            <select
+              id="reactivation-authorization-basis"
+              required
+            ></select>
+          </label>
           <label>
             Autorizado por
             <input
@@ -1253,10 +1260,10 @@
           </label>
         </div>
         <p class="form-help">
-          Aether vuelve a calcular la deuda antes de aceptar la operación. Si
-          aún existe saldo, registra únicamente una prórroga o un convenio
-          realmente autorizado. Esta simulación no cambia MikroTik ni reactiva
-          el servicio.
+          Aether vuelve a calcular la deuda y verifica el respaldo seleccionado
+          antes de aceptar la operación. Con saldo pendiente exige una prórroga
+          o un convenio vigente del titular actual. Esta simulación no cambia
+          MikroTik ni reactiva el servicio.
         </p>
         <p id="reactivation-check-error" class="form-error" role="alert"></p>
         <div class="dialog-actions">

@@ -13,6 +13,7 @@ const state = {
   selectedNetworkAction: null,
   selectedSuspensionDebt: null,
   selectedReactivationDebt: null,
+  selectedReactivationAuthorizations: [],
   selectedExtensions: [],
   selectedExtensionBalance: null,
   selectedExtensionDueDate: null,
@@ -1137,13 +1138,49 @@ async function openReactivationCheckDialog(service) {
   $("#reactivation-check-reason").value =
     "Pago verificado o acuerdo de pago autorizado";
   $("#reactivation-authorized-by").value = "";
+  $("#reactivation-authorized-by").readOnly = false;
+  $("#reactivation-basis-field").hidden = true;
+  $("#reactivation-authorization-basis").disabled = true;
+  $("#reactivation-authorization-basis").innerHTML = "";
   $("#reactivation-check-error").textContent = "";
+  state.selectedReactivationAuthorizations = [];
   $("#reactivation-check-dialog").showModal();
   try {
-    const balance = await api(
-      `/api/v1/services/${service.id}/balance`
-    );
+    const [balance, extensions, agreements] = await Promise.all([
+      api(`/api/v1/services/${service.id}/balance`),
+      api(`/api/v1/services/${service.id}/extensions`),
+      api(`/api/v1/services/${service.id}/payment-agreements`),
+    ]);
     state.selectedReactivationDebt = balance.outstanding_balance;
+    const today = localDateValue();
+    state.selectedReactivationAuthorizations = [
+      ...extensions
+        .filter(
+          (item) =>
+            item.status === "active" &&
+            item.customer_id === service.current_customer_id
+        )
+        .map((item) => ({
+          type: "extension",
+          id: item.id,
+          authorized_by: item.authorized_by,
+          label:
+            `Prórroga hasta ${formatDate(item.promised_date)}`,
+        })),
+      ...agreements
+        .filter(
+          (item) =>
+            item.status === "active" &&
+            item.customer_id === service.current_customer_id &&
+            (!item.promised_date || item.promised_date >= today)
+        )
+        .map((item) => ({
+          type: "payment_agreement",
+          id: item.id,
+          authorized_by: item.authorized_by,
+          label: `${item.folio} · ${item.terms.slice(0, 70)}`,
+        })),
+    ];
     $("#reactivation-check-summary").innerHTML = `
       <div>
         <span>Deuda total actual</span>
@@ -1158,7 +1195,26 @@ async function openReactivationCheckDialog(service) {
         <strong>${balance.open_charges}</strong>
       </div>
     `;
-    $("#reactivation-authorized-by").focus();
+    if (Number(balance.outstanding_balance) > 0) {
+      $("#reactivation-basis-field").hidden = false;
+      $("#reactivation-authorization-basis").disabled = false;
+      $("#reactivation-authorization-basis").innerHTML =
+        state.selectedReactivationAuthorizations
+          .map(
+            (item, index) =>
+              `<option value="${index}">${escapeText(item.label)}</option>`
+          )
+          .join("");
+      $("#reactivation-authorized-by").readOnly = true;
+      if (!state.selectedReactivationAuthorizations.length) {
+        $("#reactivation-check-error").textContent =
+          "La deuda requiere una prórroga o un convenio vigente del titular actual.";
+      }
+      updateReactivationAuthorizer();
+      $("#reactivation-authorization-basis").focus();
+    } else {
+      $("#reactivation-authorized-by").focus();
+    }
   } catch (error) {
     $("#reactivation-check-error").textContent = error.message;
   }
@@ -1168,6 +1224,15 @@ function closeReactivationCheckDialog() {
   $("#reactivation-check-dialog").close();
   state.selectedServiceId = null;
   state.selectedReactivationDebt = null;
+  state.selectedReactivationAuthorizations = [];
+}
+
+function updateReactivationAuthorizer() {
+  const index = Number($("#reactivation-authorization-basis").value);
+  const authorization =
+    state.selectedReactivationAuthorizations[index];
+  $("#reactivation-authorized-by").value =
+    authorization?.authorized_by || "";
 }
 
 async function runReactivationCheck(event) {
@@ -1178,6 +1243,17 @@ async function runReactivationCheck(event) {
   );
   const errorBox = $("#reactivation-check-error");
   if (!serviceId || state.selectedReactivationDebt === null) return;
+  const hasDebt = Number(state.selectedReactivationDebt) > 0;
+  const authorization = hasDebt
+    ? state.selectedReactivationAuthorizations[
+        Number($("#reactivation-authorization-basis").value)
+      ]
+    : null;
+  if (hasDebt && !authorization) {
+    errorBox.textContent =
+      "Selecciona una prórroga o un convenio vigente.";
+    return;
+  }
   submitButton.disabled = true;
   errorBox.textContent = "";
   try {
@@ -1190,6 +1266,14 @@ async function runReactivationCheck(event) {
           authorized_by: $("#reactivation-authorized-by").value.trim(),
           performed_by: state.user.display_name,
           debt_amount: state.selectedReactivationDebt,
+          extension_id:
+            authorization?.type === "extension"
+              ? authorization.id
+              : null,
+          payment_agreement_id:
+            authorization?.type === "payment_agreement"
+              ? authorization.id
+              : null,
           idempotency_key:
             `ui-reactivation-${crypto.randomUUID()}`,
           dry_run: true,
@@ -2584,6 +2668,10 @@ $("#cancel-suspension-check").addEventListener(
 $("#reactivation-check-form").addEventListener(
   "submit",
   runReactivationCheck
+);
+$("#reactivation-authorization-basis").addEventListener(
+  "change",
+  updateReactivationAuthorizer
 );
 $("#close-reactivation-check-dialog").addEventListener(
   "click",

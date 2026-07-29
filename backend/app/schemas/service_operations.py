@@ -78,13 +78,43 @@ class ReactivationCreate(BaseModel):
     authorized_by: str = Field(min_length=2, max_length=150)
     performed_by: str = Field(min_length=2, max_length=150)
     debt_amount: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
+    extension_id: UUID | None = None
+    payment_agreement_id: UUID | None = None
     mikrotik_result: NetworkOperationResult
     mikrotik_details: str | None = Field(default=None, max_length=1000)
 
+    @model_validator(mode="after")
+    def validate_authorization_basis(self) -> Self:
+        basis_count = sum(
+            value is not None
+            for value in (
+                self.extension_id,
+                self.payment_agreement_id,
+            )
+        )
+        if self.debt_amount > 0 and basis_count != 1:
+            raise ValueError(
+                "Debt reactivation requires exactly one active "
+                "extension or payment agreement"
+            )
+        if self.debt_amount == 0 and basis_count != 0:
+            raise ValueError(
+                "Settled balance reactivation cannot use a debt agreement"
+            )
+        return self
 
-class ReactivationRead(ReactivationCreate):
+
+class ReactivationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    reason: str
+    authorized_by: str
+    performed_by: str
+    debt_amount: Decimal
+    extension_id: UUID | None
+    payment_agreement_id: UUID | None
+    mikrotik_result: NetworkOperationResult
+    mikrotik_details: str | None
     id: UUID
     suspension_id: UUID
     network_command_id: UUID | None
@@ -96,8 +126,30 @@ class CoordinatedReactivationCreate(BaseModel):
     authorized_by: str = Field(min_length=2, max_length=150)
     performed_by: str = Field(min_length=2, max_length=150)
     debt_amount: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
+    extension_id: UUID | None = None
+    payment_agreement_id: UUID | None = None
     idempotency_key: str = Field(min_length=8, max_length=100)
     dry_run: bool = True
+
+    @model_validator(mode="after")
+    def validate_authorization_basis(self) -> Self:
+        basis_count = sum(
+            value is not None
+            for value in (
+                self.extension_id,
+                self.payment_agreement_id,
+            )
+        )
+        if self.debt_amount > 0 and basis_count != 1:
+            raise ValueError(
+                "Debt reactivation requires exactly one active "
+                "extension or payment agreement"
+            )
+        if self.debt_amount == 0 and basis_count != 0:
+            raise ValueError(
+                "Settled balance reactivation cannot use a debt agreement"
+            )
+        return self
 
 
 class CoordinatedReactivationRead(BaseModel):

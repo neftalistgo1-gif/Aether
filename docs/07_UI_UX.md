@@ -105,10 +105,12 @@ el estado del servicio.
 
 Para servicios suspendidos, la validación coordinada de reactivación consulta
 el saldo vigente y muestra deuda total, deuda vencida y cargos abiertos.
-Solicita la persona que autorizó y el motivo o acuerdo aplicable. La API
-compara nuevamente la deuda con sus cargos y la interfaz fuerza `dry_run`, de
-modo que una validación correcta tampoco modifica MikroTik ni el estado del
-servicio.
+Con deuda, reúne las prórrogas y convenios vigentes del titular actual y exige
+seleccionar uno; la persona autorizante se completa desde ese registro y no
+puede editarse. Con saldo cero permite una autorización directa sin inventar
+un acuerdo. La API compara nuevamente deuda, servicio, titular, vigencia y
+autorizante. La interfaz fuerza `dry_run`, de modo que una validación correcta
+tampoco modifica MikroTik ni el estado del servicio.
 
 La acción de prórrogas abre un historial por servicio y muestra el saldo
 actual. Una cuenta con `billing.write` puede registrar fecha original, nueva

@@ -20,6 +20,9 @@ from app.api.v1.endpoints.service_operations import (
     coordinate_reactivation,
     coordinate_suspension,
 )
+from app.api.v1.endpoints.payment_agreements import (
+    create_payment_agreement,
+)
 from app.api.v1.endpoints.network_assignments import create_network_assignment
 from app.api.v1.endpoints.services import create_service
 from app.db.base import Base
@@ -49,6 +52,7 @@ from app.schemas.service_operations import (
     CoordinatedReactivationCreate,
     CoordinatedSuspensionCreate,
 )
+from app.schemas.payment_agreement import PaymentAgreementCreate
 from app.schemas.network_assignment import NetworkAssignmentCreate
 from app.schemas.service import ServiceCreate
 
@@ -123,6 +127,15 @@ class MikroTikControlTestCase(unittest.TestCase):
         )
         self.db.add(self.notification)
         self.db.commit()
+        self.payment_agreement = create_payment_agreement(
+            self.service.id,
+            PaymentAgreementCreate(
+                terms="Convenio autorizado para reactivación",
+                authorized_by="Atencion a clientes",
+                evidence_reference="private/agreements/amr901",
+            ),
+            self.db,
+        )
         self.router = create_router(
             MikrotikRouterCreate(
                 name="CCR-Principal",
@@ -565,6 +578,7 @@ class MikroTikControlTestCase(unittest.TestCase):
                         authorized_by="Atencion a clientes",
                         performed_by="Tecnico de red",
                         debt_amount=Decimal("600.00"),
+                        payment_agreement_id=self.payment_agreement.id,
                         idempotency_key="coordinated-cycle-reactivate",
                         dry_run=False,
                     ),
