@@ -12,6 +12,7 @@ const state = {
   selectedInstallation: null,
   selectedNetworkAction: null,
   selectedSuspensionDebt: null,
+  selectedReactivationDebt: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -400,11 +401,16 @@ function renderServices() {
     hasCapability("billing.read") &&
     hasCapability("notifications.read")
   );
+  const canCheckReactivation = (
+    hasCapability("network.control") &&
+    hasCapability("billing.read")
+  );
   const canShowActions = (
     canScheduleInstallation ||
     canControlNetwork ||
     canWriteNotifications ||
-    canCheckSuspension
+    canCheckSuspension ||
+    canCheckReactivation
   );
   body.innerHTML = state.services
     .map((service) => `
@@ -445,6 +451,13 @@ function renderServices() {
                 type="button"
                 data-service-id="${service.id}"
               >Validar suspensión</button>
+            ` : ""}
+            ${canCheckReactivation && service.status === "suspended" ? `
+              <button
+                class="row-action check-commercial-reactivation"
+                type="button"
+                data-service-id="${service.id}"
+              >Validar reactivación</button>
             ` : ""}
           </td>
         ` : ""}
@@ -1085,6 +1098,88 @@ async function runSuspensionCheck(event) {
     setNotice(
       result.command.status === "simulated"
         ? "La suspensión comercial pasó todas las validaciones en modo seguro."
+        : `La validación terminó con estado ${result.command.status}.`
+    );
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function openReactivationCheckDialog(service) {
+  state.selectedServiceId = service.id;
+  state.selectedReactivationDebt = null;
+  $("#reactivation-check-dialog-title").textContent =
+    `Validar reactivación · ${service.amr_code}`;
+  $("#reactivation-check-summary").innerHTML =
+    '<p class="empty-state">Consultando saldo actual…</p>';
+  $("#reactivation-check-reason").value =
+    "Pago verificado o acuerdo de pago autorizado";
+  $("#reactivation-authorized-by").value = "";
+  $("#reactivation-check-error").textContent = "";
+  $("#reactivation-check-dialog").showModal();
+  try {
+    const balance = await api(
+      `/api/v1/services/${service.id}/balance`
+    );
+    state.selectedReactivationDebt = balance.outstanding_balance;
+    $("#reactivation-check-summary").innerHTML = `
+      <div>
+        <span>Deuda total actual</span>
+        <strong>${formatMoney(balance.outstanding_balance)}</strong>
+      </div>
+      <div>
+        <span>Deuda vencida</span>
+        <strong>${formatMoney(balance.overdue_balance)}</strong>
+      </div>
+      <div>
+        <span>Cargos abiertos</span>
+        <strong>${balance.open_charges}</strong>
+      </div>
+    `;
+    $("#reactivation-authorized-by").focus();
+  } catch (error) {
+    $("#reactivation-check-error").textContent = error.message;
+  }
+}
+
+function closeReactivationCheckDialog() {
+  $("#reactivation-check-dialog").close();
+  state.selectedServiceId = null;
+  state.selectedReactivationDebt = null;
+}
+
+async function runReactivationCheck(event) {
+  event.preventDefault();
+  const serviceId = state.selectedServiceId;
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const errorBox = $("#reactivation-check-error");
+  if (!serviceId || state.selectedReactivationDebt === null) return;
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const result = await api(
+      `/api/v1/services/${serviceId}/reactivations/coordinated`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          reason: $("#reactivation-check-reason").value.trim(),
+          authorized_by: $("#reactivation-authorized-by").value.trim(),
+          performed_by: state.user.display_name,
+          debt_amount: state.selectedReactivationDebt,
+          idempotency_key:
+            `ui-reactivation-${crypto.randomUUID()}`,
+          dry_run: true,
+        }),
+      }
+    );
+    closeReactivationCheckDialog();
+    setNotice(
+      result.command.status === "simulated"
+        ? "La reactivación comercial pasó todas las validaciones en modo seguro."
         : `La validación terminó con estado ${result.command.status}.`
     );
   } catch (error) {
@@ -1870,11 +1965,15 @@ $("#services-body").addEventListener("click", (event) => {
   const suspensionButton = event.target.closest(
     ".check-commercial-suspension"
   );
+  const reactivationButton = event.target.closest(
+    ".check-commercial-reactivation"
+  );
   if (
     !button &&
     !networkButton &&
     !notificationButton &&
-    !suspensionButton
+    !suspensionButton &&
+    !reactivationButton
   ) return;
   const service = state.services?.find(
     (item) =>
@@ -1883,13 +1982,15 @@ $("#services-body").addEventListener("click", (event) => {
         button ||
         networkButton ||
         notificationButton ||
-        suspensionButton
+        suspensionButton ||
+        reactivationButton
       ).dataset.serviceId
   );
   if (!service) return;
   if (networkButton) openNetworkSimulationDialog(service);
   else if (notificationButton) openNotificationDialog(service);
   else if (suspensionButton) openSuspensionCheckDialog(service);
+  else if (reactivationButton) openReactivationCheckDialog(service);
   else openInstallationDialog(service);
 });
 $("#installation-coverage-result").addEventListener(
@@ -1973,6 +2074,18 @@ $("#close-suspension-check-dialog").addEventListener(
 $("#cancel-suspension-check").addEventListener(
   "click",
   closeSuspensionCheckDialog
+);
+$("#reactivation-check-form").addEventListener(
+  "submit",
+  runReactivationCheck
+);
+$("#close-reactivation-check-dialog").addEventListener(
+  "click",
+  closeReactivationCheckDialog
+);
+$("#cancel-reactivation-check").addEventListener(
+  "click",
+  closeReactivationCheckDialog
 );
 $("#new-payment-button").addEventListener("click", openPaymentDialog);
 $("#payment-customer").addEventListener("change", updatePaymentServices);

@@ -103,6 +103,13 @@ y prórrogas, pero el backend vuelve a calcular todas las condiciones. La acció
 fuerza `dry_run`, por lo que una validación aprobada no corta internet ni cambia
 el estado del servicio.
 
+Para servicios suspendidos, la validación coordinada de reactivación consulta
+el saldo vigente y muestra deuda total, deuda vencida y cargos abiertos.
+Solicita la persona que autorizó y el motivo o acuerdo aplicable. La API
+compara nuevamente la deuda con sus cargos y la interfaz fuerza `dry_run`, de
+modo que una validación correcta tampoco modifica MikroTik ni el estado del
+servicio.
+
 ## Implementación
 
 La superficie actual usa HTML, CSS y JavaScript modular sin dependencias. Se

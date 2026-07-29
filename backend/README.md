@@ -173,7 +173,9 @@ ruta interna. Este módulo registra comunicaciones; todavía no envía mensajes
 por medio de un proveedor externo.
 
 La reactivación conserva autorización, responsable, deuda y resultado de red.
-Los intentos fallidos quedan registrados y pueden reintentarse.
+Antes de iniciar una operación coordinada, la API vuelve a calcular los cargos
+abiertos y rechaza cualquier deuda declarada que no coincida con el saldo de
+Aether. Los intentos fallidos quedan registrados y pueden reintentarse.
 
 La baja definitiva puede ejecutarse inmediatamente o programarse para una
 fecha futura. Conserva titular solicitante, folio, saldos y estado de
@@ -327,6 +329,11 @@ comerciales, ejecutan después el cambio de red y sólo actualizan el estado del
 servicio cuando MikroTik confirma el resultado. Una simulación o un fallo no
 modifica el estado comercial. La orden verificada queda enlazada de forma
 única con la suspensión o reactivación que originó.
+
+La UI permite validar una reactivación coordinada para servicios suspendidos
+cuando la cuenta reúne `network.control` y `billing.read`. Consulta el saldo
+autoritativo, exige autorización y motivo, y fuerza siempre `dry_run: true`;
+por tanto, esta pantalla no retira el bloqueo ni reactiva el servicio.
 
 Las operaciones manuales continúan disponibles para contingencias y quedan
 identificadas como `manual`. Ya no es posible declarar un resultado automático

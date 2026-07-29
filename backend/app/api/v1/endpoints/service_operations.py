@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -452,6 +452,27 @@ def prepare_reactivation(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="No open successful suspension was found",
+        )
+    actual_debt = db.scalar(
+        select(
+            func.coalesce(func.sum(Charge.outstanding_balance), 0)
+        ).where(
+            Charge.service_id == service_id,
+            Charge.status.in_(
+                {ChargeStatus.pending, ChargeStatus.partial}
+            ),
+            Charge.outstanding_balance > 0,
+        )
+    )
+    actual_debt = Decimal(actual_debt or 0)
+    if actual_debt != reactivation_data.debt_amount:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Reported debt does not match Aether balance",
+                "reported_debt": str(reactivation_data.debt_amount),
+                "actual_debt": str(actual_debt),
+            },
         )
     return service, effective_suspension
 

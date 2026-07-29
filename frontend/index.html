@@ -1211,6 +1211,67 @@
       </form>
     </dialog>
 
+    <dialog
+      id="reactivation-check-dialog"
+      aria-labelledby="reactivation-check-dialog-title"
+    >
+      <form id="reactivation-check-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">VALIDACIÓN COMERCIAL · DRY RUN</p>
+            <h2 id="reactivation-check-dialog-title">
+              Simular reactivación completa
+            </h2>
+          </div>
+          <button
+            id="close-reactivation-check-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div id="reactivation-check-summary" class="decision-summary"></div>
+        <div class="form-grid">
+          <label>
+            Autorizado por
+            <input
+              id="reactivation-authorized-by"
+              minlength="2"
+              maxlength="150"
+              required
+            >
+          </label>
+          <label class="full-row">
+            Motivo o acuerdo aplicable
+            <textarea
+              id="reactivation-check-reason"
+              rows="3"
+              minlength="3"
+              maxlength="500"
+              required
+            >Pago verificado o acuerdo de pago autorizado</textarea>
+          </label>
+        </div>
+        <p class="form-help">
+          Aether vuelve a calcular la deuda antes de aceptar la operación. Si
+          aún existe saldo, registra únicamente una prórroga o un convenio
+          realmente autorizado. Esta simulación no cambia MikroTik ni reactiva
+          el servicio.
+        </p>
+        <p id="reactivation-check-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-reactivation-check"
+            class="text-button"
+            type="button"
+          >Volver</button>
+          <button class="primary-button" type="submit">
+            Validar en modo seguro
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="plan-price-dialog" aria-labelledby="plan-price-dialog-title">
       <form id="plan-price-form">
         <div class="dialog-heading">

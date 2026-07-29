@@ -121,6 +121,23 @@ class FrontendShellTestCase(unittest.TestCase):
             "pasó todas las validaciones en modo seguro",
             script,
         )
+        self.assertIn(
+            ".check-commercial-reactivation",
+            script,
+        )
+        self.assertIn("/reactivations/coordinated", script)
+        self.assertIn(
+            "debt_amount: state.selectedReactivationDebt",
+            script,
+        )
+        self.assertIn(
+            "authorized_by:",
+            script,
+        )
+        self.assertIn(
+            "La reactivación comercial pasó todas las validaciones",
+            script,
+        )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

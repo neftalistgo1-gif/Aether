@@ -138,7 +138,7 @@ class ServiceOperationsTestCase(unittest.TestCase):
             reason="Pago verificado",
             authorized_by="Atención a clientes",
             performed_by="Técnico de red",
-            debt_amount=Decimal("0.00"),
+            debt_amount=Decimal("500.00"),
             mikrotik_result=result,
             mikrotik_details="Operación de prueba",
         )
@@ -280,6 +280,28 @@ class ServiceOperationsTestCase(unittest.TestCase):
         self.assertEqual(
             len(list_reactivations(self.service.id, self.db)),
             2,
+        )
+
+    def test_reactivation_requires_current_aether_balance(self) -> None:
+        suspend_service(
+            self.service.id,
+            self.suspension_payload(),
+            self.db,
+        )
+        payload = self.reactivation_payload()
+        payload.debt_amount = Decimal("0.00")
+
+        with self.assertRaises(HTTPException) as context:
+            reactivate_service(self.service.id, payload, self.db)
+
+        self.assertEqual(context.exception.status_code, 409)
+        self.assertEqual(
+            context.exception.detail["actual_debt"],
+            "500.00",
+        )
+        self.assertEqual(
+            get_service(self.service.id, self.db).status,
+            ServiceStatus.suspended,
         )
 
     def test_immediate_cancellation_is_final(self) -> None:
