@@ -12,6 +12,7 @@ from app.models.customer import Customer
 from app.models.equipment_recovery import EquipmentRecovery
 from app.models.extension import Extension
 from app.models.incident import Incident, IncidentServiceImpact
+from app.models.installation import Installation, InstallationScheduleChange
 from app.models.maintenance_inspection import MaintenanceInspection
 from app.models.mikrotik import MikrotikRouter, NetworkControlCommand
 from app.models.network_assignment import NetworkAssignment

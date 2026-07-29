@@ -11,6 +11,7 @@ from app.api.v1.endpoints.equipment_recovery import (
 from app.api.v1.endpoints.extensions import router as extensions_router
 from app.api.v1.endpoints.health import router as health_router
 from app.api.v1.endpoints.incidents import router as incidents_router
+from app.api.v1.endpoints.installations import router as installations_router
 from app.api.v1.endpoints.maintenance_inspections import (
     router as maintenance_inspections_router,
 )
@@ -37,6 +38,7 @@ app = FastAPI(
 app.include_router(health_router)
 app.include_router(audit_router)
 app.include_router(incidents_router)
+app.include_router(installations_router)
 app.include_router(customers_router)
 app.include_router(services_router)
 app.include_router(assets_router)

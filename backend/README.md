@@ -247,6 +247,20 @@ El catálogo y los acuerdos individuales son independientes. Cada `Service`
 continúa usando su `monthly_price` acordado, por lo que modificar o desactivar
 un plan nunca cambia automáticamente lo que pagan los clientes existentes.
 
+### Instalaciones y cambios de domicilio
+
+`Installation` administra instalaciones iniciales, reinstalaciones y cambios
+de domicilio. Cada registro conserva el resultado de cobertura, fecha
+programada, costo, técnicos, evidencias fotográficas y confirmación de
+navegación. Las reprogramaciones se almacenan por separado y no sobrescriben
+su historial.
+
+Una cobertura no viable no se agenda ni genera cargos. Cuando el trabajo
+tiene costo, se crea un cargo real y la instalación no puede completarse hasta
+que esté totalmente pagado. La instalación inicial activa el servicio sólo
+después de confirmar la navegación; un cambio de domicilio actualiza la
+dirección únicamente al completar una nueva cobertura viable.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:
