@@ -85,6 +85,9 @@
           <button class="nav-item" data-view="payments">
             <span>04</span> Pagos
           </button>
+          <button class="nav-item" data-view="plans">
+            <span>05</span> Planes
+          </button>
         </nav>
         <div class="sidebar-foot">
           <div class="secure-dot"></div>
@@ -256,6 +259,38 @@
               </table>
             </div>
             <p id="payments-empty" class="empty-state" hidden></p>
+          </div>
+        </section>
+
+        <section id="plans-panel" class="view-panel" hidden>
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">CATÁLOGO COMERCIAL</p>
+                <h2>Planes y tarifas</h2>
+              </div>
+              <button
+                id="new-plan-button"
+                class="secondary-button"
+                type="button"
+                hidden
+              >Nuevo plan</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Plan</th>
+                    <th>Velocidad</th>
+                    <th>Tarifa vigente</th>
+                    <th>Estado</th>
+                    <th class="plan-action-column" hidden>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="plans-body"></tbody>
+              </table>
+            </div>
+            <p id="plans-empty" class="empty-state" hidden></p>
           </div>
         </section>
       </main>
@@ -670,6 +705,171 @@
         </div>
         <p id="account-empty" class="empty-state" hidden></p>
       </div>
+    </dialog>
+
+    <dialog id="plan-dialog" aria-labelledby="plan-dialog-title">
+      <form id="plan-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">CATÁLOGO COMERCIAL</p>
+            <h2 id="plan-dialog-title">Nuevo plan</h2>
+          </div>
+          <button
+            id="close-plan-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Nombre
+            <input id="plan-name" minlength="2" maxlength="100" required>
+          </label>
+          <label>
+            Velocidad
+            <input
+              id="plan-speed"
+              minlength="2"
+              maxlength="100"
+              placeholder="20 Mbps"
+              required
+            >
+          </label>
+          <label>
+            Tarifa mensual
+            <input
+              id="plan-price"
+              type="number"
+              min="0.01"
+              step="0.01"
+              required
+            >
+          </label>
+          <label>
+            Vigente desde
+            <input id="plan-valid-from" type="date" required>
+          </label>
+          <label class="full-row">
+            Descripción
+            <textarea id="plan-description" rows="3" maxlength="2000"></textarea>
+          </label>
+          <label class="full-row">
+            Motivo del alta
+            <textarea
+              id="plan-create-reason"
+              rows="2"
+              minlength="3"
+              maxlength="1000"
+              required
+            >Alta de oferta comercial</textarea>
+          </label>
+        </div>
+        <p id="plan-form-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="cancel-plan-dialog" class="text-button" type="button">
+            Volver
+          </button>
+          <button class="primary-button" type="submit">Crear plan</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="plan-price-dialog" aria-labelledby="plan-price-dialog-title">
+      <form id="plan-price-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">NUEVA TARIFA</p>
+            <h2 id="plan-price-dialog-title">Cambiar precio</h2>
+          </div>
+          <button
+            id="close-plan-price-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Nueva tarifa mensual
+            <input
+              id="plan-new-price"
+              type="number"
+              min="0.01"
+              step="0.01"
+              required
+            >
+          </label>
+          <label>
+            Vigente desde
+            <input id="plan-price-effective-from" type="date" required>
+          </label>
+          <label class="full-row">
+            Motivo
+            <textarea
+              id="plan-price-reason"
+              rows="3"
+              minlength="3"
+              maxlength="1000"
+              required
+            ></textarea>
+          </label>
+        </div>
+        <p class="form-help">
+          El cambio no modifica las tarifas acordadas de servicios existentes.
+        </p>
+        <p id="plan-price-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-plan-price-dialog"
+            class="text-button"
+            type="button"
+          >Volver</button>
+          <button class="primary-button" type="submit">Guardar tarifa</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      id="plan-deactivate-dialog"
+      aria-labelledby="plan-deactivate-dialog-title"
+    >
+      <form id="plan-deactivate-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">RETIRAR OFERTA</p>
+            <h2 id="plan-deactivate-dialog-title">Desactivar plan</h2>
+          </div>
+          <button
+            id="close-plan-deactivate-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <p class="form-help">
+          Los servicios existentes conservarán su plan y precio acordado.
+        </p>
+        <label>
+          Motivo de desactivación
+          <textarea
+            id="plan-deactivate-reason"
+            rows="3"
+            minlength="3"
+            maxlength="1000"
+            required
+          ></textarea>
+        </label>
+        <p id="plan-deactivate-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-plan-deactivate-dialog"
+            class="text-button"
+            type="button"
+          >Volver</button>
+          <button class="danger-button" type="submit">Desactivar plan</button>
+        </div>
+      </form>
     </dialog>
     <script type="module" src="/app/app.js"></script>
   </body>

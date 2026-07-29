@@ -25,6 +25,7 @@ Aether. Incluye:
 - tablas de servicios y pagos recientes;
 - alta de servicios pendientes mediante selección de titular y plan vigente;
 - recepción de pagos pendientes para cuentas con `billing.write`;
+- catálogo de planes y tarifas según `plans.read` y `plans.write`;
 - mensajes claros cuando la cuenta no tiene permiso para un área;
 - navegación adaptable a escritorio y móvil.
 
@@ -58,6 +59,12 @@ Las cuentas con `billing.read` pueden abrir el estado de cuenta desde el
 directorio de clientes. La vista consulta un resumen calculado por la API y el
 historial de cargos; muestra deuda total, deuda vencida, saldo a favor, importes
 originales y pendientes. Esta etapa es estrictamente de lectura.
+
+El catálogo comercial muestra planes activos e inactivos. Las cuentas con
+`plans.write` pueden crear un plan con su primera tarifa, cambiar el precio
+publicado desde una fecha válida o retirar la oferta. La interfaz explica que
+ninguna de estas acciones cambia el acuerdo de clientes existentes y conserva
+los motivos exigidos por la API.
 
 ## Implementación
 

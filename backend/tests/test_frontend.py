@@ -35,7 +35,7 @@ class FrontendShellTestCase(unittest.TestCase):
             "/api/v1/customers",
             "/api/v1/services",
             "/api/v1/payments",
-            "/api/v1/plans?plan_status=active",
+            "/api/v1/plans",
         ):
             with self.subTest(endpoint=endpoint):
                 self.assertIn(endpoint, script)
@@ -66,6 +66,14 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("/balance`)", script)
         self.assertIn("/charges`)", script)
         self.assertIn("Estado de cuenta", script)
+        self.assertIn('hasCapability("plans.read")', script)
+        self.assertIn('hasCapability("plans.write")', script)
+        self.assertIn("/prices", script)
+        self.assertIn("/deactivate", script)
+        self.assertIn(
+            "los servicios existentes no fueron modificados",
+            script,
+        )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

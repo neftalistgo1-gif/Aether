@@ -51,6 +51,11 @@ precio vigente y el backend verifica que `plan_id`, nombre y precio coincidan
 con el catálogo. El alta queda auditada y nunca activa automáticamente la
 conexión.
 
+Las cuentas con `plans.read` consultan el catálogo completo. Con `plans.write`
+pueden crear ofertas, publicar una nueva tarifa y desactivar planes. Cada
+cambio exige motivo y conserva el historial; nunca modifica automáticamente
+los precios acordados de servicios existentes.
+
 ## Primer administrador y acceso
 
 Todas las rutas de negocio requieren autenticación. Para preparar una

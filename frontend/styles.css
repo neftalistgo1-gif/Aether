@@ -138,6 +138,7 @@ table { width: 100%; border-collapse: collapse; }
 th, td { padding: 15px 22px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
 th { color: var(--muted); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; }
 td { color: #dce8f6; font-size: .83rem; }
+.table-subtitle { display: block; max-width: 320px; margin-top: 4px; color: var(--muted); font-weight: 400; white-space: normal; }
 tbody tr:hover { background: rgba(35,136,239,.045); }
 .badge { display: inline-flex; border-radius: 20px; padding: 5px 9px; background: rgba(79,209,161,.1); color: var(--green); font-size: .7rem; }
 .badge.pending, .badge.partial { background: rgba(255,197,92,.1); color: var(--amber); }
