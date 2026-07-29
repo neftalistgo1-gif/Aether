@@ -212,6 +212,19 @@ Las operaciones manuales continúan disponibles para contingencias y quedan
 identificadas como `manual`. Ya no es posible declarar un resultado automático
 `success` desde las rutas manuales sin una orden MikroTik verificada.
 
+### Incidentes y bonificaciones
+
+`Incident` registra interrupciones o degradaciones por torre, AP o servicio,
+con hora exacta de inicio, resolución, causa y responsable. Cada
+`IncidentServiceImpact` conserva el servicio y el titular afectado en ese
+momento, además de su propio periodo de afectación. Un servicio puede marcarse
+como restaurado antes de resolver el incidente general.
+
+Registrar o resolver un incidente no cambia el estado comercial del servicio.
+Una vez resuelto, una persona autorizada puede otorgar una sola bonificación
+por servicio afectado. La bonificación genera un `CreditMovement` positivo,
+queda vinculada al incidente y se incorpora al saldo a favor del titular.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:
