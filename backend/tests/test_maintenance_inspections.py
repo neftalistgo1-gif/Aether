@@ -73,6 +73,9 @@ class MaintenanceInspectionTestCase(unittest.TestCase):
             ),
             self.db,
         )
+        self.service.status = ServiceStatus.pending
+        self.service.activation_date = None
+        self.db.commit()
         create_cancellation(
             self.service.id,
             CancellationCreate(

@@ -10,6 +10,7 @@ from app.api.v1.endpoints.services import find_service_or_404
 from app.db.session import get_db
 from app.models.network_assignment import NetworkAssignment
 from app.models.service import ServiceStatus
+from app.models.service_operations import Cancellation, CancellationStatus
 from app.schemas.network_assignment import (
     NetworkAssignmentCreate,
     NetworkAssignmentRead,
@@ -74,8 +75,22 @@ def create_network_assignment(
                 "suspended"
             ),
         )
-
     current = find_current_network_assignment(service_id, db)
+    if current is not None:
+        scheduled_cancellation = db.scalar(
+            select(Cancellation).where(
+                Cancellation.service_id == service.id,
+                Cancellation.status == CancellationStatus.scheduled,
+            )
+        )
+        if scheduled_cancellation is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Network configuration cannot change while "
+                    "cancellation is scheduled"
+                ),
+            )
     if current is not None and all(
         getattr(current, field_name) == getattr(assignment_data, field_name)
         for field_name in NETWORK_CONFIGURATION_FIELDS

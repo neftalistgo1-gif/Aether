@@ -29,6 +29,8 @@ ejecución:
 
 - Suspender: agregar la IP vigente del servicio a la lista de suspendidos.
 - Reactivar: retirar la IP vigente del servicio de la lista de suspendidos.
+- Preparar baja: bloquear y verificar la IP antes de ejecutar la cancelación
+  comercial.
 - Verificar: consultar la lista después de cada operación.
 - Auditar: conservar solicitud, resultado, respuesta y responsable.
 
@@ -97,3 +99,10 @@ bloquea y exige reconciliación.
 
 El resultado `manual` se conserva para contingencias operativas. El resultado
 automático `success` no puede declararse desde las rutas manuales.
+
+La baja definitiva usa una transición técnica en dos fases. Primero,
+`decommission` confirma que la IP vigente quedó bloqueada y la orden se enlaza
+a `Cancellation`; sólo entonces el servicio pasa a cancelado. La asignación no
+se cierra todavía, porque una IP presente en la address list no debe volver al
+inventario. Después de la recuperación física, una fase independiente retirará
+el bloqueo, verificará el resultado y cerrará la asignación.

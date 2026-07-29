@@ -164,7 +164,7 @@ class NetworkAssignmentTestCase(unittest.TestCase):
             )
         self.assertEqual(suspended.exception.status_code, 409)
 
-    def test_cancellation_closes_current_network_assignment(self) -> None:
+    def test_cancellation_reserves_current_network_assignment(self) -> None:
         assignment = create_network_assignment(
             self.service.id,
             self.network_data(),
@@ -182,17 +182,42 @@ class NetworkAssignmentTestCase(unittest.TestCase):
             self.db,
         )
 
-        self.assertIsNotNone(assignment.ended_at)
-        with self.assertRaises(HTTPException) as current:
-            get_current_network_assignment(self.service.id, self.db)
-        self.assertEqual(current.exception.status_code, 404)
-        with self.assertRaises(HTTPException) as cancelled:
+        self.assertIsNone(assignment.ended_at)
+        self.assertEqual(
+            get_current_network_assignment(self.service.id, self.db).id,
+            assignment.id,
+        )
+        with self.assertRaises(HTTPException) as scheduled:
             create_network_assignment(
                 self.service.id,
                 self.network_data(ip="10.20.30.43"),
                 self.db,
             )
-        self.assertEqual(cancelled.exception.status_code, 409)
+        self.assertEqual(scheduled.exception.status_code, 409)
+
+    def test_scheduled_cancellation_allows_missing_initial_assignment(
+        self,
+    ) -> None:
+        service = self.create_active_service("AMR603")
+        create_cancellation(
+            service.id,
+            CancellationCreate(
+                requester_customer_id=self.customer.id,
+                effective_date=date.today(),
+                reason="Baja de servicio histórico sin IP registrada",
+                registered_by="Atencion a clientes",
+            ),
+            self.db,
+        )
+
+        assignment = create_network_assignment(
+            service.id,
+            self.network_data(ip="10.20.30.43"),
+            self.db,
+        )
+
+        self.assertEqual(assignment.service_id, service.id)
+        self.assertIsNone(assignment.ended_at)
 
     def test_ip_address_must_be_valid_and_is_normalized(self) -> None:
         with self.assertRaises(ValueError):

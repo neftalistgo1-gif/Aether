@@ -221,6 +221,9 @@ class AssetInventoryTestCase(unittest.TestCase):
             self.assignment_data(asset.id),
             self.db,
         )
+        self.service.status = ServiceStatus.pending
+        self.service.activation_date = None
+        self.db.commit()
         create_cancellation(
             self.service.id,
             CancellationCreate(

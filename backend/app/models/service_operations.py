@@ -176,6 +176,12 @@ class Cancellation(Base):
         ForeignKey("customers.id", ondelete="RESTRICT"),
         index=True,
     )
+    network_command_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("network_control_commands.id", ondelete="RESTRICT"),
+        unique=True,
+        nullable=True,
+    )
     requested_at: Mapped[date] = mapped_column(Date)
     effective_date: Mapped[date] = mapped_column(Date)
     reason: Mapped[str] = mapped_column(Text)

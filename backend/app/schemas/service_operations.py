@@ -196,12 +196,28 @@ class CancellationExecute(BaseModel):
     performed_by: str = Field(min_length=2, max_length=150)
 
 
+class CoordinatedCancellationCreate(BaseModel):
+    performed_by: str = Field(min_length=2, max_length=150)
+    idempotency_key: str = Field(min_length=8, max_length=100)
+    dry_run: bool = True
+    preflight_command_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def validate_execution_mode(self) -> Self:
+        if self.dry_run and self.preflight_command_id is not None:
+            raise ValueError("Dry-run operations cannot reference a preflight")
+        if not self.dry_run and self.preflight_command_id is None:
+            raise ValueError("Live operations require a preflight command")
+        return self
+
+
 class CancellationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     service_id: UUID
     requester_customer_id: UUID
+    network_command_id: UUID | None
     requested_at: date
     effective_date: date
     reason: str
@@ -215,3 +231,8 @@ class CancellationRead(BaseModel):
     executed_by: str | None
     executed_at: datetime | None
     notes: str | None
+
+
+class CoordinatedCancellationRead(BaseModel):
+    command: NetworkControlCommandRead
+    cancellation: CancellationRead

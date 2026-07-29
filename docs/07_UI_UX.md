@@ -137,8 +137,9 @@ reduce la deuda ni registra pagos automáticamente.
 La baja definitiva todavía no se expone en la interfaz. El backend ya calcula
 deuda y saldo a favor de forma autoritativa, exige resolver cualquier crédito
 y reserva la acción a `services.cancel`. La pantalla se incorporará después de
-definir y verificar el cierre técnico de red, para no cancelar comercialmente
-un servicio que permanezca conectado ni liberar una IP todavía bloqueada.
+completar la segunda fase del cierre técnico. La primera fase ya exige bloquear
+y verificar la IP antes de cancelar; falta retirar ese bloqueo y liberar la
+asignación después de la recuperación física.
 
 ## Implementación
 

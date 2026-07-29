@@ -616,6 +616,7 @@ Representa la solicitud y ejecución de la baja definitiva.
 - Saldo pendiente.
 - Saldo a favor.
 - Estado de recuperación de equipos.
+- Orden de red que verificó el bloqueo previo.
 - Usuario responsable.
 
 ## Reglas
@@ -631,6 +632,10 @@ Representa la solicitud y ejecución de la baja definitiva.
 - Debe resolverse el saldo a favor antes de ejecutar la baja.
 - El titular no puede cambiar mientras exista una baja programada.
 - Ejecutar la baja requiere la capacidad específica `services.cancel`.
+- Un servicio activo, suspendido o con asignación IP requiere un comando
+  `decommission` verificado.
+- La asignación IP permanece vigente y reservada hasta retirar el bloqueo
+  después de la recuperación física.
 - Debe iniciarse la recuperación de equipos.
 
 ---

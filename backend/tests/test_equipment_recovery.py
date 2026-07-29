@@ -70,6 +70,9 @@ class EquipmentRecoveryTestCase(unittest.TestCase):
         self.engine.dispose()
 
     def cancel_service(self, effective_date: date) -> None:
+        self.service.status = ServiceStatus.pending
+        self.service.activation_date = None
+        self.db.commit()
         create_cancellation(
             self.service.id,
             CancellationCreate(

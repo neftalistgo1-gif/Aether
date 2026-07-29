@@ -415,6 +415,10 @@ class AuthenticationTestCase(unittest.TestCase):
             capability_for_operation("POST", f"{base}/execute"),
             Capability.services_cancel,
         )
+        self.assertEqual(
+            capability_for_operation("POST", f"{base}/coordinated"),
+            Capability.services_cancel,
+        )
 
     def test_extension_resolution_requires_billing_approval(self) -> None:
         service_path = "/api/v1/services/{service_id}/extensions"

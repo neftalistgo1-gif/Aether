@@ -463,7 +463,10 @@ class ServiceOperationsTestCase(unittest.TestCase):
             ServiceStatus.active,
         )
 
-    def test_immediate_cancellation_is_final(self) -> None:
+    def test_pending_service_immediate_cancellation_is_final(self) -> None:
+        self.service.status = ServiceStatus.pending
+        self.service.activation_date = None
+        self.db.commit()
         cancellation = create_cancellation(
             self.service.id,
             self.cancellation_payload(date.today()),
@@ -528,9 +531,34 @@ class ServiceOperationsTestCase(unittest.TestCase):
             ServiceStatus.active,
         )
 
+    def test_active_service_requires_coordinated_network_shutdown(
+        self,
+    ) -> None:
+        cancellation = create_cancellation(
+            self.service.id,
+            self.cancellation_payload(date.today()),
+            self.db,
+        )
+        self.assertEqual(cancellation.status, CancellationStatus.scheduled)
+
+        with self.assertRaises(HTTPException) as context:
+            execute_scheduled_cancellation(
+                self.service.id,
+                CancellationExecute(performed_by="Atención a clientes"),
+                self.db,
+            )
+
+        self.assertEqual(context.exception.status_code, 409)
+        self.assertEqual(
+            get_service(self.service.id, self.db).status,
+            ServiceStatus.active,
+        )
+
     def test_scheduled_cancellation_refreshes_balances_at_execution(
         self,
     ) -> None:
+        self.service.status = ServiceStatus.pending
+        self.service.activation_date = None
         self.db.add(
             CreditMovement(
                 customer_id=self.customer.id,
@@ -583,6 +611,9 @@ class ServiceOperationsTestCase(unittest.TestCase):
         self.assertEqual(executed.status, CancellationStatus.executed)
 
     def test_future_cancellation_waits_for_effective_date(self) -> None:
+        self.service.status = ServiceStatus.pending
+        self.service.activation_date = None
+        self.db.commit()
         cancellation = create_cancellation(
             self.service.id,
             self.cancellation_payload(date.today() + timedelta(days=1)),
@@ -592,7 +623,7 @@ class ServiceOperationsTestCase(unittest.TestCase):
         self.assertEqual(cancellation.status, CancellationStatus.scheduled)
         self.assertEqual(
             get_service(self.service.id, self.db).status,
-            ServiceStatus.active,
+            ServiceStatus.pending,
         )
 
         with self.assertRaises(HTTPException) as context:

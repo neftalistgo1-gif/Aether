@@ -17,8 +17,10 @@ from app.api.v1.endpoints.mikrotik import (
     update_router,
 )
 from app.api.v1.endpoints.service_operations import (
+    coordinate_cancellation,
     coordinate_reactivation,
     coordinate_suspension,
+    create_cancellation,
 )
 from app.api.v1.endpoints.payment_agreements import (
     create_payment_agreement,
@@ -42,6 +44,7 @@ from app.models.notification import (
     NotificationStatus,
 )
 from app.models.service import ServiceStatus
+from app.models.service_operations import CancellationStatus
 from app.schemas.mikrotik import (
     MikrotikRouterCreate,
     MikrotikRouterUpdate,
@@ -49,6 +52,8 @@ from app.schemas.mikrotik import (
     NetworkControlRetry,
 )
 from app.schemas.service_operations import (
+    CancellationCreate,
+    CoordinatedCancellationCreate,
     CoordinatedReactivationCreate,
     CoordinatedSuspensionCreate,
 )
@@ -795,6 +800,139 @@ class MikroTikControlTestCase(unittest.TestCase):
         self.assertEqual(
             result.reactivation.network_command_id,
             result.command.id,
+        )
+        self.db.refresh(self.service)
+        self.assertEqual(self.service.status, ServiceStatus.active)
+
+    def cancellation_request(self):
+        return create_cancellation(
+            self.service.id,
+            CancellationCreate(
+                requester_customer_id=self.service.current_customer_id,
+                effective_date=date.today(),
+                reason="Baja definitiva solicitada por el titular",
+                registered_by="Atencion a clientes",
+                equipment_pending_notes="Recuperar equipo instalado",
+            ),
+            self.db,
+        )
+
+    def test_coordinated_cancellation_requires_verified_shutdown(
+        self,
+    ) -> None:
+        cancellation = self.cancellation_request()
+        preflight = coordinate_cancellation(
+            self.service.id,
+            CoordinatedCancellationCreate(
+                performed_by="Tecnico de red",
+                idempotency_key="cancel-network-preflight",
+                dry_run=True,
+            ),
+            self.db,
+        )
+        self.assertEqual(
+            preflight.command.status,
+            NetworkCommandStatus.simulated,
+        )
+        self.assertEqual(
+            cancellation.status,
+            CancellationStatus.scheduled,
+        )
+        self.db.refresh(self.service)
+        self.assertEqual(self.service.status, ServiceStatus.active)
+
+        stored_router = self.db.get(MikrotikRouter, self.router.id)
+        stored_router.enabled = True
+        self.db.commit()
+        with patch(
+            "app.api.v1.endpoints.mikrotik.RouterOSRestClient.set_blocked",
+            return_value=RouterExecutionResult(
+                blocked=True,
+                changed=True,
+                entry_count=1,
+            ),
+        ):
+            with patch.dict(
+                os.environ,
+                {
+                    "MIKROTIK_PRINCIPAL_USERNAME": "aether",
+                    "MIKROTIK_PRINCIPAL_PASSWORD": "secret",
+                },
+                clear=False,
+            ):
+                live_execution = CoordinatedCancellationCreate(
+                    performed_by="Tecnico de red",
+                    idempotency_key="cancel-network-live",
+                    dry_run=False,
+                    preflight_command_id=preflight.command.id,
+                )
+                result = coordinate_cancellation(
+                    self.service.id,
+                    live_execution,
+                    self.db,
+                )
+                repeated = coordinate_cancellation(
+                    self.service.id,
+                    live_execution,
+                    self.db,
+                )
+
+        self.assertEqual(
+            result.command.status,
+            NetworkCommandStatus.succeeded,
+        )
+        self.assertEqual(
+            result.cancellation.status,
+            CancellationStatus.executed,
+        )
+        self.assertEqual(
+            result.cancellation.network_command_id,
+            result.command.id,
+        )
+        self.assertEqual(repeated.command.id, result.command.id)
+        self.assertEqual(
+            repeated.cancellation.id,
+            result.cancellation.id,
+        )
+        assignment = self.db.get(
+            NetworkAssignment,
+            result.command.network_assignment_id,
+        )
+        self.assertIsNone(assignment.ended_at)
+        self.db.refresh(self.service)
+        self.assertEqual(self.service.status, ServiceStatus.cancelled)
+
+    def test_failed_network_shutdown_does_not_execute_cancellation(
+        self,
+    ) -> None:
+        cancellation = self.cancellation_request()
+        preflight = coordinate_cancellation(
+            self.service.id,
+            CoordinatedCancellationCreate(
+                performed_by="Tecnico de red",
+                idempotency_key="cancel-failed-preflight",
+                dry_run=True,
+            ),
+            self.db,
+        )
+        result = coordinate_cancellation(
+            self.service.id,
+            CoordinatedCancellationCreate(
+                performed_by="Tecnico de red",
+                idempotency_key="cancel-failed-live",
+                dry_run=False,
+                preflight_command_id=preflight.command.id,
+            ),
+            self.db,
+        )
+
+        self.assertEqual(
+            result.command.status,
+            NetworkCommandStatus.failed,
+        )
+        self.assertEqual(
+            cancellation.status,
+            CancellationStatus.scheduled,
         )
         self.db.refresh(self.service)
         self.assertEqual(self.service.status, ServiceStatus.active)

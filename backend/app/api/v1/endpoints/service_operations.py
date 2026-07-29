@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints.services import find_service_or_404
 from app.api.v1.endpoints.network_assignments import (
-    close_current_network_assignment,
     find_current_network_assignment,
 )
 from app.api.v1.endpoints.extensions import find_active_extension
@@ -47,6 +46,8 @@ from app.schemas.service_operations import (
     CancellationCreate,
     CancellationExecute,
     CancellationRead,
+    CoordinatedCancellationCreate,
+    CoordinatedCancellationRead,
     CoordinatedReactivationCreate,
     CoordinatedReactivationRead,
     CoordinatedSuspensionCreate,
@@ -792,17 +793,64 @@ def validate_cancellation_execution(
     return pending_balance, credit_balance
 
 
+def cancellation_requires_network_shutdown(
+    service: Service,
+    db: Session,
+) -> bool:
+    return (
+        service.status != ServiceStatus.pending
+        or find_current_network_assignment(service.id, db) is not None
+    )
+
+
+def validate_cancellation_network_command(
+    service: Service,
+    command: NetworkControlCommand,
+    db: Session,
+) -> None:
+    assignment = find_current_network_assignment(service.id, db)
+    if (
+        assignment is None
+        or command.status != NetworkCommandStatus.succeeded
+        or command.action != NetworkControlAction.decommission
+        or not command.desired_blocked
+        or command.verified_at is None
+        or command.service_id != service.id
+        or command.network_assignment_id != assignment.id
+        or command.target_ip != assignment.ip_address
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Cancellation requires a verified network shutdown "
+                "for the current assignment"
+            ),
+        )
+
+
 def execute_cancellation(
     service: Service,
     cancellation: Cancellation,
     performed_by: str,
     db: Session,
+    network_command: NetworkControlCommand | None = None,
 ) -> None:
     pending_balance, credit_balance = validate_cancellation_execution(
         service,
         cancellation,
         db,
     )
+    if cancellation_requires_network_shutdown(service, db):
+        if network_command is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Use coordinated cancellation to verify network "
+                    "shutdown first"
+                ),
+            )
+        validate_cancellation_network_command(service, network_command, db)
+        cancellation.network_command_id = network_command.id
     previous_status = service.status
     previous_pending_balance = cancellation.pending_balance
     previous_credit_balance = cancellation.credit_balance
@@ -813,7 +861,6 @@ def execute_cancellation(
     cancellation.status = CancellationStatus.executed
     cancellation.executed_by = performed_by
     cancellation.executed_at = datetime.now(UTC)
-    close_current_network_assignment(service.id, db)
     add_status_event(
         service,
         previous_status,
@@ -838,6 +885,7 @@ def execute_cancellation(
             "effective_date": cancellation.effective_date,
             "pending_balance": cancellation.pending_balance,
             "credit_balance": cancellation.credit_balance,
+            "network_command_id": cancellation.network_command_id,
         },
     )
 
@@ -908,7 +956,10 @@ def create_cancellation(
         },
     )
 
-    if cancellation.effective_date <= date.today():
+    if (
+        cancellation.effective_date <= date.today()
+        and not cancellation_requires_network_shutdown(service, db)
+    ):
         execute_cancellation(
             service,
             cancellation,
@@ -927,6 +978,95 @@ def create_cancellation(
 
     db.refresh(cancellation)
     return cancellation
+
+
+@router.post(
+    "/{service_id}/cancellation/coordinated",
+    response_model=CoordinatedCancellationRead,
+)
+def coordinate_cancellation(
+    service_id: UUID,
+    execution: CoordinatedCancellationCreate,
+    db: Session = Depends(get_db),
+) -> CoordinatedCancellationRead:
+    service = find_service_or_404(service_id, db)
+    cancellation = db.scalar(
+        select(Cancellation).where(Cancellation.service_id == service_id)
+    )
+    if cancellation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cancellation not found",
+        )
+    existing = find_command_by_idempotency_key(
+        execution.idempotency_key,
+        service_id,
+        NetworkControlAction.decommission,
+        db,
+    )
+    validate_coordinated_command_mode(
+        existing,
+        dry_run=execution.dry_run,
+        preflight_command_id=execution.preflight_command_id,
+    )
+    if cancellation.status == CancellationStatus.executed:
+        if (
+            existing is not None
+            and cancellation.network_command_id == existing.id
+        ):
+            return CoordinatedCancellationRead(
+                command=existing,
+                cancellation=cancellation,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The cancellation was already executed",
+        )
+    if cancellation.effective_date > date.today():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The effective cancellation date has not arrived",
+        )
+    validate_cancellation_execution(service, cancellation, db)
+    if existing is None:
+        existing = control_service_network(
+            service_id,
+            NetworkControlAction.decommission,
+            NetworkControlRequest(
+                requested_by=execution.performed_by,
+                idempotency_key=execution.idempotency_key,
+                dry_run=execution.dry_run,
+                preflight_command_id=execution.preflight_command_id,
+            ),
+            db,
+        )
+    if existing.status == NetworkCommandStatus.succeeded:
+        execute_cancellation(
+            service,
+            cancellation,
+            execution.performed_by,
+            db,
+            network_command=existing,
+        )
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            cancellation = db.scalar(
+                select(Cancellation).where(
+                    Cancellation.service_id == service_id
+                )
+            )
+            if (
+                cancellation is None
+                or cancellation.network_command_id != existing.id
+            ):
+                raise
+        db.refresh(cancellation)
+    return CoordinatedCancellationRead(
+        command=existing,
+        cancellation=cancellation,
+    )
 
 
 @router.get(

@@ -192,6 +192,15 @@ conserva, pero cualquier saldo a favor debe resolverse antes de ejecutar. Una
 baja programada también bloquea el cambio de titular para evitar cancelar el
 servicio de una persona distinta.
 
+Los servicios activos, suspendidos o con asignación IP no se cancelan mediante
+la ejecución manual. `POST /api/v1/services/{service_id}/cancellation/coordinated`
+realiza primero un `decommission` en modo simulación y después exige un
+preflight vigente para bloquear y verificar la IP. Sólo entonces ejecuta la
+baja y enlaza la orden de red. Un fallo deja la solicitud programada. La
+asignación IP permanece reservada tras la baja para evitar reutilizarla mientras
+siga bloqueada; su liberación se realizará después de la recuperación física y
+del retiro verificado de la address list.
+
 ### Recuperación de equipos
 
 La recuperación se programa después de registrar una baja y conserva técnico,

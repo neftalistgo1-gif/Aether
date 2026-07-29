@@ -292,6 +292,13 @@ def control_service_network(
         if service.status != ServiceStatus.suspended:
             raise HTTPException(status_code=409, detail="Only a suspended service can be reactivated")
         desired_blocked = False
+    elif action == NetworkControlAction.decommission:
+        if service.status == ServiceStatus.cancelled:
+            raise HTTPException(
+                status_code=409,
+                detail="A cancelled service cannot start network shutdown",
+            )
+        desired_blocked = True
     else:
         desired_blocked = service.status == ServiceStatus.suspended
     preflight = validate_live_preflight(
