@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#071326">
+    <title>Aether · Operación WISP</title>
+    <meta
+      name="description"
+      content="Interfaz operativa de Aether para Servicios AMR."
+    >
+    <link rel="icon" href="/app/assets/aether-mark.png">
+    <link rel="stylesheet" href="/app/styles.css">
+  </head>
+  <body>
+    <div id="login-view" class="login-shell">
+      <section class="login-panel" aria-labelledby="login-title">
+        <img
+          class="login-logo"
+          src="/app/assets/aether-horizontal.png"
+          alt="Aether"
+        >
+        <p class="eyebrow">Servicios AMR · Reynosa</p>
+        <h1 id="login-title">Tu operación, en un solo lugar.</h1>
+        <p class="login-copy">
+          Accede con la cuenta asignada por tu administrador.
+        </p>
+        <form id="login-form">
+          <label>
+            Usuario
+            <input
+              id="username"
+              name="username"
+              autocomplete="username"
+              minlength="3"
+              required
+            >
+          </label>
+          <label>
+            Contraseña
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            >
+          </label>
+          <p id="login-error" class="form-error" role="alert"></p>
+          <button class="primary-button" type="submit">
+            Entrar a Aether
+          </button>
+        </form>
+      </section>
+      <aside class="login-art" aria-hidden="true">
+        <div class="signal signal-one"></div>
+        <div class="signal signal-two"></div>
+        <div class="signal signal-three"></div>
+        <div class="network-card">
+          <span>OPERACIÓN CONECTADA</span>
+          <strong>Claridad para cada decisión.</strong>
+        </div>
+      </aside>
+    </div>
+
+    <div id="app-view" class="app-shell" hidden>
+      <aside class="sidebar">
+        <div class="brand-row">
+          <img src="/app/assets/aether-mark.png" alt="">
+          <div>
+            <strong>AETHER</strong>
+            <span>WISP MANAGEMENT</span>
+          </div>
+        </div>
+        <nav aria-label="Navegación principal">
+          <button class="nav-item active" data-view="overview">
+            <span>01</span> Resumen
+          </button>
+          <button class="nav-item" data-view="customers">
+            <span>02</span> Clientes
+          </button>
+          <button class="nav-item" data-view="services">
+            <span>03</span> Servicios
+          </button>
+          <button class="nav-item" data-view="payments">
+            <span>04</span> Pagos
+          </button>
+        </nav>
+        <div class="sidebar-foot">
+          <div class="secure-dot"></div>
+          <span>Sesión protegida</span>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <button
+            id="menu-button"
+            class="menu-button"
+            aria-label="Abrir navegación"
+            aria-expanded="false"
+          >☰</button>
+          <div>
+            <p class="eyebrow">CENTRO OPERATIVO</p>
+            <h1 id="page-title">Resumen</h1>
+          </div>
+          <div class="user-menu">
+            <div class="user-avatar" id="user-avatar">A</div>
+            <div>
+              <strong id="user-name">Administrador</strong>
+              <span id="user-role">administrator</span>
+            </div>
+            <button id="logout-button" class="text-button">Salir</button>
+          </div>
+        </header>
+
+        <section id="notice" class="notice" role="status" hidden></section>
+
+        <section id="overview-panel" class="view-panel">
+          <div class="hero-card">
+            <div>
+              <p class="eyebrow">ESTADO GENERAL</p>
+              <h2>La operación está bajo control.</h2>
+              <p id="overview-message">
+                Consultando la información disponible para tu cuenta.
+              </p>
+            </div>
+            <div class="pulse-orbit"><span></span></div>
+          </div>
+          <div id="metric-grid" class="metric-grid"></div>
+          <div class="content-grid">
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">SERVICIOS</p>
+                  <h2>Distribución actual</h2>
+                </div>
+              </div>
+              <div id="service-statuses" class="status-list"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ACCESO</p>
+                  <h2>Capacidades asignadas</h2>
+                </div>
+              </div>
+              <div id="permission-list" class="permission-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="customers-panel" class="view-panel" hidden>
+          <div class="panel">
+            <div class="panel-heading table-heading">
+              <div>
+                <p class="eyebrow">DIRECTORIO</p>
+                <h2>Clientes</h2>
+              </div>
+              <label class="search-field">
+                <span>Buscar</span>
+                <input
+                  id="customer-search"
+                  type="search"
+                  placeholder="Nombre o teléfono"
+                >
+              </label>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Teléfono</th>
+                    <th>Correo</th>
+                    <th>Registro</th>
+                  </tr>
+                </thead>
+                <tbody id="customers-body"></tbody>
+              </table>
+            </div>
+            <p id="customers-empty" class="empty-state" hidden></p>
+          </div>
+        </section>
+
+        <section id="services-panel" class="view-panel" hidden>
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">CONECTIVIDAD</p>
+                <h2>Servicios</h2>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Plan</th>
+                    <th>Domicilio</th>
+                    <th>Pago</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="services-body"></tbody>
+              </table>
+            </div>
+            <p id="services-empty" class="empty-state" hidden></p>
+          </div>
+        </section>
+
+        <section id="payments-panel" class="view-panel" hidden>
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">INGRESOS</p>
+                <h2>Pagos recientes</h2>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Referencia</th>
+                    <th>Monto</th>
+                    <th>Medio</th>
+                    <th>Fecha</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="payments-body"></tbody>
+              </table>
+            </div>
+            <p id="payments-empty" class="empty-state" hidden></p>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/app/app.js"></script>
+  </body>
+</html>

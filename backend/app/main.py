@@ -1,5 +1,8 @@
 
+from pathlib import Path
+
 from fastapi import Depends, FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api.dependencies.auth import require_authorized_user
 from app.api.v1.endpoints.audit import router as audit_router
@@ -91,3 +94,12 @@ def about():
         "city": "Reynosa, Tamaulipas ",
         "version": "0.1.0",
     }
+
+
+frontend_directory = Path(__file__).resolve().parents[2] / "frontend"
+if frontend_directory.is_dir():
+    app.mount(
+        "/app",
+        StaticFiles(directory=frontend_directory, html=True),
+        name="frontend",
+    )

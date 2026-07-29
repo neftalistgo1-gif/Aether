@@ -37,6 +37,10 @@ Desde la carpeta `backend`:
 La documentación interactiva estará disponible en
 `http://127.0.0.1:8000/docs`.
 
+La interfaz operativa estará disponible en `http://127.0.0.1:8000/app/`.
+Usa las mismas cuentas y permisos de la API; no requiere iniciar otro proceso
+ni instalar herramientas de frontend.
+
 ## Primer administrador y acceso
 
 Todas las rutas de negocio requieren autenticación. Para preparar una

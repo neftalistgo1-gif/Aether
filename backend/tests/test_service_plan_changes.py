@@ -1,6 +1,7 @@
 import unittest
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -171,27 +172,44 @@ class ServicePlanChangeTestCase(unittest.TestCase):
         self.assertIsNotNone(audit)
 
     def test_next_unbilled_due_date_can_use_new_price(self) -> None:
-        self.service.payment_day = date.today().day
+        fixed_today = date.today().replace(day=15)
+
+        class FixedDate(date):
+            @classmethod
+            def today(cls):
+                return fixed_today
+
+        self.service.payment_day = 20
         self.db.commit()
-        change = change_service_plan(
-            self.service.id,
-            self.change_data(),
-            self.db,
-        )
-        current_period = month_start(date.today())
-        self.assertEqual(change.billing_effective_period, current_period)
-        charge = create_monthly_charge(
-            self.service.id,
-            MonthlyChargeCreate(
-                billing_period=current_period,
-                generated_by="Proceso mensual",
+        with (
+            patch(
+                "app.api.v1.endpoints.service_plan_changes.date",
+                FixedDate,
             ),
-            self.db,
-        )
+            patch("app.api.v1.endpoints.charges.date", FixedDate),
+        ):
+            change = change_service_plan(
+                self.service.id,
+                self.change_data(requested_on=fixed_today),
+                self.db,
+            )
+            current_period = month_start(fixed_today)
+            self.assertEqual(
+                change.billing_effective_period,
+                current_period,
+            )
+            charge = create_monthly_charge(
+                self.service.id,
+                MonthlyChargeCreate(
+                    billing_period=current_period,
+                    generated_by="Proceso mensual",
+                ),
+                self.db,
+            )
         self.assertEqual(charge.amount, Decimal("600.00"))
 
     def test_existing_monthly_charge_is_never_repriced(self) -> None:
-        self.service.payment_day = date.today().day
+        self.service.payment_day = min(date.today().day, 28)
         self.db.commit()
         current_period = month_start(date.today())
         original_charge = create_monthly_charge(

@@ -5,8 +5,8 @@ Las funciones de monitoreo de red, inventario, integraciones y
 documentos avanzados se desarrollarán después de validar el núcleo
 administrativo.
 
-La interfaz operativa se iniciará después de estabilizar los flujos principales
-del backend. La autenticación y los permisos explícitos ya están definidos;
-antes de comenzar la UI se cerrarán los servicios transversales imprescindibles
-para operación segura. De este modo, la interfaz consumirá reglas probadas y
-no tendrá que duplicar ni decidir lógica de negocio.
+La primera interfaz operativa de consulta ya comenzó después de estabilizar los
+flujos principales, autenticación, permisos, procesos diarios y notificaciones.
+Consume reglas probadas de la API y no duplica lógica de negocio. Las acciones
+de escritura se incorporarán por módulo sólo cuando puedan conservar todas las
+validaciones y evidencias del backend.
