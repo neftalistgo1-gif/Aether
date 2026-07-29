@@ -99,6 +99,13 @@ class FrontendShellTestCase(unittest.TestCase):
             "el servicio fue activado",
             script,
         )
+        self.assertIn('hasCapability("network.control")', script)
+        self.assertIn("/network-control/${action}", script)
+        self.assertIn("dry_run: true", script)
+        self.assertIn(
+            "MikroTik y el estado comercial no cambiaron",
+            script,
+        )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

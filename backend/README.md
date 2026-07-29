@@ -72,6 +72,11 @@ confirmación de navegación. Sólo el cierre aprobado activa el servicio. Las
 referencias de evidencias permanecen privadas; la API únicamente devuelve sus
 conteos.
 
+Las cuentas con `network.control` pueden ejecutar desde la UI una simulación
+de suspensión o reactivación para servicios activos o suspendidos. Siempre
+envía `dry_run: true`: valida asignación IP y router, genera un comando
+idempotente y auditado, pero no modifica MikroTik ni el estado comercial.
+
 ## Primer administrador y acceso
 
 Todas las rutas de negocio requieren autenticación. Para preparar una

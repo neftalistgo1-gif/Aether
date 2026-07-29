@@ -10,6 +10,7 @@ const state = {
   selectedPlanId: null,
   selectedServiceId: null,
   selectedInstallation: null,
+  selectedNetworkAction: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -154,9 +155,12 @@ function renderUser() {
   document.querySelectorAll(".plan-action-column").forEach((column) => {
     column.hidden = !canWritePlans;
   });
-  document.querySelectorAll(".installation-action-column").forEach(
+  document.querySelectorAll(".service-action-column").forEach(
     (column) => {
-      column.hidden = !hasCapability("installations.write");
+      column.hidden = !(
+        hasCapability("installations.write") ||
+        hasCapability("network.control")
+      );
     }
   );
 }
@@ -387,6 +391,8 @@ function renderServices() {
     return;
   }
   const canScheduleInstallation = hasCapability("installations.write");
+  const canControlNetwork = hasCapability("network.control");
+  const canShowActions = canScheduleInstallation || canControlNetwork;
   body.innerHTML = state.services
     .map((service) => `
       <tr>
@@ -395,9 +401,9 @@ function renderServices() {
         <td>${escapeText(service.address)}</td>
         <td>Día ${service.payment_day} · ${formatMoney(service.monthly_price)}</td>
         <td><span class="badge ${service.status}">${escapeText(service.status)}</span></td>
-        ${canScheduleInstallation ? `
+        ${canShowActions ? `
           <td>
-            ${service.status === "pending" ? `
+            ${canScheduleInstallation && service.status === "pending" ? `
               <button
                 class="row-action assess-installation"
                 type="button"
@@ -405,7 +411,14 @@ function renderServices() {
               >${service.has_scheduled_installation
                 ? "Ver instalación"
                 : "Cobertura y agenda"}</button>
-            ` : "—"}
+            ` : ""}
+            ${canControlNetwork && ["active", "suspended"].includes(service.status) ? `
+              <button
+                class="row-action simulate-network-control"
+                type="button"
+                data-service-id="${service.id}"
+              >Simular ${service.status === "active" ? "suspensión" : "reactivación"}</button>
+            ` : ""}
           </td>
         ` : ""}
       </tr>
@@ -765,6 +778,74 @@ async function completeSelectedInstallation(event) {
     state.selectedInstallation = null;
     setNotice(
       "La instalación quedó completada y el servicio fue activado."
+    );
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+function openNetworkSimulationDialog(service) {
+  state.selectedServiceId = service.id;
+  state.selectedNetworkAction =
+    service.status === "active" ? "suspend" : "reactivate";
+  $("#network-simulation-dialog-title").textContent =
+    `Simular ${state.selectedNetworkAction === "suspend"
+      ? "suspensión"
+      : "reactivación"} · ${service.amr_code}`;
+  $("#network-simulation-summary").innerHTML = `
+    <div>
+      <span>Servicio</span>
+      <strong>${escapeText(service.amr_code)}</strong>
+    </div>
+    <div>
+      <span>Estado actual</span>
+      <strong>${escapeText(service.status)}</strong>
+    </div>
+    <div>
+      <span>Modo</span>
+      <strong>Simulación sin cambios</strong>
+    </div>
+  `;
+  $("#network-simulation-error").textContent = "";
+  $("#network-simulation-dialog").showModal();
+}
+
+function closeNetworkSimulationDialog() {
+  $("#network-simulation-dialog").close();
+  state.selectedServiceId = null;
+  state.selectedNetworkAction = null;
+}
+
+async function runNetworkSimulation(event) {
+  event.preventDefault();
+  const serviceId = state.selectedServiceId;
+  const action = state.selectedNetworkAction;
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const errorBox = $("#network-simulation-error");
+  if (!serviceId || !action) return;
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const command = await api(
+      `/api/v1/services/${serviceId}/network-control/${action}`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          requested_by: state.user.display_name,
+          idempotency_key: `ui-${crypto.randomUUID()}`,
+          dry_run: true,
+        }),
+      }
+    );
+    closeNetworkSimulationDialog();
+    setNotice(
+      command.status === "simulated"
+        ? "La simulación fue correcta; MikroTik y el estado comercial no cambiaron."
+        : `La simulación terminó con estado ${command.status}.`
     );
   } catch (error) {
     errorBox.textContent = error.message;
@@ -1544,11 +1625,14 @@ $("#close-service-dialog").addEventListener("click", closeServiceDialog);
 $("#cancel-service-dialog").addEventListener("click", closeServiceDialog);
 $("#services-body").addEventListener("click", (event) => {
   const button = event.target.closest(".assess-installation");
-  if (!button) return;
+  const networkButton = event.target.closest(".simulate-network-control");
+  if (!button && !networkButton) return;
   const service = state.services?.find(
-    (item) => item.id === button.dataset.serviceId
+    (item) => item.id === (button || networkButton).dataset.serviceId
   );
-  if (service) openInstallationDialog(service);
+  if (!service) return;
+  if (networkButton) openNetworkSimulationDialog(service);
+  else openInstallationDialog(service);
 });
 $("#installation-coverage-result").addEventListener(
   "change",
@@ -1594,6 +1678,18 @@ $("#close-installation-complete-dialog").addEventListener(
 $("#cancel-installation-complete").addEventListener(
   "click",
   returnToInstallationManageDialog
+);
+$("#network-simulation-form").addEventListener(
+  "submit",
+  runNetworkSimulation
+);
+$("#close-network-simulation-dialog").addEventListener(
+  "click",
+  closeNetworkSimulationDialog
+);
+$("#cancel-network-simulation").addEventListener(
+  "click",
+  closeNetworkSimulationDialog
 );
 $("#new-payment-button").addEventListener("click", openPaymentDialog);
 $("#payment-customer").addEventListener("change", updatePaymentServices);

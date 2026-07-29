@@ -219,7 +219,7 @@
                     <th>Domicilio</th>
                     <th>Pago</th>
                     <th>Estado</th>
-                    <th class="installation-action-column" hidden>Acciones</th>
+                    <th class="service-action-column" hidden>Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="services-body"></tbody>
@@ -1007,6 +1007,45 @@
           >Volver</button>
           <button class="primary-button" type="submit">
             Completar y activar
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      id="network-simulation-dialog"
+      aria-labelledby="network-simulation-dialog-title"
+    >
+      <form id="network-simulation-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">MODO SEGURO · DRY RUN</p>
+            <h2 id="network-simulation-dialog-title">
+              Simular control de red
+            </h2>
+          </div>
+          <button
+            id="close-network-simulation-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div id="network-simulation-summary" class="decision-summary"></div>
+        <p class="form-help">
+          Esta prueba valida el servicio, la IP y el router configurado. No
+          modifica la address-list, no corta internet y no cambia el estado
+          comercial.
+        </p>
+        <p id="network-simulation-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-network-simulation"
+            class="text-button"
+            type="button"
+          >Volver</button>
+          <button class="primary-button" type="submit">
+            Ejecutar simulación
           </button>
         </div>
       </form>

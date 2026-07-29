@@ -85,6 +85,12 @@ API vuelve a comprobarlos y también bloquea el cierre si el cargo no está
 pagado. Sólo una instalación inicial completada por este flujo activa el
 servicio.
 
+El control de red comienza en modo seguro. Para `network.control`, los servicios
+activos y suspendidos ofrecen una simulación técnica de la acción
+correspondiente. El diálogo explica que no es una suspensión comercial, usa una
+clave de idempotencia nueva y fuerza `dry_run`. No existe en esta etapa un
+botón de ejecución real.
+
 ## Implementación
 
 La superficie actual usa HTML, CSS y JavaScript modular sin dependencias. Se
