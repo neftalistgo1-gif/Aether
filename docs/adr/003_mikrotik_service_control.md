@@ -2,10 +2,12 @@
 
 ## Estado
 
-Aceptado
+Implementado inicialmente
 
-La asignación vigente de router e IP ya se conserva mediante
-`NetworkAssignment`. La conexión automática con MikroTik continúa pendiente.
+La asignación vigente de router e IP se conserva mediante
+`NetworkAssignment`. La ejecución contra equipos reales permanece
+deshabilitada por defecto hasta configurar credenciales externas y habilitar
+explícitamente cada router.
 
 ## Fecha
 
@@ -62,3 +64,20 @@ operativo de acceso a la red.
 
 Estos riesgos se mitigarán con asignaciones vigentes, verificación posterior,
 auditoría y reconciliación periódica.
+
+## Controles implementados
+
+- Registro de routers sin contraseñas en la base de datos ni en Git.
+- Credenciales tomadas de variables de entorno por `credential_key`.
+- HTTPS obligatorio y validación TLS activada por defecto.
+- Modo `dry_run` predeterminado, sin cambios en MikroTik.
+- Habilitación explícita por router solamente cuando existen credenciales.
+- Claves de idempotencia para impedir ejecuciones duplicadas.
+- Verificación de la address list después de agregar o retirar una IP.
+- Historial de intentos, resultado, responsable, fechas y errores.
+- Reintento del mismo comando sin perder la auditoría anterior.
+- Reconciliación tomando el estado comercial de Aether como fuente de verdad.
+
+El control de red no cambia por sí solo el estado comercial del servicio.
+Esto evita que una prueba o una falla del router altere suspensiones,
+reactivaciones o bajas registradas en Aether.

@@ -185,6 +185,23 @@ exige al menos una mensualidad cuyo periodo de tolerancia haya terminado y
 guarda una fotografía de los cargos usados para tomar la decisión. Un monto
 manual que no coincida con Aether bloquea el corte.
 
+### Control seguro de MikroTik
+
+Cada router se registra por nombre, URL HTTPS, address list de suspendidos y
+una clave de credenciales. Los usuarios y contraseñas nunca se guardan en la
+base ni en Git: se leen de variables `MIKROTIK_<CLAVE>_USERNAME` y
+`MIKROTIK_<CLAVE>_PASSWORD`.
+
+Las operaciones de suspensión, reactivación y reconciliación usan la IP y el
+router de `NetworkAssignment`. El modo de simulación está activo por defecto.
+Para operar un router real deben existir sus credenciales y después debe
+habilitarse explícitamente su registro.
+
+Cada orden conserva una clave de idempotencia, responsable, IP, intención,
+intentos y resultado. Aether consulta la address list después de cada cambio;
+sólo marca éxito cuando el estado real coincide. Los fallos pueden reintentarse
+y la reconciliación vuelve a aplicar el estado comercial que conserva Aether.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:

@@ -11,6 +11,7 @@ from app.models.customer import Customer
 from app.models.equipment_recovery import EquipmentRecovery
 from app.models.extension import Extension
 from app.models.maintenance_inspection import MaintenanceInspection
+from app.models.mikrotik import MikrotikRouter, NetworkControlCommand
 from app.models.network_assignment import NetworkAssignment
 from app.models.payment import Payment, PaymentStatusEvent
 from app.models.payment_allocation import CreditMovement, PaymentAllocation
