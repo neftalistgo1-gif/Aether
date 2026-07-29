@@ -137,6 +137,10 @@ class Payment(Base):
         lazy="selectin",
     )
 
+    @property
+    def has_proof(self) -> bool:
+        return self.proof_reference is not None
+
 
 class PaymentStatusEvent(Base):
     __tablename__ = "payment_status_events"

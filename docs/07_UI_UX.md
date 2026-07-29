@@ -24,6 +24,7 @@ Aether. Incluye:
 - alta y edición de clientes para cuentas con `customers.write`;
 - tablas de servicios y pagos recientes;
 - alta de servicios pendientes mediante selección de titular y plan vigente;
+- recepción de pagos pendientes para cuentas con `billing.write`;
 - mensajes claros cuando la cuenta no tiene permiso para un área;
 - navegación adaptable a escritorio y móvil.
 
@@ -38,6 +39,13 @@ El alta de servicios sólo aparece cuando la cuenta puede escribir servicios y
 consultar al menos un cliente y un plan activo. Nombre y precio se presentan
 desde el catálogo; no se capturan como texto libre. La activación permanece en
 su flujo especializado y no forma parte del formulario de alta.
+
+La recepción de pagos mantiene separados los pasos financieros. El operador
+puede declarar cliente, servicio opcional, monto, medio, fecha y referencias,
+pero el registro siempre inicia pendiente. La interfaz advierte que esta acción
+no reduce deuda y no ofrece verificar ni aplicar el pago en el mismo formulario.
+La ubicación del comprobante se envía como dato privado y nunca regresa en los
+listados; éstos sólo indican si existe evidencia.
 
 ## Implementación
 

@@ -53,7 +53,7 @@ class PaymentRead(BaseModel):
     received_at: datetime
     method: PaymentMethod
     reference: str | None
-    proof_reference: str | None
+    has_proof: bool
     origin_account_holder: str | None
     status: PaymentStatus
     received_by: str

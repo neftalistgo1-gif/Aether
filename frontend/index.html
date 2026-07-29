@@ -232,7 +232,14 @@
                 <p class="eyebrow">INGRESOS</p>
                 <h2>Pagos recientes</h2>
               </div>
+              <button
+                id="new-payment-button"
+                class="secondary-button"
+                type="button"
+                hidden
+              >Registrar pago</button>
             </div>
+            <p id="payment-write-note" class="inline-note" hidden></p>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -417,6 +424,97 @@
           >Cancelar</button>
           <button class="primary-button" type="submit">
             Registrar servicio
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="payment-dialog" aria-labelledby="payment-dialog-title">
+      <form id="payment-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">RECEPCIÓN DE PAGO</p>
+            <h2 id="payment-dialog-title">Registrar pago</h2>
+          </div>
+          <button
+            id="close-payment-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Cliente
+            <select id="payment-customer" required></select>
+          </label>
+          <label>
+            Servicio relacionado
+            <select id="payment-service"></select>
+          </label>
+          <label>
+            Monto declarado
+            <input
+              id="payment-amount"
+              type="number"
+              min="0.01"
+              step="0.01"
+              inputmode="decimal"
+              required
+            >
+          </label>
+          <label>
+            Medio de pago
+            <select id="payment-method" required>
+              <option value="cash">Efectivo</option>
+              <option value="bank_transfer">Transferencia bancaria</option>
+              <option value="bank_deposit">Depósito bancario</option>
+              <option value="card">Tarjeta</option>
+              <option value="other">Otro</option>
+            </select>
+          </label>
+          <label>
+            Fecha declarada
+            <input id="payment-declared-at" type="datetime-local" required>
+          </label>
+          <label>
+            Referencia bancaria o interna
+            <input id="payment-reference" maxlength="150">
+          </label>
+          <label>
+            Titular de la cuenta de origen
+            <input id="payment-origin-holder" maxlength="150">
+          </label>
+          <label>
+            Referencia privada del comprobante
+            <input
+              id="payment-proof-reference"
+              maxlength="500"
+              placeholder="Ej. comprobantes/folio-123"
+            >
+          </label>
+          <label class="full-row">
+            Notas
+            <textarea
+              id="payment-notes"
+              rows="3"
+              maxlength="1000"
+            ></textarea>
+          </label>
+        </div>
+        <p class="form-help">
+          El registro quedará pendiente. La deuda no cambiará hasta que el pago
+          sea verificado y aplicado por una persona autorizada.
+        </p>
+        <p id="payment-form-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-payment-dialog"
+            class="text-button"
+            type="button"
+          >Cancelar</button>
+          <button class="primary-button" type="submit">
+            Registrar como pendiente
           </button>
         </div>
       </form>

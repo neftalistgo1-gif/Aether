@@ -224,6 +224,8 @@ el historial y deja de sumar al saldo.
 `Payment` registra el monto declarado, fecha, método, referencia, comprobante,
 titular de la cuenta de origen y persona que lo recibió. Todo pago inicia en
 `pending`: recibir un comprobante no confirma que el dinero haya ingresado.
+La referencia de almacenamiento del comprobante es privada: las respuestas
+generales sólo indican `has_proof` y no revelan su ubicación.
 
 Una persona responsable puede verificar el monto realmente recibido, rechazar
 el comprobante o cancelar un registro pendiente. Si el monto confirmado es

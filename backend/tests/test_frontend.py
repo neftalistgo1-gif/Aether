@@ -47,6 +47,12 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn('hasCapability("services.write")', script)
         self.assertIn("plan_id: plan.id", script)
         self.assertIn('setNotice("El servicio quedó registrado como pendiente.")', script)
+        self.assertIn('hasCapability("billing.write")', script)
+        self.assertIn("proof_reference: optionalText", script)
+        self.assertIn(
+            "El pago quedó pendiente de verificación",
+            script,
+        )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

@@ -23,6 +23,7 @@ from app.models.payment import PaymentMethod, PaymentStatus
 from app.schemas.payment import (
     PaymentCreate,
     PaymentDecision,
+    PaymentRead,
     PaymentVerify,
 )
 from app.schemas.service import ServiceCreate
@@ -99,6 +100,14 @@ class PaymentTestCase(unittest.TestCase):
         )
         self.assertIsNotNone(audit)
         self.assertEqual(audit.actor, "Atencion a clientes")
+
+    def test_public_payment_response_hides_private_proof_reference(self) -> None:
+        payment = create_payment(self.payment_data(), self.db)
+
+        response = PaymentRead.model_validate(payment).model_dump()
+
+        self.assertTrue(response["has_proof"])
+        self.assertNotIn("proof_reference", response)
 
     def test_verify_payment_confirms_amount_and_records_event(self) -> None:
         payment = create_payment(self.payment_data(), self.db)

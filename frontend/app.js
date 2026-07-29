@@ -125,6 +125,16 @@ function renderUser() {
   serviceWriteNote.textContent = hasServiceReferences
     ? ""
     : "Para registrar servicios se necesita al menos un cliente y un plan activo visibles para esta cuenta.";
+  const canWritePayments = hasCapability("billing.write");
+  const hasPaymentReferences = Boolean(state.customers?.length);
+  $("#new-payment-button").hidden = !(
+    canWritePayments && hasPaymentReferences
+  );
+  const paymentWriteNote = $("#payment-write-note");
+  paymentWriteNote.hidden = !canWritePayments || hasPaymentReferences;
+  paymentWriteNote.textContent = hasPaymentReferences
+    ? ""
+    : "Para registrar pagos se necesita al menos un cliente visible para esta cuenta.";
 }
 
 function hasCapability(capability) {
@@ -469,6 +479,96 @@ function renderPayments() {
   empty.hidden = state.payments.length > 0;
 }
 
+function updatePaymentServices() {
+  const customerId = $("#payment-customer").value;
+  const services = (state.services || []).filter(
+    (service) => service.current_customer_id === customerId
+  );
+  $("#payment-service").innerHTML = [
+    '<option value="">Sin servicio específico</option>',
+    ...services.map(
+      (service) =>
+        `<option value="${service.id}">${escapeText(service.amr_code)} · ${escapeText(service.plan_name)}</option>`
+    ),
+  ].join("");
+}
+
+function localDateTimeValue(date = new Date()) {
+  const localTime = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60000
+  );
+  return localTime.toISOString().slice(0, 16);
+}
+
+function openPaymentDialog() {
+  $("#payment-customer").innerHTML = (state.customers || [])
+    .map(
+      (customer) =>
+        `<option value="${customer.id}">${escapeText(customer.full_name)}</option>`
+    )
+    .join("");
+  $("#payment-amount").value = "";
+  $("#payment-method").value = "cash";
+  $("#payment-declared-at").value = localDateTimeValue();
+  $("#payment-reference").value = "";
+  $("#payment-origin-holder").value = "";
+  $("#payment-proof-reference").value = "";
+  $("#payment-notes").value = "";
+  $("#payment-form-error").textContent = "";
+  updatePaymentServices();
+  $("#payment-dialog").showModal();
+  $("#payment-amount").focus();
+}
+
+function closePaymentDialog() {
+  $("#payment-dialog").close();
+}
+
+async function savePayment(event) {
+  event.preventDefault();
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const errorBox = $("#payment-form-error");
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const declaredAt = new Date($("#payment-declared-at").value);
+    if (Number.isNaN(declaredAt.getTime())) {
+      throw new Error("Indica una fecha válida para el pago.");
+    }
+    const optionalText = (selector) => $(selector).value.trim() || null;
+    const saved = await api("/api/v1/payments", {
+      method: "POST",
+      body: JSON.stringify({
+        customer_id: $("#payment-customer").value,
+        service_id: $("#payment-service").value || null,
+        declared_amount: $("#payment-amount").value,
+        declared_at: declaredAt.toISOString(),
+        method: $("#payment-method").value,
+        reference: optionalText("#payment-reference"),
+        proof_reference: optionalText("#payment-proof-reference"),
+        origin_account_holder: optionalText("#payment-origin-holder"),
+        received_by: state.user.display_name,
+        notes: optionalText("#payment-notes"),
+      }),
+    });
+    if (state.payments) {
+      state.payments.push(saved);
+      renderPayments();
+      renderOverview();
+    }
+    closePaymentDialog();
+    setNotice(
+      "El pago quedó pendiente de verificación; la deuda todavía no cambió."
+    );
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 function showView(name) {
   document.querySelectorAll(".view-panel").forEach((panel) => {
     panel.hidden = panel.id !== `${name}-panel`;
@@ -572,6 +672,11 @@ $("#service-plan").addEventListener("change", updateSelectedPlanPrice);
 $("#service-form").addEventListener("submit", saveService);
 $("#close-service-dialog").addEventListener("click", closeServiceDialog);
 $("#cancel-service-dialog").addEventListener("click", closeServiceDialog);
+$("#new-payment-button").addEventListener("click", openPaymentDialog);
+$("#payment-customer").addEventListener("change", updatePaymentServices);
+$("#payment-form").addEventListener("submit", savePayment);
+$("#close-payment-dialog").addEventListener("click", closePaymentDialog);
+$("#cancel-payment-dialog").addEventListener("click", closePaymentDialog);
 $("#logout-button").addEventListener("click", () => logout());
 $("#menu-button").addEventListener("click", () => {
   const sidebar = $(".sidebar");

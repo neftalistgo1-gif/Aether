@@ -72,6 +72,7 @@ input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(89, 185, 255
 }
 .secondary-button:hover { background: rgba(35,136,239,.22); }
 .form-error { min-height: 20px; margin: -6px 0; color: var(--red); font-size: 0.84rem; }
+.form-help { margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
 .login-art { position: relative; overflow: hidden; background: linear-gradient(145deg, #071426, #0c2e59); }
 .login-art::before { content: ""; position: absolute; inset: 10%; border: 1px solid var(--line); transform: rotate(30deg); }
 .signal { position: absolute; border: 1px solid rgba(89, 185, 255, 0.2); border-radius: 50%; }
