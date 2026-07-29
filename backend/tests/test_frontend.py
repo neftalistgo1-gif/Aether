@@ -230,6 +230,31 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("network-execution-confirm", page)
         self.assertIn("válida por 15 minutos", page)
 
+    def test_cancellation_ui_preserves_staged_safe_workflow(self) -> None:
+        script = (frontend_directory / "app.js").read_text(
+            encoding="utf-8"
+        )
+        page = (frontend_directory / "index.html").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('hasCapability("services.cancel")', script)
+        self.assertIn('hasCapability("assets.write")', script)
+        self.assertIn("cancellation-request-form", script)
+        self.assertIn("/cancellation/coordinated", script)
+        self.assertIn("/equipment-recovery/complete", script)
+        self.assertIn(
+            "/cancellation/network-release/coordinated",
+            script,
+        )
+        self.assertIn("physical_disconnect_confirmed:", script)
+        self.assertIn("disconnect_evidence_reference:", script)
+        self.assertIn('type: "cancellation"', script)
+        self.assertIn('type: "network_release"', script)
+        self.assertIn("preflightCommandId: result.command.id", script)
+        self.assertIn("cancellation-dialog", page)
+        self.assertIn("BAJA SEGURA · FLUJO POR ETAPAS", page)
+
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(
             path.read_text(encoding="utf-8")

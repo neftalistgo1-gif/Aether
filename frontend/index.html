@@ -1341,6 +1341,36 @@
       </form>
     </dialog>
 
+    <dialog
+      id="cancellation-dialog"
+      aria-labelledby="cancellation-dialog-title"
+    >
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">BAJA SEGURA · FLUJO POR ETAPAS</p>
+            <h2 id="cancellation-dialog-title">Baja y retiro</h2>
+          </div>
+          <button
+            id="close-cancellation-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div id="cancellation-summary" class="decision-summary"></div>
+        <div id="cancellation-workspace" class="cancellation-workspace"></div>
+        <p id="cancellation-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="dismiss-cancellation-dialog"
+            class="text-button"
+            type="button"
+          >Cerrar</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="extension-dialog" aria-labelledby="extension-dialog-title">
       <div class="dialog-content">
         <div class="dialog-heading">

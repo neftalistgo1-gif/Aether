@@ -220,6 +220,48 @@ dialog form.embedded-form { padding: 0; }
   line-height: 1.55;
 }
 .safety-panel p { margin: 0; color: #c9d4e1; }
+.cancellation-workspace {
+  display: grid;
+  gap: 14px;
+  padding: 20px 0 8px;
+}
+.cancellation-stage-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: rgba(35,136,239,.04);
+}
+.cancellation-stage-card h3,
+.cancellation-stage-card p { margin: 0; }
+.cancellation-stage-card h3 { font-size: .94rem; }
+.cancellation-stage-card p {
+  color: var(--muted);
+  font-size: .8rem;
+  line-height: 1.55;
+}
+.cancellation-stage-card .form-grid { padding-top: 0; }
+.stage-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.equipment-classification {
+  display: grid;
+  gap: 9px;
+}
+.equipment-classification label {
+  display: grid;
+  grid-template-columns: 1fr minmax(150px, .55fr);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px 11px;
+  background: rgba(6,19,37,.45);
+}
 .extension-section {
   display: grid;
   gap: 12px;
@@ -275,6 +317,7 @@ dialog form.embedded-form { padding: 0; }
   .split-actions { align-items: stretch; flex-direction: column-reverse; }
   .split-actions > div { justify-content: flex-end; flex-wrap: wrap; }
   .decision-summary { grid-template-columns: 1fr; }
+  .equipment-classification label { grid-template-columns: 1fr; }
 }
 @media (max-width: 460px) {
   .metric-grid { grid-template-columns: 1fr; }

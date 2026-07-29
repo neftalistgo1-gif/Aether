@@ -134,14 +134,18 @@ notas permanecen opcionales. Las cuentas con `billing.approve` seleccionan el
 convenio vigente que desean cumplir o cancelar. Ninguna de estas acciones
 reduce la deuda ni registra pagos automáticamente.
 
-La baja definitiva todavía no se expone en la interfaz. El backend ya calcula
-deuda y saldo a favor de forma autoritativa, exige resolver cualquier crédito
-y reserva la acción a `services.cancel`. Sus dos fases técnicas ya están
-completas: primero bloquea y verifica la IP antes de cancelar; después de la
-recuperación final exige desconexión física documentada, retira el bloqueo y
-libera la asignación. La pantalla se incorporará sobre estas rutas coordinadas,
-sin duplicar las reglas en el navegador, y conservará la secuencia
-simulación-confirmación-ejecución.
+La baja definitiva se presenta como un expediente de cuatro etapas: solicitud,
+corte verificado, recuperación de equipos y liberación de IP. La vista muestra
+folio, fecha efectiva, saldos calculados y avance operativo, pero no reproduce
+las reglas financieras ni técnicas. `services.cancel` controla solicitud,
+ejecución y liberación; `assets.write` permite programar y completar el retiro.
+
+Las dos acciones de MikroTik conservan la secuencia
+simulación-confirmación-ejecución y exigen escribir el código AMR antes del
+cambio real. La recuperación obliga a clasificar cada equipo esperado como
+recuperado o faltante. La liberación sólo aparece después de un resultado final
+y exige evidencia privada de desconexión. Si la baja no tenía asignación de
+red, la interfaz termina el expediente sin ofrecer una liberación inexistente.
 
 ## Implementación
 

@@ -205,6 +205,13 @@ exige confirmar y documentar la desconexión física. Primero simula la acción
 list, verifica el resultado y sólo entonces cierra la asignación. Un fallo
 mantiene la IP reservada.
 
+La UI reúne este proceso en **Baja y retiro**, pero conserva cuatro etapas
+separadas: solicitud, corte verificado, recuperación de equipos y liberación de
+IP. `services.cancel` controla las decisiones terminales y `assets.write` la
+visita de recuperación. Los cambios de MikroTik reutilizan la confirmación
+segura por código AMR y nunca omiten el preflight. Una baja sin asignación de
+red termina sin inventar una liberación de IP.
+
 ### Recuperación de equipos
 
 La recuperación se programa después de registrar una baja y conserva técnico,

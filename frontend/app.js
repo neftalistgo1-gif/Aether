@@ -19,6 +19,8 @@ const state = {
   selectedExtensionDueDate: null,
   selectedPaymentAgreements: [],
   selectedAgreementBalance: null,
+  selectedCancellation: null,
+  selectedRecovery: null,
   pendingNetworkOperation: null,
 };
 
@@ -172,7 +174,10 @@ function renderUser() {
         hasCapability("installations.write") ||
         hasCapability("network.control") ||
         hasCapability("notifications.write") ||
-        hasCapability("billing.read")
+        hasCapability("billing.read") ||
+        hasCapability("services.cancel") ||
+        hasCapability("assets.read") ||
+        hasCapability("assets.write")
       );
     }
   );
@@ -416,13 +421,20 @@ function renderServices() {
     hasCapability("billing.read")
   );
   const canReadExtensions = hasCapability("billing.read");
+  const canCancelServices = hasCapability("services.cancel");
+  const canManageRecovery = (
+    hasCapability("assets.read") ||
+    hasCapability("assets.write")
+  );
   const canShowActions = (
     canScheduleInstallation ||
     canControlNetwork ||
     canWriteNotifications ||
     canCheckSuspension ||
     canCheckReactivation ||
-    canReadExtensions
+    canReadExtensions ||
+    canCancelServices ||
+    canManageRecovery
   );
   body.innerHTML = state.services
     .map((service) => `
@@ -482,6 +494,15 @@ function renderServices() {
                 type="button"
                 data-service-id="${service.id}"
               >Convenios</button>
+            ` : ""}
+            ${(canCancelServices || (
+              canManageRecovery && service.status === "cancelled"
+            )) ? `
+              <button
+                class="row-action manage-cancellation"
+                type="button"
+                data-service-id="${service.id}"
+              >Baja y retiro</button>
             ` : ""}
           </td>
         ` : ""}
@@ -1081,15 +1102,704 @@ function closeSuspensionCheckDialog() {
   state.selectedSuspensionDebt = null;
 }
 
+function textLines(value) {
+  return value
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+async function loadOptionalRecord(path) {
+  try {
+    return await api(path);
+  } catch (error) {
+    if ([403, 404].includes(error.status)) return null;
+    throw error;
+  }
+}
+
+async function openCancellationDialog(service) {
+  state.selectedServiceId = service.id;
+  state.selectedCancellation = null;
+  state.selectedRecovery = null;
+  $("#cancellation-dialog-title").textContent =
+    `Baja y retiro · ${service.amr_code}`;
+  $("#cancellation-summary").innerHTML = `
+    <div>
+      <span>Servicio</span>
+      <strong>${escapeText(service.amr_code)}</strong>
+    </div>
+    <div>
+      <span>Estado comercial</span>
+      <strong>${escapeText(service.status)}</strong>
+    </div>
+    <div>
+      <span>Etapa</span>
+      <strong>Consultando…</strong>
+    </div>
+  `;
+  $("#cancellation-workspace").innerHTML =
+    '<p class="empty-state">Consultando el expediente de baja…</p>';
+  $("#cancellation-error").textContent = "";
+  $("#cancellation-dialog").showModal();
+  try {
+    state.selectedCancellation = await loadOptionalRecord(
+      `/api/v1/services/${service.id}/cancellation`
+    );
+    if (state.selectedCancellation) {
+      state.selectedRecovery = await loadOptionalRecord(
+        `/api/v1/services/${service.id}/equipment-recovery`
+      );
+    }
+    renderCancellationWorkspace();
+  } catch (error) {
+    $("#cancellation-error").textContent = error.message;
+  }
+}
+
+function closeCancellationDialog() {
+  $("#cancellation-dialog").close();
+  state.selectedServiceId = null;
+  state.selectedCancellation = null;
+  state.selectedRecovery = null;
+  $("#cancellation-error").textContent = "";
+}
+
+function cancellationStageLabel(cancellation, recovery) {
+  if (!cancellation) return "Solicitud pendiente";
+  if (cancellation.status === "scheduled") return "Corte pendiente";
+  if (!recovery) return "Retiro por programar";
+  if (["scheduled", "pending"].includes(recovery.status)) {
+    return "Retiro pendiente";
+  }
+  if (!cancellation.network_command_id) return "Cierre completado";
+  if (!cancellation.network_release_command_id) {
+    return "Liberación de IP pendiente";
+  }
+  return "Cierre completado";
+}
+
+function cancellationRequestMarkup(service) {
+  if (!hasCapability("services.cancel")) {
+    return `
+      <section class="cancellation-stage-card">
+        <h3>Sin solicitud de baja</h3>
+        <p>Tu cuenta puede consultar el servicio, pero no iniciar una baja definitiva.</p>
+      </section>
+    `;
+  }
+  return `
+    <form id="cancellation-request-form" class="cancellation-stage-card">
+      <div class="stage-status">
+        <h3>1. Registrar solicitud</h3>
+        <span class="badge pending">Pendiente</span>
+      </div>
+      <p>
+        Aether calculará deuda y saldo a favor. La fecha efectiva puede ser hoy
+        o el final del periodo pagado.
+      </p>
+      <div class="form-grid">
+        <label>
+          Fecha efectiva
+          <input
+            id="cancellation-effective-date"
+            type="date"
+            min="${localDateValue()}"
+            value="${localDateValue()}"
+            required
+          >
+        </label>
+        <label class="full-row">
+          Motivo confirmado por el titular
+          <textarea
+            id="cancellation-reason"
+            rows="3"
+            minlength="3"
+            maxlength="500"
+            required
+          ></textarea>
+        </label>
+        <label class="full-row">
+          Equipos que deben priorizarse
+          <textarea
+            id="cancellation-equipment-notes"
+            rows="2"
+            maxlength="1000"
+          >Priorizar antena, módem, PoE y fuente propiedad de AMR</textarea>
+        </label>
+        <label class="full-row">
+          Notas internas
+          <textarea id="cancellation-notes" rows="2" maxlength="1000"></textarea>
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <button class="danger-button" type="submit">Registrar solicitud</button>
+      </div>
+    </form>
+  `;
+}
+
+function recoveryScheduleMarkup(cancellation) {
+  if (!hasCapability("assets.write")) {
+    return `
+      <section class="cancellation-stage-card">
+        <h3>3. Recuperación de equipos</h3>
+        <p>Aún no hay una visita registrada. Se requiere una cuenta de inventario para programarla.</p>
+      </section>
+    `;
+  }
+  const minimumDate = cancellation.effective_date > localDateValue()
+    ? cancellation.effective_date
+    : localDateValue();
+  return `
+    <form id="recovery-schedule-form" class="cancellation-stage-card">
+      <div class="stage-status">
+        <h3>3. Programar recuperación</h3>
+        <span class="badge pending">Pendiente</span>
+      </div>
+      <p>La visita queda vinculada al folio y no libera la IP por sí sola.</p>
+      <div class="form-grid">
+        <label>
+          Fecha acordada
+          <input
+            id="recovery-scheduled-for"
+            type="date"
+            min="${minimumDate}"
+            value="${minimumDate}"
+            required
+          >
+        </label>
+        <label>
+          Técnico asignado
+          <input id="recovery-technician" minlength="2" maxlength="150" required>
+        </label>
+        <label class="full-row">
+          Equipos esperados, uno por línea
+          <textarea
+            id="recovery-expected-equipment"
+            rows="5"
+            required
+          >Antena
+Módem
+PoE
+Fuente</textarea>
+        </label>
+        <label class="full-row">
+          Notas
+          <textarea id="recovery-schedule-notes" rows="2" maxlength="1000"></textarea>
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <button class="primary-button" type="submit">Programar visita</button>
+      </div>
+    </form>
+  `;
+}
+
+function recoveryCompletionMarkup(recovery, cancellation) {
+  const canComplete = (
+    hasCapability("assets.write") &&
+    cancellation.status === "executed"
+  );
+  if (!canComplete) {
+    return `
+      <section class="cancellation-stage-card">
+        <div class="stage-status">
+          <h3>3. Recuperación programada</h3>
+          <span class="badge pending">${escapeText(recovery.status)}</span>
+        </div>
+        <p>
+          Visita para ${formatDate(recovery.scheduled_for)} ·
+          ${escapeText(recovery.assigned_technician)}.
+          ${cancellation.status === "executed"
+            ? "Tu cuenta no puede completar el retiro."
+            : "Primero debe ejecutarse la baja."}
+        </p>
+      </section>
+    `;
+  }
+  return `
+    <form id="recovery-complete-form" class="cancellation-stage-card">
+      <div class="stage-status">
+        <h3>3. Confirmar recuperación</h3>
+        <span class="badge pending">Visita programada</span>
+      </div>
+      <p>Clasifica cada equipo. Los faltantes permanecerán en el historial.</p>
+      <div class="equipment-classification">
+        ${recovery.expected_equipment.map((item) => `
+          <label>
+            <strong>${escapeText(item)}</strong>
+            <select
+              class="equipment-result"
+              data-equipment="${escapeText(item)}"
+              required
+            >
+              <option value="recovered">Recuperado</option>
+              <option value="missing">No recuperado</option>
+            </select>
+          </label>
+        `).join("")}
+      </div>
+      <div class="form-grid">
+        <label class="full-row">
+          Condición y trabajo realizado
+          <textarea
+            id="recovery-condition-notes"
+            rows="3"
+            minlength="3"
+            maxlength="2000"
+            required
+          ></textarea>
+        </label>
+        <label class="full-row">
+          Referencias privadas de evidencia, una por línea
+          <textarea id="recovery-evidence" rows="3"></textarea>
+        </label>
+        <label>
+          Constancia de recepción
+          <input id="recovery-receipt" maxlength="500">
+        </label>
+        <label class="full-row">
+          Notas
+          <textarea id="recovery-completion-notes" rows="2" maxlength="1000"></textarea>
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <button class="primary-button" type="submit">Cerrar visita</button>
+      </div>
+    </form>
+  `;
+}
+
+function networkReleaseMarkup(cancellation, recovery) {
+  if (cancellation.network_release_command_id) {
+    return `
+      <section class="cancellation-stage-card">
+        <div class="stage-status">
+          <h3>4. Red liberada</h3>
+          <span class="badge">Completado</span>
+        </div>
+        <p>
+          MikroTik confirmó el retiro del bloqueo el
+          ${formatDate(cancellation.network_released_at)}. La asignación IP ya
+          está cerrada y su evidencia permanece privada.
+        </p>
+      </section>
+    `;
+  }
+  if (!hasCapability("services.cancel")) {
+    return `
+      <section class="cancellation-stage-card">
+        <h3>4. Liberación de IP pendiente</h3>
+        <p>El retiro físico terminó. Se requiere autorización de baja para liberar la IP.</p>
+      </section>
+    `;
+  }
+  return `
+    <form id="network-release-form" class="cancellation-stage-card">
+      <div class="stage-status">
+        <h3>4. Liberar IP reservada</h3>
+        <span class="badge pending">Requiere simulación</span>
+      </div>
+      <p>
+        Resultado del retiro: ${escapeText(recovery.status)}. La IP sólo se
+        libera si MikroTik confirma que salió de la lista de suspendidos.
+      </p>
+      <div class="form-grid">
+        <label class="full-row">
+          Referencia privada de la desconexión física
+          <input
+            id="network-release-evidence"
+            minlength="3"
+            maxlength="500"
+            required
+          >
+        </label>
+        <label class="checkbox-field full-row">
+          <input id="network-release-confirmed" type="checkbox" required>
+          Confirmo que la instalación quedó físicamente desconectada
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <button class="danger-button" type="submit">Simular liberación</button>
+      </div>
+    </form>
+  `;
+}
+
+function renderCancellationWorkspace() {
+  const service = state.services?.find(
+    (item) => item.id === state.selectedServiceId
+  );
+  const cancellation = state.selectedCancellation;
+  const recovery = state.selectedRecovery;
+  if (!service) return;
+  $("#cancellation-summary").innerHTML = `
+    <div>
+      <span>Servicio</span>
+      <strong>${escapeText(service.amr_code)}</strong>
+    </div>
+    <div>
+      <span>Estado comercial</span>
+      <strong>${escapeText(service.status)}</strong>
+    </div>
+    <div>
+      <span>Etapa</span>
+      <strong>${escapeText(cancellationStageLabel(cancellation, recovery))}</strong>
+    </div>
+  `;
+  if (!cancellation) {
+    $("#cancellation-workspace").innerHTML =
+      cancellationRequestMarkup(service);
+    return;
+  }
+
+  const due = cancellation.effective_date <= localDateValue();
+  const finalRecovery = recovery && [
+    "complete",
+    "partial",
+    "unrecoverable",
+  ].includes(recovery.status);
+  const sections = [`
+    <section class="cancellation-stage-card">
+      <div class="stage-status">
+        <h3>1. Solicitud ${escapeText(cancellation.folio)}</h3>
+        <span class="badge ${escapeText(cancellation.status)}">${escapeText(cancellation.status)}</span>
+      </div>
+      <p>
+        Efectiva el ${formatDate(cancellation.effective_date)} ·
+        deuda ${formatMoney(cancellation.pending_balance)} ·
+        saldo a favor ${formatMoney(cancellation.credit_balance)}.
+      </p>
+    </section>
+  `];
+  if (cancellation.status === "scheduled") {
+    sections.push(`
+      <section class="cancellation-stage-card">
+        <div class="stage-status">
+          <h3>2. Corte de red verificado</h3>
+          <span class="badge pending">${due ? "Listo para validar" : "Programado"}</span>
+        </div>
+        <p>
+          ${due
+            ? "Aether simulará el bloqueo de la IP antes de permitir la baja real."
+            : `La ejecución estará disponible el ${formatDate(cancellation.effective_date)}.`}
+        </p>
+        ${due && hasCapability("services.cancel") ? `
+          <div class="dialog-actions">
+            <button
+              id="${service.status === "pending"
+                ? "execute-pending-cancellation"
+                : "simulate-cancellation-shutdown"}"
+              class="danger-button"
+              type="button"
+            >${service.status === "pending"
+              ? "Ejecutar baja pendiente"
+              : "Simular corte y baja"}</button>
+          </div>
+        ` : ""}
+      </section>
+    `);
+  } else {
+    sections.push(`
+      <section class="cancellation-stage-card">
+        <div class="stage-status">
+          <h3>2. Baja ejecutada</h3>
+          <span class="badge">Verificada</span>
+        </div>
+        <p>
+          ${cancellation.network_command_id
+            ? "MikroTik confirmó el bloqueo y la IP permanece reservada."
+            : "El servicio no requería una asignación de red para cerrar."}
+        </p>
+      </section>
+    `);
+  }
+
+  if (!recovery) sections.push(recoveryScheduleMarkup(cancellation));
+  else if (["scheduled", "pending"].includes(recovery.status)) {
+    sections.push(recoveryCompletionMarkup(recovery, cancellation));
+  } else {
+    sections.push(`
+      <section class="cancellation-stage-card">
+        <div class="stage-status">
+          <h3>3. Recuperación finalizada</h3>
+          <span class="badge ${escapeText(recovery.status)}">${escapeText(recovery.status)}</span>
+        </div>
+        <p>
+          ${recovery.recovered_equipment?.length || 0} recuperados ·
+          ${recovery.missing_equipment?.length || 0} no recuperados.
+          La evidencia y la constancia permanecen en el expediente.
+        </p>
+      </section>
+    `);
+  }
+  if (cancellation.status === "executed" && finalRecovery) {
+    if (cancellation.network_command_id) {
+      sections.push(networkReleaseMarkup(cancellation, recovery));
+    } else {
+      sections.push(`
+        <section class="cancellation-stage-card">
+          <div class="stage-status">
+            <h3>4. Cierre completado</h3>
+            <span class="badge">Sin IP reservada</span>
+          </div>
+          <p>Este servicio no tenía una asignación de red que liberar.</p>
+        </section>
+      `);
+    }
+  }
+  $("#cancellation-workspace").innerHTML = sections.join("");
+}
+
+async function saveCancellationRequest(event) {
+  event.preventDefault();
+  const service = state.services?.find(
+    (item) => item.id === state.selectedServiceId
+  );
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  if (!service) return;
+  submitButton.disabled = true;
+  $("#cancellation-error").textContent = "";
+  try {
+    state.selectedCancellation = await api(
+      `/api/v1/services/${service.id}/cancellation`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          requester_customer_id: service.current_customer_id,
+          requested_at: localDateValue(),
+          effective_date: $("#cancellation-effective-date").value,
+          reason: $("#cancellation-reason").value.trim(),
+          equipment_pending_notes:
+            $("#cancellation-equipment-notes").value.trim() || null,
+          registered_by: state.user.display_name,
+          notes: $("#cancellation-notes").value.trim() || null,
+        }),
+      }
+    );
+    if (state.selectedCancellation.status === "executed") {
+      service.status = "cancelled";
+      renderServices();
+      renderOverview();
+    }
+    renderCancellationWorkspace();
+    setNotice("La solicitud de baja quedó registrada con sus saldos calculados por Aether.");
+  } catch (error) {
+    $("#cancellation-error").textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function simulateCancellationShutdown(button) {
+  const service = state.services?.find(
+    (item) => item.id === state.selectedServiceId
+  );
+  if (!service) return;
+  button.disabled = true;
+  $("#cancellation-error").textContent = "";
+  try {
+    const payload = {
+      performed_by: state.user.display_name,
+      idempotency_key: `ui-cancellation-preflight-${crypto.randomUUID()}`,
+      dry_run: true,
+    };
+    const result = await api(
+      `/api/v1/services/${service.id}/cancellation/coordinated`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+    if (result.command.status !== "simulated") {
+      throw new Error(`La simulación terminó con estado ${result.command.status}.`);
+    }
+    closeCancellationDialog();
+    openNetworkExecutionDialog({
+      type: "cancellation",
+      serviceId: service.id,
+      serviceCode: service.amr_code,
+      actionLabel: "Ejecutar baja definitiva",
+      targetIp: result.command.target_ip,
+      endpoint:
+        `/api/v1/services/${service.id}/cancellation/coordinated`,
+      payload,
+      preflightCommandId: result.command.id,
+    });
+  } catch (error) {
+    $("#cancellation-error").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function executePendingCancellation(button) {
+  const service = state.services?.find(
+    (item) => item.id === state.selectedServiceId
+  );
+  if (!service) return;
+  button.disabled = true;
+  $("#cancellation-error").textContent = "";
+  try {
+    state.selectedCancellation = await api(
+      `/api/v1/services/${service.id}/cancellation/execute`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          performed_by: state.user.display_name,
+        }),
+      }
+    );
+    service.status = "cancelled";
+    renderServices();
+    renderOverview();
+    renderCancellationWorkspace();
+    setNotice("La baja pendiente quedó ejecutada sin una asignación de red que liberar.");
+  } catch (error) {
+    $("#cancellation-error").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function scheduleEquipmentRecovery(event) {
+  event.preventDefault();
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  submitButton.disabled = true;
+  $("#cancellation-error").textContent = "";
+  try {
+    state.selectedRecovery = await api(
+      `/api/v1/services/${state.selectedServiceId}/equipment-recovery`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          scheduled_for: $("#recovery-scheduled-for").value,
+          assigned_technician: $("#recovery-technician").value.trim(),
+          expected_equipment: textLines(
+            $("#recovery-expected-equipment").value
+          ),
+          notes: $("#recovery-schedule-notes").value.trim() || null,
+        }),
+      }
+    );
+    renderCancellationWorkspace();
+    setNotice("La recuperación de equipos quedó programada y vinculada al folio.");
+  } catch (error) {
+    $("#cancellation-error").textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function completeEquipmentRecovery(event) {
+  event.preventDefault();
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const recovered = [];
+  const missing = [];
+  document.querySelectorAll(".equipment-result").forEach((select) => {
+    const target = select.value === "recovered" ? recovered : missing;
+    target.push(select.dataset.equipment);
+  });
+  submitButton.disabled = true;
+  $("#cancellation-error").textContent = "";
+  try {
+    state.selectedRecovery = await api(
+      `/api/v1/services/${state.selectedServiceId}/equipment-recovery/complete`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          performed_by: state.user.display_name,
+          recovered_equipment: recovered,
+          missing_equipment: missing,
+          condition_notes: $("#recovery-condition-notes").value.trim(),
+          evidence_references: textLines($("#recovery-evidence").value),
+          receipt_reference: $("#recovery-receipt").value.trim() || null,
+          notes: $("#recovery-completion-notes").value.trim() || null,
+        }),
+      }
+    );
+    state.selectedCancellation = await api(
+      `/api/v1/services/${state.selectedServiceId}/cancellation`
+    );
+    renderCancellationWorkspace();
+    setNotice("La visita quedó cerrada; los equipos recuperados y faltantes se conservaron.");
+  } catch (error) {
+    $("#cancellation-error").textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function simulateNetworkRelease(event) {
+  event.preventDefault();
+  const service = state.services?.find(
+    (item) => item.id === state.selectedServiceId
+  );
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  if (!service) return;
+  submitButton.disabled = true;
+  $("#cancellation-error").textContent = "";
+  try {
+    const payload = {
+      performed_by: state.user.display_name,
+      physical_disconnect_confirmed:
+        $("#network-release-confirmed").checked,
+      disconnect_evidence_reference:
+        $("#network-release-evidence").value.trim(),
+      idempotency_key: `ui-network-release-preflight-${crypto.randomUUID()}`,
+      dry_run: true,
+    };
+    const result = await api(
+      `/api/v1/services/${service.id}/cancellation/network-release/coordinated`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+    if (result.command.status !== "simulated") {
+      throw new Error(`La simulación terminó con estado ${result.command.status}.`);
+    }
+    closeCancellationDialog();
+    openNetworkExecutionDialog({
+      type: "network_release",
+      serviceId: service.id,
+      serviceCode: service.amr_code,
+      actionLabel: "Liberar IP reservada",
+      targetIp: result.command.target_ip,
+      endpoint:
+        `/api/v1/services/${service.id}/cancellation/network-release/coordinated`,
+      payload,
+      preflightCommandId: result.command.id,
+    });
+  } catch (error) {
+    $("#cancellation-error").textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 function openNetworkExecutionDialog(operation) {
   state.pendingNetworkOperation = {
     ...operation,
     expiresAt: Date.now() + NETWORK_PREFLIGHT_VALIDITY_MS,
   };
+  const eyebrowByType = {
+    suspension: "SUSPENSIÓN REAL · CONFIRMACIÓN FINAL",
+    reactivation: "REACTIVACIÓN REAL · CONFIRMACIÓN FINAL",
+    cancellation: "BAJA DEFINITIVA · CONFIRMACIÓN FINAL",
+    network_release: "LIBERACIÓN DE IP · CONFIRMACIÓN FINAL",
+  };
   $("#network-execution-eyebrow").textContent =
-    operation.type === "suspension"
-      ? "SUSPENSIÓN REAL · CONFIRMACIÓN FINAL"
-      : "REACTIVACIÓN REAL · CONFIRMACIÓN FINAL";
+    eyebrowByType[operation.type] || "CAMBIO REAL · CONFIRMACIÓN FINAL";
   $("#network-execution-dialog-title").textContent =
     `${operation.actionLabel} · ${operation.serviceCode}`;
   $("#network-execution-summary").innerHTML = `
@@ -1106,10 +1816,19 @@ function openNetworkExecutionDialog(operation) {
       <strong>${escapeText(operation.targetIp)}</strong>
     </div>
   `;
+  const impactByType = {
+    suspension:
+      "Aether agregará esta IP a la lista de suspendidos. El servicio sólo quedará suspendido si MikroTik confirma el bloqueo.",
+    reactivation:
+      "Aether retirará esta IP de la lista de suspendidos. El servicio sólo quedará activo si MikroTik confirma el acceso.",
+    cancellation:
+      "Aether bloqueará y verificará esta IP. Sólo entonces ejecutará la baja; la IP seguirá reservada hasta recuperar los equipos.",
+    network_release:
+      "Aether retirará esta IP de la lista de suspendidos. Sólo una verificación exitosa cerrará la asignación y permitirá reutilizarla.",
+  };
   $("#network-execution-impact").textContent =
-    operation.type === "suspension"
-      ? "Aether agregará esta IP a la lista de suspendidos. El servicio sólo quedará suspendido si MikroTik confirma el bloqueo."
-      : "Aether retirará esta IP de la lista de suspendidos. El servicio sólo quedará activo si MikroTik confirma el acceso.";
+    impactByType[operation.type] ||
+    "Aether volverá a validar la operación antes de contactar MikroTik.";
   $("#network-execution-code-label").textContent =
     `Escribe ${operation.serviceCode} para confirmar`;
   $("#network-execution-code").value = "";
@@ -1412,10 +2131,12 @@ async function executeConfirmedNetworkOperation(event) {
         preflight_command_id: operation.preflightCommandId,
       }),
     });
-    const completedRecord =
-      operation.type === "suspension"
-        ? result.suspension
-        : result.reactivation;
+    const completedRecord = {
+      suspension: result.suspension,
+      reactivation: result.reactivation,
+      cancellation: result.cancellation,
+      network_release: result.cancellation,
+    }[operation.type];
     if (
       result.command.status !== "succeeded" ||
       !completedRecord
@@ -1430,17 +2151,28 @@ async function executeConfirmedNetworkOperation(event) {
       (item) => item.id === operation.serviceId
     );
     if (service) {
-      service.status =
-        operation.type === "suspension" ? "suspended" : "active";
+      if (operation.type === "suspension") {
+        service.status = "suspended";
+      } else if (operation.type === "reactivation") {
+        service.status = "active";
+      } else if (operation.type === "cancellation") {
+        service.status = "cancelled";
+      }
     }
     closeNetworkExecutionDialog();
     renderServices();
     renderOverview();
-    setNotice(
-      operation.type === "suspension"
-        ? "MikroTik confirmó el bloqueo y el servicio quedó suspendido."
-        : "MikroTik confirmó el acceso y el servicio quedó reactivado."
-    );
+    const noticeByType = {
+      suspension:
+        "MikroTik confirmó el bloqueo y el servicio quedó suspendido.",
+      reactivation:
+        "MikroTik confirmó el acceso y el servicio quedó reactivado.",
+      cancellation:
+        "MikroTik confirmó el bloqueo y la baja quedó ejecutada. La IP continúa reservada.",
+      network_release:
+        "MikroTik confirmó el retiro del bloqueo y la asignación IP quedó cerrada.",
+    };
+    setNotice(noticeByType[operation.type]);
   } catch (error) {
     errorBox.textContent = error.message;
   } finally {
@@ -2707,6 +3439,9 @@ $("#services-body").addEventListener("click", (event) => {
   const agreementButton = event.target.closest(
     ".manage-payment-agreements"
   );
+  const cancellationButton = event.target.closest(
+    ".manage-cancellation"
+  );
   if (
     !button &&
     !networkButton &&
@@ -2714,7 +3449,8 @@ $("#services-body").addEventListener("click", (event) => {
     !suspensionButton &&
     !reactivationButton &&
     !extensionButton &&
-    !agreementButton
+    !agreementButton &&
+    !cancellationButton
   ) return;
   const service = state.services?.find(
     (item) =>
@@ -2726,7 +3462,8 @@ $("#services-body").addEventListener("click", (event) => {
         suspensionButton ||
         reactivationButton ||
         extensionButton ||
-        agreementButton
+        agreementButton ||
+        cancellationButton
       ).dataset.serviceId
   );
   if (!service) return;
@@ -2736,6 +3473,7 @@ $("#services-body").addEventListener("click", (event) => {
   else if (reactivationButton) openReactivationCheckDialog(service);
   else if (extensionButton) openExtensionDialog(service);
   else if (agreementButton) openPaymentAgreementDialog(service);
+  else if (cancellationButton) openCancellationDialog(service);
   else openInstallationDialog(service);
 });
 $("#installation-coverage-result").addEventListener(
@@ -2848,6 +3586,38 @@ $("#cancel-network-execution").addEventListener(
   "click",
   closeNetworkExecutionDialog
 );
+$("#close-cancellation-dialog").addEventListener(
+  "click",
+  closeCancellationDialog
+);
+$("#dismiss-cancellation-dialog").addEventListener(
+  "click",
+  closeCancellationDialog
+);
+$("#cancellation-workspace").addEventListener("submit", (event) => {
+  if (event.target.id === "cancellation-request-form") {
+    saveCancellationRequest(event);
+  } else if (event.target.id === "recovery-schedule-form") {
+    scheduleEquipmentRecovery(event);
+  } else if (event.target.id === "recovery-complete-form") {
+    completeEquipmentRecovery(event);
+  } else if (event.target.id === "network-release-form") {
+    simulateNetworkRelease(event);
+  }
+});
+$("#cancellation-workspace").addEventListener("click", (event) => {
+  const simulationButton = event.target.closest(
+    "#simulate-cancellation-shutdown"
+  );
+  const pendingButton = event.target.closest(
+    "#execute-pending-cancellation"
+  );
+  if (simulationButton) {
+    simulateCancellationShutdown(simulationButton);
+  } else if (pendingButton) {
+    executePendingCancellation(pendingButton);
+  }
+});
 $("#extension-create-form").addEventListener("submit", saveExtension);
 $("#extension-resolve-form").addEventListener(
   "submit",
