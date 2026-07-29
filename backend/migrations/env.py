@@ -7,6 +7,7 @@ from app.core.config import DATABASE_URL
 from app.db.base import Base
 from app.models.customer import Customer
 from app.models.equipment_recovery import EquipmentRecovery
+from app.models.maintenance_inspection import MaintenanceInspection
 from app.models.service import Service, ServiceEvent, ServiceHolder
 from app.models.service_operations import Cancellation, Reactivation, Suspension
 

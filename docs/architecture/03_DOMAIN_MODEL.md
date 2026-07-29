@@ -535,6 +535,20 @@ Representa la revisión de un equipo recuperado.
 - Defectuoso.
 - Desechado.
 
+## Reglas
+
+- Todo equipo recuperado inicia en cuarentena.
+- Sólo puede inspeccionarse un equipo registrado como recuperado.
+- Para quedar listo para reutilizarse debe haberse limpiado y aprobar todas
+  las pruebas registradas.
+- Un equipo que requiere reparación o resulta defectuoso puede volver a
+  inspeccionarse.
+- Listo para reutilizarse y desechado son estados terminales.
+- Ningún equipo puede asignarse a otro servicio mientras no esté listo para
+  reutilizarse.
+- El registro de Aether documenta la decisión operativa y no sustituye una
+  certificación técnica o eléctrica cuando ésta sea necesaria.
+
 ---
 
 # 19. Incident

@@ -82,6 +82,23 @@ El resultado se calcula automáticamente:
 La finalización también conserva condición, evidencias y constancia de
 recepción. Una recuperación no puede completarse antes de ejecutar la baja.
 
+### Inspección y mantenimiento
+
+Cada equipo recuperado inicia en `quarantine` y conserva un historial de
+inspecciones con técnico, limpieza, pruebas, reparaciones, evidencias y
+dictamen.
+
+Los resultados posibles son:
+
+- `ready_for_reuse`: todas las pruebas fueron aprobadas y se realizó limpieza.
+- `needs_repair`: permite reparar y registrar una nueva inspección.
+- `defective`: permite diagnosticar o trabajar el equipo y volver a revisarlo.
+- `discarded`: el equipo queda fuera de uso de forma definitiva.
+
+Sólo `ready_for_reuse` marca el equipo como reutilizable. Tanto ese resultado
+como `discarded` cierran las inspecciones posteriores para evitar cambios
+accidentales.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:
