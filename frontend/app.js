@@ -461,6 +461,11 @@ function renderServices() {
                 type="button"
                 data-service-id="${service.id}"
               >Simular ${service.status === "active" ? "suspensión" : "reactivación"}</button>
+              <button
+                class="row-action reconcile-network"
+                type="button"
+                data-service-id="${service.id}"
+              >Reconciliar red</button>
             ` : ""}
             ${canWriteNotifications ? `
               <button
@@ -936,6 +941,47 @@ async function runNetworkSimulation(event) {
     errorBox.textContent = error.message;
   } finally {
     submitButton.disabled = false;
+  }
+}
+
+async function startNetworkReconciliation(service, button) {
+  button.disabled = true;
+  setNotice();
+  try {
+    const payload = {
+      requested_by: state.user.display_name,
+      idempotency_key:
+        `ui-reconciliation-preflight-${crypto.randomUUID()}`,
+      dry_run: true,
+    };
+    const command = await api(
+      `/api/v1/services/${service.id}/network-control/reconcile`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+    if (command.status !== "simulated") {
+      throw new Error(
+        `La simulación terminó con estado ${command.status}.`
+      );
+    }
+    openNetworkExecutionDialog({
+      type: "reconciliation",
+      serviceId: service.id,
+      serviceCode: service.amr_code,
+      commercialStatus: service.status,
+      actionLabel: "Reconciliar estado de red",
+      targetIp: command.target_ip,
+      endpoint:
+        `/api/v1/services/${service.id}/network-control/reconcile`,
+      payload,
+      preflightCommandId: command.id,
+    });
+  } catch (error) {
+    setNotice(error.message);
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -1797,6 +1843,7 @@ function openNetworkExecutionDialog(operation) {
     reactivation: "REACTIVACIÓN REAL · CONFIRMACIÓN FINAL",
     cancellation: "BAJA DEFINITIVA · CONFIRMACIÓN FINAL",
     network_release: "LIBERACIÓN DE IP · CONFIRMACIÓN FINAL",
+    reconciliation: "RECONCILIACIÓN DE RED · CONFIRMACIÓN FINAL",
   };
   $("#network-execution-eyebrow").textContent =
     eyebrowByType[operation.type] || "CAMBIO REAL · CONFIRMACIÓN FINAL";
@@ -1825,6 +1872,10 @@ function openNetworkExecutionDialog(operation) {
       "Aether bloqueará y verificará esta IP. Sólo entonces ejecutará la baja; la IP seguirá reservada hasta recuperar los equipos.",
     network_release:
       "Aether retirará esta IP de la lista de suspendidos. Sólo una verificación exitosa cerrará la asignación y permitirá reutilizarla.",
+    reconciliation:
+      operation.commercialStatus === "suspended"
+        ? "Aether volverá a aplicar el bloqueo que corresponde al estado suspendido y verificará la address list. El estado comercial no cambiará."
+        : "Aether retirará cualquier bloqueo manual que contradiga el estado activo y verificará la address list. El estado comercial no cambiará.",
   };
   $("#network-execution-impact").textContent =
     impactByType[operation.type] ||
@@ -2131,14 +2182,17 @@ async function executeConfirmedNetworkOperation(event) {
         preflight_command_id: operation.preflightCommandId,
       }),
     });
+    const networkCommand =
+      operation.type === "reconciliation" ? result : result.command;
     const completedRecord = {
       suspension: result.suspension,
       reactivation: result.reactivation,
       cancellation: result.cancellation,
       network_release: result.cancellation,
+      reconciliation: result,
     }[operation.type];
     if (
-      result.command.status !== "succeeded" ||
+      networkCommand?.status !== "succeeded" ||
       !completedRecord
     ) {
       closeNetworkExecutionDialog();
@@ -2171,6 +2225,8 @@ async function executeConfirmedNetworkOperation(event) {
         "MikroTik confirmó el bloqueo y la baja quedó ejecutada. La IP continúa reservada.",
       network_release:
         "MikroTik confirmó el retiro del bloqueo y la asignación IP quedó cerrada.",
+      reconciliation:
+        "MikroTik confirmó que la red coincide con el estado comercial de Aether.",
     };
     setNotice(noticeByType[operation.type]);
   } catch (error) {
@@ -3428,6 +3484,7 @@ $("#cancel-service-dialog").addEventListener("click", closeServiceDialog);
 $("#services-body").addEventListener("click", (event) => {
   const button = event.target.closest(".assess-installation");
   const networkButton = event.target.closest(".simulate-network-control");
+  const reconciliationButton = event.target.closest(".reconcile-network");
   const notificationButton = event.target.closest(".record-notification");
   const suspensionButton = event.target.closest(
     ".check-commercial-suspension"
@@ -3445,6 +3502,7 @@ $("#services-body").addEventListener("click", (event) => {
   if (
     !button &&
     !networkButton &&
+    !reconciliationButton &&
     !notificationButton &&
     !suspensionButton &&
     !reactivationButton &&
@@ -3458,6 +3516,7 @@ $("#services-body").addEventListener("click", (event) => {
       (
         button ||
         networkButton ||
+        reconciliationButton ||
         notificationButton ||
         suspensionButton ||
         reactivationButton ||
@@ -3468,7 +3527,9 @@ $("#services-body").addEventListener("click", (event) => {
   );
   if (!service) return;
   if (networkButton) openNetworkSimulationDialog(service);
-  else if (notificationButton) openNotificationDialog(service);
+  else if (reconciliationButton) {
+    startNetworkReconciliation(service, reconciliationButton);
+  } else if (notificationButton) openNotificationDialog(service);
   else if (suspensionButton) openSuspensionCheckDialog(service);
   else if (reactivationButton) openReactivationCheckDialog(service);
   else if (extensionButton) openExtensionDialog(service);

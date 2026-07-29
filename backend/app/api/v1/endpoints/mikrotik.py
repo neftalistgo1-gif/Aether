@@ -306,8 +306,21 @@ def control_service_network(
                 detail="Only a cancelled service can release its network IP",
             )
         desired_blocked = False
-    else:
+    elif action == NetworkControlAction.reconcile:
+        if service.status not in {
+            ServiceStatus.active,
+            ServiceStatus.suspended,
+        }:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Only an active or suspended service can reconcile "
+                    "network access"
+                ),
+            )
         desired_blocked = service.status == ServiceStatus.suspended
+    else:
+        raise HTTPException(status_code=409, detail="Unsupported network action")
     preflight = validate_live_preflight(
         control,
         service.id,

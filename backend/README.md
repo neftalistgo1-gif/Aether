@@ -387,6 +387,13 @@ router y estado deseado, y sólo puede autorizar una orden real. Un reintento
 conserva el modo original: una simulación nunca puede convertirse en ejecución
 real mediante reintento.
 
+La UI ofrece **Reconciliar red** únicamente para servicios activos o
+suspendidos y cuentas con `network.control`. La simulación determina si la IP
+debe estar bloqueada según el estado comercial; una segunda confirmación por
+código AMR permite aplicar y verificar ese estado en MikroTik sin modificar el
+servicio. Los servicios pendientes o cancelados no pueden usar esta acción:
+sus transiciones tienen flujos propios.
+
 Las rutas coordinadas de suspensión y reactivación validan primero las reglas
 comerciales, ejecutan después el cambio de red y sólo actualizan el estado del
 servicio cuando MikroTik confirma el resultado. Una simulación o un fallo no

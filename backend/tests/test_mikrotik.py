@@ -478,6 +478,66 @@ class MikroTikControlTestCase(unittest.TestCase):
         )
         self.assertTrue(command.desired_blocked)
 
+    def test_reconcile_rejects_pending_and_cancelled_services(self) -> None:
+        for service_status in (
+            ServiceStatus.pending,
+            ServiceStatus.cancelled,
+        ):
+            with self.subTest(service_status=service_status):
+                self.service.status = service_status
+                self.db.commit()
+                with self.assertRaises(HTTPException) as context:
+                    control_service_network(
+                        self.service.id,
+                        NetworkControlAction.reconcile,
+                        self.request(
+                            f"mikrotik-reconcile-{service_status.value}"
+                        ),
+                        self.db,
+                    )
+                self.assertEqual(context.exception.status_code, 409)
+
+    def test_live_reconcile_verifies_router_without_commercial_change(
+        self,
+    ) -> None:
+        live_request = self.live_request(
+            NetworkControlAction.reconcile,
+            "mikrotik-reconcile-live",
+        )
+        stored_router = self.db.get(MikrotikRouter, self.router.id)
+        stored_router.enabled = True
+        self.db.commit()
+
+        with patch(
+            "app.api.v1.endpoints.mikrotik.RouterOSRestClient.set_blocked",
+            return_value=RouterExecutionResult(
+                blocked=False,
+                changed=True,
+                entry_count=0,
+            ),
+        ):
+            with patch.dict(
+                os.environ,
+                {
+                    "MIKROTIK_PRINCIPAL_USERNAME": "aether",
+                    "MIKROTIK_PRINCIPAL_PASSWORD": "secret",
+                },
+                clear=False,
+            ):
+                command = control_service_network(
+                    self.service.id,
+                    NetworkControlAction.reconcile,
+                    live_request,
+                    self.db,
+                )
+
+        self.assertEqual(command.status, NetworkCommandStatus.succeeded)
+        self.assertFalse(command.desired_blocked)
+        self.assertTrue(command.changed_router)
+        self.assertIsNotNone(command.verified_at)
+        self.db.refresh(self.service)
+        self.assertEqual(self.service.status, ServiceStatus.active)
+
     def test_retry_rejects_an_obsolete_network_assignment(self) -> None:
         command = control_service_network(
             self.service.id,

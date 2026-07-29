@@ -255,6 +255,35 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("cancellation-dialog", page)
         self.assertIn("BAJA SEGURA · FLUJO POR ETAPAS", page)
 
+    def test_network_reconciliation_ui_requires_confirmed_preflight(
+        self,
+    ) -> None:
+        script = (frontend_directory / "app.js").read_text(
+            encoding="utf-8"
+        )
+        reconciliation = script.split(
+            "async function startNetworkReconciliation",
+            maxsplit=1,
+        )[1].split(
+            "function updateNotificationResultFields",
+            maxsplit=1,
+        )[0]
+
+        self.assertIn(".reconcile-network", script)
+        self.assertIn("/network-control/reconcile", reconciliation)
+        self.assertIn("dry_run: true", reconciliation)
+        self.assertNotIn("dry_run: false", reconciliation)
+        self.assertIn('type: "reconciliation"', reconciliation)
+        self.assertIn("openNetworkExecutionDialog", reconciliation)
+        self.assertIn(
+            "RECONCILIACIÓN DE RED · CONFIRMACIÓN FINAL",
+            script,
+        )
+        self.assertIn(
+            "El estado comercial no cambiará",
+            script,
+        )
+
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(
             path.read_text(encoding="utf-8")

@@ -86,6 +86,10 @@ auditoría y reconciliación periódica.
 - Reintento del mismo comando sin perder la auditoría anterior ni cambiar su
   modo; una simulación no puede promoverse a ejecución real.
 - Reconciliación tomando el estado comercial de Aether como fuente de verdad.
+- Reconciliación limitada a servicios activos o suspendidos; pendientes y
+  cancelados conservan sus flujos de alta o baja.
+- Ejecución de reconciliación desde la UI sólo después de simulación vigente,
+  revisión de servicio e IP y confirmación del código AMR.
 
 El control de red no cambia por sí solo el estado comercial del servicio.
 Esto evita que una prueba o una falla del router altere suspensiones,
