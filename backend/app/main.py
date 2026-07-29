@@ -2,6 +2,9 @@
 from fastapi import FastAPI
 
 from app.api.v1.endpoints.customers import router as customers_router
+from app.api.v1.endpoints.equipment_recovery import (
+    router as equipment_recovery_router,
+)
 from app.api.v1.endpoints.health import router as health_router
 from app.api.v1.endpoints.service_operations import (
     router as service_operations_router,
@@ -18,6 +21,7 @@ app.include_router(health_router)
 app.include_router(customers_router)
 app.include_router(services_router)
 app.include_router(service_operations_router)
+app.include_router(equipment_recovery_router)
 
 
 @app.get("/")

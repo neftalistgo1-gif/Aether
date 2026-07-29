@@ -70,9 +70,6 @@ class CancellationCreate(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
     pending_balance: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
     credit_balance: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
-    equipment_recovery_status: EquipmentRecoveryStatus = (
-        EquipmentRecoveryStatus.pending
-    )
     equipment_pending_notes: str | None = Field(
         default=None,
         max_length=1000,

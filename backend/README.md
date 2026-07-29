@@ -67,6 +67,21 @@ La baja definitiva puede ejecutarse inmediatamente o programarse para una
 fecha futura. Conserva titular solicitante, folio, saldos y estado de
 recuperación de equipos.
 
+### Recuperación de equipos
+
+La recuperación se programa después de registrar una baja y conserva técnico,
+fecha y equipos esperados. Al completar la visita, cada equipo esperado debe
+clasificarse como recuperado o faltante.
+
+El resultado se calcula automáticamente:
+
+- `complete`: se recuperaron todos los equipos esperados.
+- `partial`: se recuperó una parte y quedaron equipos faltantes.
+- `unrecoverable`: no se recuperó ningún equipo.
+
+La finalización también conserva condición, evidencias y constancia de
+recepción. Una recuperación no puede completarse antes de ejecutar la baja.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:
