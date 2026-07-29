@@ -401,6 +401,21 @@ class AuthenticationTestCase(unittest.TestCase):
                     Capability.network_control,
                 )
 
+    def test_cancellation_requires_dedicated_capability(self) -> None:
+        base = "/api/v1/services/{service_id}/cancellation"
+        self.assertEqual(
+            capability_for_operation("GET", base),
+            Capability.services_read,
+        )
+        self.assertEqual(
+            capability_for_operation("POST", base),
+            Capability.services_cancel,
+        )
+        self.assertEqual(
+            capability_for_operation("POST", f"{base}/execute"),
+            Capability.services_cancel,
+        )
+
     def test_extension_resolution_requires_billing_approval(self) -> None:
         service_path = "/api/v1/services/{service_id}/extensions"
         self.assertEqual(

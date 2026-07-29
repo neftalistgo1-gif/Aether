@@ -134,6 +134,12 @@ notas permanecen opcionales. Las cuentas con `billing.approve` seleccionan el
 convenio vigente que desean cumplir o cancelar. Ninguna de estas acciones
 reduce la deuda ni registra pagos automáticamente.
 
+La baja definitiva todavía no se expone en la interfaz. El backend ya calcula
+deuda y saldo a favor de forma autoritativa, exige resolver cualquier crédito
+y reserva la acción a `services.cancel`. La pantalla se incorporará después de
+definir y verificar el cierre técnico de red, para no cancelar comercialmente
+un servicio que permanezca conectado ni liberar una IP todavía bloqueada.
+
 ## Implementación
 
 La superficie actual usa HTML, CSS y JavaScript modular sin dependencias. Se

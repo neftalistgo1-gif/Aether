@@ -76,8 +76,6 @@ class EquipmentRecoveryTestCase(unittest.TestCase):
                 requester_customer_id=self.customer.id,
                 effective_date=effective_date,
                 reason="Baja solicitada por el cliente",
-                pending_balance=Decimal("0.00"),
-                credit_balance=Decimal("0.00"),
                 registered_by="Atención a clientes",
             ),
             self.db,

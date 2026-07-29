@@ -10,6 +10,7 @@ from app.api.v1.endpoints.services import find_service_or_404
 from app.db.session import get_db
 from app.models.customer import Customer
 from app.models.holder_transfer import HolderTransfer
+from app.models.service_operations import Cancellation, CancellationStatus
 from app.models.service import (
     Service,
     ServiceEvent,
@@ -74,6 +75,19 @@ def transfer_service_holder(
         raise HTTPException(
             status_code=409,
             detail="A cancelled service cannot change holder",
+        )
+    scheduled_cancellation = db.scalar(
+        select(Cancellation).where(
+            Cancellation.service_id == service.id,
+            Cancellation.status == CancellationStatus.scheduled,
+        )
+    )
+    if scheduled_cancellation is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Resolve the scheduled cancellation before changing holder"
+            ),
         )
     if data.effective_date != date.today():
         raise HTTPException(

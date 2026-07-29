@@ -624,7 +624,13 @@ Representa la solicitud y ejecución de la baja definitiva.
 - El servicio puede continuar hasta terminar el periodo pagado.
 - La baja detiene nuevas mensualidades.
 - La deuda anterior no desaparece.
-- Debe resolverse el saldo a favor.
+- Los saldos se calculan desde los cargos y movimientos de crédito de Aether;
+  no se aceptan montos declarados por el operador.
+- Al ejecutar una baja programada se actualizan las fotografías de deuda y
+  crédito.
+- Debe resolverse el saldo a favor antes de ejecutar la baja.
+- El titular no puede cambiar mientras exista una baja programada.
+- Ejecutar la baja requiere la capacidad específica `services.cancel`.
 - Debe iniciarse la recuperación de equipos.
 
 ---

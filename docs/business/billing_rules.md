@@ -240,6 +240,11 @@ Al cancelar se debe registrar:
 - Equipos pendientes de recuperación.
 - Notas.
 
+La deuda y el saldo a favor se toman de Aether; no los captura manualmente el
+operador. La deuda anterior permanece exigible. Si existe saldo a favor, debe
+resolverse antes de ejecutar la baja. En una baja programada, ambos importes se
+vuelven a calcular en la fecha efectiva.
+
 Después de la fecha efectiva de baja dejan de generarse nuevas
 mensualidades.
 

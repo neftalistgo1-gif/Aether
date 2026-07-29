@@ -37,6 +37,7 @@ from app.models.notification import (
 )
 from app.models.charge import Charge, ChargeStatus, ChargeType
 from app.models.service import ServiceStatus
+from app.models.payment_allocation import CreditMovement, CreditMovementType
 from app.models.service_operations import (
     CancellationStatus,
     NetworkOperationResult,
@@ -171,8 +172,6 @@ class ServiceOperationsTestCase(unittest.TestCase):
             requester_customer_id=self.customer.id,
             effective_date=effective_date,
             reason="Baja solicitada por el cliente",
-            pending_balance=Decimal("0.00"),
-            credit_balance=Decimal("0.00"),
             registered_by="Atención a clientes",
             equipment_pending_notes="Recuperar antena, módem y PoE",
         )
@@ -475,9 +474,113 @@ class ServiceOperationsTestCase(unittest.TestCase):
         self.assertIsNotNone(cancellation.executed_at)
         self.assertTrue(cancellation.folio.startswith("CAN-"))
         self.assertEqual(
+            cancellation.pending_balance,
+            Decimal("500.00"),
+        )
+        self.assertEqual(cancellation.credit_balance, Decimal("0.00"))
+        self.assertEqual(
             get_service(self.service.id, self.db).status,
             ServiceStatus.cancelled,
         )
+
+    def test_cancellation_rejects_client_claimed_balances(self) -> None:
+        values = self.cancellation_payload(date.today()).model_dump()
+        values["pending_balance"] = Decimal("0.00")
+        values["credit_balance"] = Decimal("0.00")
+
+        with self.assertRaises(ValidationError):
+            CancellationCreate(**values)
+
+    def test_cancellation_request_date_cannot_be_in_the_future(self) -> None:
+        values = self.cancellation_payload(
+            date.today() + timedelta(days=1)
+        ).model_dump()
+        values["requested_at"] = date.today() + timedelta(days=1)
+
+        with self.assertRaises(ValidationError):
+            CancellationCreate(**values)
+
+    def test_credit_must_be_resolved_before_immediate_cancellation(
+        self,
+    ) -> None:
+        self.db.add(
+            CreditMovement(
+                customer_id=self.customer.id,
+                service_id=self.service.id,
+                movement_type=CreditMovementType.authorized_adjustment,
+                amount=Decimal("100.00"),
+                performed_by="Supervisor de cobranza",
+                reason="Saldo a favor confirmado",
+            )
+        )
+        self.db.commit()
+
+        with self.assertRaises(HTTPException) as context:
+            create_cancellation(
+                self.service.id,
+                self.cancellation_payload(date.today()),
+                self.db,
+            )
+
+        self.assertEqual(context.exception.status_code, 409)
+        self.assertEqual(
+            get_service(self.service.id, self.db).status,
+            ServiceStatus.active,
+        )
+
+    def test_scheduled_cancellation_refreshes_balances_at_execution(
+        self,
+    ) -> None:
+        self.db.add(
+            CreditMovement(
+                customer_id=self.customer.id,
+                service_id=self.service.id,
+                movement_type=CreditMovementType.authorized_adjustment,
+                amount=Decimal("100.00"),
+                performed_by="Supervisor de cobranza",
+                reason="Saldo a favor confirmado",
+            )
+        )
+        self.db.commit()
+        cancellation = create_cancellation(
+            self.service.id,
+            self.cancellation_payload(date.today() + timedelta(days=1)),
+            self.db,
+        )
+        self.assertEqual(cancellation.credit_balance, Decimal("100.00"))
+        cancellation.effective_date = date.today()
+        self.db.commit()
+
+        with self.assertRaises(HTTPException) as context:
+            execute_scheduled_cancellation(
+                self.service.id,
+                CancellationExecute(performed_by="Atención a clientes"),
+                self.db,
+            )
+        self.assertEqual(context.exception.status_code, 409)
+
+        self.db.add(
+            CreditMovement(
+                customer_id=self.customer.id,
+                service_id=self.service.id,
+                movement_type=CreditMovementType.refund,
+                amount=Decimal("-100.00"),
+                performed_by="Supervisor de cobranza",
+                reason="Saldo a favor devuelto",
+            )
+        )
+        self.charge.outstanding_balance = Decimal("350.00")
+        self.charge.status = ChargeStatus.partial
+        self.db.commit()
+        executed = execute_scheduled_cancellation(
+            self.service.id,
+            CancellationExecute(performed_by="Atención a clientes"),
+            self.db,
+        )
+
+        self.assertEqual(executed.pending_balance, Decimal("350.00"))
+        self.assertEqual(executed.credit_balance, Decimal("0.00"))
+        self.assertEqual(executed.status, CancellationStatus.executed)
 
     def test_future_cancellation_waits_for_effective_date(self) -> None:
         cancellation = create_cancellation(

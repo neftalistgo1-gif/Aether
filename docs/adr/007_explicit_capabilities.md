@@ -24,6 +24,8 @@ explícitas independientes:
   contratos, instalaciones, activos, incidentes, red y planes;
 - aprobar decisiones financieras, compensar incidentes y controlar la red son
   capacidades específicas;
+- ejecutar una baja definitiva requiere `services.cancel`; la edición general
+  mediante `services.write` no concede esa decisión terminal;
 - consultar auditoría requiere una capacidad propia;
 - el administrador conserva acceso total para recuperar y configurar el
   sistema;

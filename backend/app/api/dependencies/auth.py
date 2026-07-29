@@ -115,6 +115,12 @@ def capability_for_operation(
         or route_path.endswith("/reactivations/coordinated")
     ):
         return Capability.network_control if not is_read else None
+    if "/cancellation" in route_path:
+        return (
+            Capability.services_read
+            if is_read
+            else Capability.services_cancel
+        )
     if "/network-control/" in route_path:
         return (
             Capability.network_read

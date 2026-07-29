@@ -168,12 +168,12 @@ class CoordinatedReactivationRead(BaseModel):
 
 
 class CancellationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     requester_customer_id: UUID
     requested_at: date = Field(default_factory=date.today)
     effective_date: date
     reason: str = Field(min_length=3, max_length=500)
-    pending_balance: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
-    credit_balance: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
     equipment_pending_notes: str | None = Field(
         default=None,
         max_length=1000,
@@ -183,6 +183,8 @@ class CancellationCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_dates(self) -> Self:
+        if self.requested_at > date.today():
+            raise ValueError("requested_at cannot be in the future")
         if self.effective_date < self.requested_at:
             raise ValueError(
                 "effective_date cannot be before requested_at"

@@ -118,7 +118,8 @@ el campo `permissions`. Puede sustituirla posteriormente con
 
 Las capacidades separan lectura y escritura por área, además de reservar
 decisiones sensibles como `billing.approve`, `incidents.compensate` y
-`network.control`. Los procesos diarios usan `operations.read` y
+`network.control`. La baja definitiva requiere `services.cancel`, separada de
+la edición ordinaria de servicios. Los procesos diarios usan `operations.read` y
 `operations.run`; el historial de comunicación usa `notifications.read` y
 `notifications.write`. El administrador tiene acceso total. Los demás usuarios
 sólo pueden ejecutar lo que figure expresamente en su cuenta; una ruta nueva
@@ -184,7 +185,12 @@ intentos fallidos quedan registrados y pueden reintentarse.
 
 La baja definitiva puede ejecutarse inmediatamente o programarse para una
 fecha futura. Conserva titular solicitante, folio, saldos y estado de
-recuperación de equipos.
+recuperación de equipos. Los saldos se calculan directamente desde cargos y
+movimientos de crédito; el cliente no puede declararlos en la solicitud. Al
+ejecutar una baja programada se vuelven a calcular. La deuda anterior se
+conserva, pero cualquier saldo a favor debe resolverse antes de ejecutar. Una
+baja programada también bloquea el cambio de titular para evitar cancelar el
+servicio de una persona distinta.
 
 ### Recuperación de equipos
 

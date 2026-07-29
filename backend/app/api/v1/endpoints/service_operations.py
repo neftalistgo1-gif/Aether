@@ -58,6 +58,7 @@ from app.schemas.service_operations import (
 )
 from app.schemas.mikrotik import NetworkControlRequest
 from app.services.audit import record_audit_event
+from app.services.billing import customer_credit_balance
 
 router = APIRouter(prefix="/api/v1/services", tags=["service operations"])
 
@@ -736,13 +737,77 @@ def coordinate_reactivation(
     )
 
 
+def cancellation_balance_snapshot(
+    service: Service,
+    db: Session,
+) -> tuple[Decimal, Decimal]:
+    if service.current_customer_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Service has no current holder",
+        )
+    pending_balance = db.scalar(
+        select(func.coalesce(func.sum(Charge.outstanding_balance), 0)).where(
+            Charge.service_id == service.id,
+            Charge.status.in_(
+                {ChargeStatus.pending, ChargeStatus.partial}
+            ),
+            Charge.outstanding_balance > 0,
+        )
+    )
+    return (
+        Decimal(pending_balance or 0),
+        customer_credit_balance(service.current_customer_id, db),
+    )
+
+
+def validate_cancellation_execution(
+    service: Service,
+    cancellation: Cancellation,
+    db: Session,
+) -> tuple[Decimal, Decimal]:
+    if cancellation.requester_customer_id != service.current_customer_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "The current service holder changed after the "
+                "cancellation request"
+            ),
+        )
+    pending_balance, credit_balance = cancellation_balance_snapshot(
+        service,
+        db,
+    )
+    if credit_balance > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": (
+                    "Resolve the current holder credit balance before "
+                    "executing cancellation"
+                ),
+                "credit_balance": str(credit_balance),
+            },
+        )
+    return pending_balance, credit_balance
+
+
 def execute_cancellation(
     service: Service,
     cancellation: Cancellation,
     performed_by: str,
     db: Session,
 ) -> None:
+    pending_balance, credit_balance = validate_cancellation_execution(
+        service,
+        cancellation,
+        db,
+    )
     previous_status = service.status
+    previous_pending_balance = cancellation.pending_balance
+    previous_credit_balance = cancellation.credit_balance
+    cancellation.pending_balance = pending_balance
+    cancellation.credit_balance = credit_balance
     service.status = ServiceStatus.cancelled
     service.cancellation_date = cancellation.effective_date
     cancellation.status = CancellationStatus.executed
@@ -763,10 +828,16 @@ def execute_cancellation(
         entity_type="Cancellation",
         entity_id=cancellation.id,
         reason=cancellation.reason,
-        before_data={"service_status": previous_status},
+        before_data={
+            "service_status": previous_status,
+            "pending_balance": previous_pending_balance,
+            "credit_balance": previous_credit_balance,
+        },
         after_data={
             "service_status": service.status,
             "effective_date": cancellation.effective_date,
+            "pending_balance": cancellation.pending_balance,
+            "credit_balance": cancellation.credit_balance,
         },
     )
 
@@ -792,11 +863,31 @@ def create_cancellation(
             status_code=status.HTTP_409_CONFLICT,
             detail="The requester must be the current service holder",
         )
+    pending_balance, credit_balance = cancellation_balance_snapshot(
+        service,
+        db,
+    )
+    if (
+        cancellation_data.effective_date <= date.today()
+        and credit_balance > 0
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": (
+                    "Resolve the current holder credit balance before "
+                    "executing cancellation"
+                ),
+                "credit_balance": str(credit_balance),
+            },
+        )
 
     cancellation = Cancellation(
         service_id=service.id,
         folio=f"CAN-{date.today():%Y%m%d}-{uuid4().hex[:8].upper()}",
         status=CancellationStatus.scheduled,
+        pending_balance=pending_balance,
+        credit_balance=credit_balance,
         **cancellation_data.model_dump(),
     )
     db.add(cancellation)

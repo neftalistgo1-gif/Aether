@@ -29,6 +29,7 @@ class Capability(str, Enum):
     customers_write = "customers.write"
     services_read = "services.read"
     services_write = "services.write"
+    services_cancel = "services.cancel"
     billing_read = "billing.read"
     billing_write = "billing.write"
     billing_approve = "billing.approve"

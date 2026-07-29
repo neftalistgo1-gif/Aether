@@ -15,6 +15,7 @@ from app.api.v1.endpoints.holder_transfers import (
 )
 from app.api.v1.endpoints.charges import create_charge
 from app.api.v1.endpoints.services import create_service
+from app.api.v1.endpoints.service_operations import create_cancellation
 from app.db.base import Base
 from app.models.asset import (
     Asset,
@@ -36,6 +37,7 @@ from app.models.service import ServiceHolder, ServiceStatus
 from app.schemas.holder_transfer import HolderTransferCreate
 from app.schemas.charge import ChargeCreate
 from app.schemas.service import ServiceCreate
+from app.schemas.service_operations import CancellationCreate
 
 
 class HolderTransferTestCase(unittest.TestCase):
@@ -264,6 +266,31 @@ class HolderTransferTestCase(unittest.TestCase):
                         self.db,
                     )
                 self.assertEqual(invalid.exception.status_code, 409)
+
+    def test_scheduled_cancellation_blocks_holder_transfer(self) -> None:
+        create_cancellation(
+            self.service.id,
+            CancellationCreate(
+                requester_customer_id=self.previous_customer.id,
+                effective_date=date.today() + timedelta(days=1),
+                reason="Baja futura solicitada por el titular",
+                registered_by="Atencion a clientes",
+            ),
+            self.db,
+        )
+
+        with self.assertRaises(HTTPException) as error:
+            transfer_service_holder(
+                self.service.id,
+                self.transfer_data(),
+                self.db,
+            )
+
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual(
+            self.service.current_customer_id,
+            self.previous_customer.id,
+        )
 
     def test_cancelled_service_cannot_change_holder(self) -> None:
         self.service.status = ServiceStatus.cancelled
