@@ -11,6 +11,7 @@ from app.models.charge import Charge
 from app.models.customer import Customer
 from app.models.equipment_recovery import EquipmentRecovery
 from app.models.extension import Extension
+from app.models.holder_transfer import HolderTransfer
 from app.models.incident import Incident, IncidentServiceImpact
 from app.models.installation import Installation, InstallationScheduleChange
 from app.models.maintenance_inspection import MaintenanceInspection

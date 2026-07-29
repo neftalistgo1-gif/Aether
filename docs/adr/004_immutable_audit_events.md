@@ -45,5 +45,5 @@ cualquier clave sensible aunque un módulo intente incluirla.
 - Suspensiones, reactivaciones y cancelaciones de servicio.
 - Bonificaciones por incidentes.
 
-Los futuros módulos de cambio de titular y documentos personales deberán
-registrar sus eventos desde su primera implementación.
+El cambio de titular registra sus eventos desde su primera implementación.
+El futuro módulo de documentos personales deberá aplicar la misma regla.

@@ -90,6 +90,11 @@ un servicio.
 - Cuando cambia el titular, el número AMR y el equipo pueden permanecer.
 - Las deudas generadas antes del cambio siguen perteneciendo al titular
   responsable de ese periodo.
+- La transferencia no tiene costo y no modifica las condiciones del Service.
+- Los periodos usan fecha final exclusiva: el día efectivo del cambio ya
+  pertenece al nuevo titular.
+- Cada transferencia conserva responsable, motivo y referencia contractual
+  cuando exista; el archivo firmado sigue siendo opcional.
 
 ---
 

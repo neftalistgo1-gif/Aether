@@ -261,6 +261,19 @@ que esté totalmente pagado. La instalación inicial activa el servicio sólo
 después de confirmar la navegación; un cambio de domicilio actualiza la
 dirección únicamente al completar una nueva cobertura viable.
 
+### Cambio de titular
+
+`HolderTransfer` registra cada transferencia con titular anterior, titular
+nuevo, fecha efectiva, responsable, motivo y referencia contractual opcional.
+La operación cierra el periodo anterior y abre el nuevo dentro de una sola
+transacción; nunca deja dos titulares vigentes.
+
+La transferencia es gratuita y conserva AMR, domicilio, plan, precio, día de
+pago, estado y equipo asignado. Tampoco mueve cargos existentes: cada deuda
+permanece con la persona responsable cuando se generó. El día efectivo de la
+transferencia ya pertenece al nuevo titular, por lo que los cargos creados
+desde ese día quedan a su nombre.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:

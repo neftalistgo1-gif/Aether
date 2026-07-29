@@ -62,7 +62,7 @@ def responsible_customer_id(
             if item.start_date <= responsibility_date
             and (
                 item.end_date is None
-                or item.end_date >= responsibility_date
+                or item.end_date > responsibility_date
             )
         ),
         None,
