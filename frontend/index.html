@@ -637,6 +637,40 @@
         </div>
       </form>
     </dialog>
+
+    <dialog id="account-dialog" aria-labelledby="account-dialog-title">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">ESTADO DE CUENTA</p>
+            <h2 id="account-dialog-title">Detalle financiero</h2>
+          </div>
+          <button
+            id="close-account-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div id="account-summary" class="decision-summary"></div>
+        <p id="account-error" class="form-error" role="alert"></p>
+        <div class="table-wrap account-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Concepto</th>
+                <th>Vencimiento</th>
+                <th>Importe</th>
+                <th>Pendiente</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="account-charges-body"></tbody>
+          </table>
+        </div>
+        <p id="account-empty" class="empty-state" hidden></p>
+      </div>
+    </dialog>
     <script type="module" src="/app/app.js"></script>
   </body>
 </html>

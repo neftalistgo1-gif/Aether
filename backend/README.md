@@ -219,6 +219,10 @@ El saldo conserva deuda total, deuda vencida y número de cargos abiertos. Un
 cargo registrado por error se cancela con responsable y motivo; permanece en
 el historial y deja de sumar al saldo.
 
+El estado de cuenta consolidado por cliente reúne deuda total, deuda vencida,
+cargos abiertos y saldo a favor para una fecha de corte. El cálculo permanece
+en la API; la interfaz no reconstruye reglas financieras en el navegador.
+
 ### Recepción y verificación de pagos
 
 `Payment` registra el monto declarado, fecha, método, referencia, comprobante,

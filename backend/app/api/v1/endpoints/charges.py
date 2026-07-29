@@ -17,9 +17,11 @@ from app.schemas.charge import (
     ChargeCancel,
     ChargeCreate,
     ChargeRead,
+    CustomerBalanceRead,
     MonthlyChargeCreate,
     ServiceBalanceRead,
 )
+from app.services.billing import customer_credit_balance
 from app.services.billing import apply_credit_to_charge
 from app.services.audit import record_audit_event
 from app.services.pricing import agreed_price_for_period
@@ -347,4 +349,46 @@ def get_service_balance(
         outstanding_balance=Decimal(outstanding or 0),
         overdue_balance=Decimal(overdue or 0),
         open_charges=int(open_charges or 0),
+    )
+
+
+@router.get(
+    "/customers/{customer_id}/balance",
+    response_model=CustomerBalanceRead,
+)
+def get_customer_balance(
+    customer_id: UUID,
+    db: Session = Depends(get_db),
+    as_of: Annotated[date, Query()] = date.today(),
+) -> CustomerBalanceRead:
+    if db.get(Customer, customer_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Customer not found",
+        )
+    open_filter = (
+        Charge.customer_id == customer_id,
+        Charge.status.in_(OPEN_CHARGE_STATUSES),
+    )
+    outstanding = db.scalar(
+        select(func.coalesce(func.sum(Charge.outstanding_balance), 0)).where(
+            *open_filter
+        )
+    )
+    overdue = db.scalar(
+        select(func.coalesce(func.sum(Charge.outstanding_balance), 0)).where(
+            *open_filter,
+            Charge.due_date < as_of,
+        )
+    )
+    open_charges = db.scalar(
+        select(func.count()).select_from(Charge).where(*open_filter)
+    )
+    return CustomerBalanceRead(
+        customer_id=customer_id,
+        as_of=as_of,
+        outstanding_balance=Decimal(outstanding or 0),
+        overdue_balance=Decimal(overdue or 0),
+        open_charges=int(open_charges or 0),
+        credit_balance=customer_credit_balance(customer_id, db),
     )

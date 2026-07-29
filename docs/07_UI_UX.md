@@ -54,6 +54,11 @@ verificación aparece la aplicación a deuda. Esta segunda confirmación distrib
 el monto entre cargos abiertos más antiguos y reporta por separado lo aplicado
 y el saldo a favor generado.
 
+Las cuentas con `billing.read` pueden abrir el estado de cuenta desde el
+directorio de clientes. La vista consulta un resumen calculado por la API y el
+historial de cargos; muestra deuda total, deuda vencida, saldo a favor, importes
+originales y pendientes. Esta etapa es estrictamente de lectura.
+
 ## Implementación
 
 La superficie actual usa HTML, CSS y JavaScript modular sin dependencias. Se

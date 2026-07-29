@@ -43,8 +43,11 @@ async function api(path, options = {}) {
 
 function formatDate(value) {
   if (!value) return "—";
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T00:00:00`)
+    : new Date(value);
   return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" }).format(
-    new Date(value)
+    parsed
   );
 }
 
@@ -107,9 +110,10 @@ function renderUser() {
         .join("")
     : '<p class="empty-state">Esta cuenta aún no tiene capacidades asignadas.</p>';
   const canWriteCustomers = hasCapability("customers.write");
+  const canReadBilling = hasCapability("billing.read");
   $("#new-customer-button").hidden = !canWriteCustomers;
   document.querySelectorAll(".customer-action-column").forEach((column) => {
-    column.hidden = !canWriteCustomers;
+    column.hidden = !(canWriteCustomers || canReadBilling);
   });
   const canWriteServices = hasCapability("services.write");
   const hasServiceReferences = Boolean(
@@ -221,6 +225,8 @@ function renderCustomers(query = "") {
       .includes(normalized)
   );
   const canWrite = hasCapability("customers.write");
+  const canReadBilling = hasCapability("billing.read");
+  const canShowActions = canWrite || canReadBilling;
   body.innerHTML = rows
     .map((customer) => `
       <tr>
@@ -228,13 +234,22 @@ function renderCustomers(query = "") {
         <td>${escapeText(customer.phones?.[0] || "—")}</td>
         <td>${escapeText(customer.email || "—")}</td>
         <td>${formatDate(customer.registered_at)}</td>
-        ${canWrite ? `
+        ${canShowActions ? `
           <td>
-            <button
-              class="row-action edit-customer"
-              type="button"
-              data-customer-id="${customer.id}"
-            >Editar</button>
+            ${canReadBilling ? `
+              <button
+                class="row-action view-account"
+                type="button"
+                data-customer-id="${customer.id}"
+              >Estado de cuenta</button>
+            ` : ""}
+            ${canWrite ? `
+              <button
+                class="row-action edit-customer"
+                type="button"
+                data-customer-id="${customer.id}"
+              >Editar</button>
+            ` : ""}
           </td>
         ` : ""}
       </tr>
@@ -799,6 +814,60 @@ async function applySelectedPayment(event) {
   }
 }
 
+async function openAccountDialog(customer) {
+  $("#account-dialog-title").textContent = customer.full_name;
+  $("#account-summary").innerHTML = "";
+  $("#account-charges-body").innerHTML = "";
+  $("#account-empty").hidden = true;
+  $("#account-error").textContent = "";
+  $("#account-dialog").showModal();
+  try {
+    const [balance, charges] = await Promise.all([
+      api(`/api/v1/customers/${customer.id}/balance`),
+      api(`/api/v1/customers/${customer.id}/charges`),
+    ]);
+    $("#account-summary").innerHTML = `
+      <div>
+        <span>Deuda total</span>
+        <strong>${formatMoney(balance.outstanding_balance)}</strong>
+      </div>
+      <div>
+        <span>Deuda vencida</span>
+        <strong>${formatMoney(balance.overdue_balance)}</strong>
+      </div>
+      <div>
+        <span>Saldo a favor</span>
+        <strong>${formatMoney(balance.credit_balance)}</strong>
+      </div>
+    `;
+    $("#account-charges-body").innerHTML = charges
+      .slice()
+      .sort((a, b) => new Date(b.due_date) - new Date(a.due_date))
+      .map((charge) => `
+        <tr>
+          <td><strong>${escapeText(charge.description)}</strong></td>
+          <td>${formatDate(charge.due_date)}</td>
+          <td>${formatMoney(charge.amount)}</td>
+          <td>${formatMoney(charge.outstanding_balance)}</td>
+          <td>
+            <span class="badge ${charge.status}">
+              ${escapeText(charge.status)}
+            </span>
+          </td>
+        </tr>
+      `)
+      .join("");
+    $("#account-empty").textContent = "Este cliente aún no tiene cargos.";
+    $("#account-empty").hidden = charges.length > 0;
+  } catch (error) {
+    $("#account-error").textContent = error.message;
+  }
+}
+
+function closeAccountDialog() {
+  $("#account-dialog").close();
+}
+
 function showView(name) {
   document.querySelectorAll(".view-panel").forEach((panel) => {
     panel.hidden = panel.id !== `${name}-panel`;
@@ -882,11 +951,14 @@ $("#new-customer-button").addEventListener("click", () => {
 });
 $("#customers-body").addEventListener("click", (event) => {
   const button = event.target.closest(".edit-customer");
-  if (!button) return;
+  const accountButton = event.target.closest(".view-account");
+  if (!button && !accountButton) return;
   const customer = state.customers?.find(
-    (item) => item.id === button.dataset.customerId
+    (item) => item.id === (button || accountButton).dataset.customerId
   );
-  if (customer) openCustomerDialog(customer);
+  if (!customer) return;
+  if (accountButton) openAccountDialog(customer);
+  else openCustomerDialog(customer);
 });
 $("#customer-form").addEventListener("submit", saveCustomer);
 $("#close-customer-dialog").addEventListener(
@@ -946,6 +1018,7 @@ $("#cancel-payment-apply").addEventListener(
   "click",
   closePaymentApplyDialog
 );
+$("#close-account-dialog").addEventListener("click", closeAccountDialog);
 $("#logout-button").addEventListener("click", () => logout());
 $("#menu-button").addEventListener("click", () => {
   const sidebar = $(".sidebar");

@@ -11,6 +11,7 @@ from app.api.v1.endpoints.charges import (
     cancel_charge,
     create_charge,
     create_monthly_charge,
+    get_customer_balance,
     get_service_balance,
     list_customer_charges,
     list_service_charges,
@@ -234,6 +235,22 @@ class ChargeTestCase(unittest.TestCase):
         self.assertEqual(balance.outstanding_balance, Decimal("500.00"))
         self.assertEqual(balance.overdue_balance, Decimal("300.00"))
         self.assertEqual(balance.open_charges, 2)
+
+        customer_balance = get_customer_balance(
+            self.customer.id,
+            self.db,
+            as_of=date.today() + timedelta(days=1),
+        )
+        self.assertEqual(
+            customer_balance.outstanding_balance,
+            Decimal("500.00"),
+        )
+        self.assertEqual(
+            customer_balance.overdue_balance,
+            Decimal("300.00"),
+        )
+        self.assertEqual(customer_balance.open_charges, 2)
+        self.assertEqual(customer_balance.credit_balance, Decimal("0.00"))
 
     def test_monthly_type_must_use_specialized_endpoint(self) -> None:
         with self.assertRaises(HTTPException) as context:

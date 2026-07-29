@@ -62,6 +62,10 @@ class FrontendShellTestCase(unittest.TestCase):
             "Aún falta aplicarlo para reducir la deuda",
             script,
         )
+        self.assertIn('hasCapability("billing.read")', script)
+        self.assertIn("/balance`)", script)
+        self.assertIn("/charges`)", script)
+        self.assertIn("Estado de cuenta", script)
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

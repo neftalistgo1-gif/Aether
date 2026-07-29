@@ -175,6 +175,8 @@ dialog {
 }
 dialog::backdrop { background: rgba(2,8,17,.76); backdrop-filter: blur(5px); }
 dialog form { padding: 26px; }
+.dialog-content { padding: 26px; }
+.account-table { margin: 20px -26px -26px; }
 .dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
 .dialog-heading h2 { margin: 0; font-size: 1.5rem; }
 .icon-button { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: transparent; font-size: 1.4rem; cursor: pointer; }

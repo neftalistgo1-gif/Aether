@@ -67,3 +67,12 @@ class ServiceBalanceRead(BaseModel):
     outstanding_balance: Decimal
     overdue_balance: Decimal
     open_charges: int
+
+
+class CustomerBalanceRead(BaseModel):
+    customer_id: UUID
+    as_of: date
+    outstanding_balance: Decimal
+    overdue_balance: Decimal
+    open_charges: int
+    credit_balance: Decimal
