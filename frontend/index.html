@@ -1279,6 +1279,68 @@
       </form>
     </dialog>
 
+    <dialog
+      id="network-execution-dialog"
+      aria-labelledby="network-execution-dialog-title"
+    >
+      <form id="network-execution-form">
+        <div class="dialog-heading">
+          <div>
+            <p id="network-execution-eyebrow" class="eyebrow">
+              CAMBIO REAL · CONFIRMACIÓN FINAL
+            </p>
+            <h2 id="network-execution-dialog-title">
+              Confirmar control de red
+            </h2>
+          </div>
+          <button
+            id="close-network-execution-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div id="network-execution-summary" class="decision-summary"></div>
+        <div class="safety-panel" role="note">
+          <strong>La simulación fue aprobada y es válida por 15 minutos.</strong>
+          <p id="network-execution-impact"></p>
+        </div>
+        <div class="form-grid">
+          <label class="full-row">
+            <span id="network-execution-code-label">
+              Escribe el código AMR para confirmar
+            </span>
+            <input
+              id="network-execution-code"
+              autocomplete="off"
+              maxlength="20"
+              required
+            >
+          </label>
+          <label class="checkbox-field full-row">
+            <input id="network-execution-confirm" type="checkbox" required>
+            Revisé el servicio, la acción y la IP mostrados arriba
+          </label>
+        </div>
+        <p class="form-help">
+          Esta confirmación no omite ninguna regla: la API vuelve a revisar
+          deuda, avisos, autorizaciones, asignación de red y vigencia de la
+          simulación antes de contactar MikroTik.
+        </p>
+        <p id="network-execution-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-network-execution"
+            class="text-button"
+            type="button"
+          >Cancelar</button>
+          <button class="danger-button" type="submit">
+            Ejecutar cambio real
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="extension-dialog" aria-labelledby="extension-dialog-title">
       <div class="dialog-content">
         <div class="dialog-heading">

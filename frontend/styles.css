@@ -164,6 +164,7 @@ tbody tr:hover { background: rgba(35,136,239,.045); }
   color: #ffb1bd;
   cursor: pointer;
 }
+.danger-button:disabled { opacity: 0.6; cursor: wait; }
 
 dialog {
   width: min(680px, calc(100% - 30px));
@@ -206,6 +207,19 @@ dialog form.embedded-form { padding: 0; }
 }
 .decision-summary span { color: var(--muted); font-size: .68rem; }
 .decision-summary strong { font-size: .82rem; }
+.safety-panel {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
+  border: 1px solid rgba(255,197,92,.28);
+  border-radius: 10px;
+  padding: 14px;
+  background: rgba(255,197,92,.07);
+  color: #f5dfac;
+  font-size: .8rem;
+  line-height: 1.55;
+}
+.safety-panel p { margin: 0; color: #c9d4e1; }
 .extension-section {
   display: grid;
   gap: 12px;

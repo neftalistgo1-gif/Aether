@@ -120,10 +120,7 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("/suspensions/coordinated", script)
         self.assertIn("grace_period_elapsed:", script)
         self.assertIn("extension_checked:", script)
-        self.assertIn(
-            "pasó todas las validaciones en modo seguro",
-            script,
-        )
+        self.assertIn("openNetworkExecutionDialog", script)
         self.assertIn(
             ".check-commercial-reactivation",
             script,
@@ -137,10 +134,7 @@ class FrontendShellTestCase(unittest.TestCase):
             "authorized_by:",
             script,
         )
-        self.assertIn(
-            "La reactivación comercial pasó todas las validaciones",
-            script,
-        )
+        self.assertIn("pendingNetworkOperation", script)
         self.assertIn(
             "selectedReactivationAuthorizations",
             script,
@@ -156,6 +150,18 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn(
             "o un convenio vigente del titular actual",
             page,
+        )
+        self.assertIn("network-execution-form", page)
+        self.assertIn("Ejecutar cambio real", page)
+        self.assertIn("preflight_command_id:", script)
+        self.assertIn("dry_run: false", script)
+        self.assertIn(
+            "Escribe exactamente ${operation.serviceCode}",
+            script,
+        )
+        self.assertIn(
+            "La orden real no fue confirmada por MikroTik",
+            script,
         )
         self.assertIn(".manage-extensions", script)
         self.assertIn("/extensions`", script)
@@ -197,6 +203,32 @@ class FrontendShellTestCase(unittest.TestCase):
             "convenio no reduce la deuda",
             page,
         )
+
+    def test_live_network_ui_requires_coordinated_preflight_confirmation(
+        self,
+    ) -> None:
+        script = (frontend_directory / "app.js").read_text(
+            encoding="utf-8"
+        )
+        page = (frontend_directory / "index.html").read_text(
+            encoding="utf-8"
+        )
+        technical_simulation = script.split(
+            "async function runNetworkSimulation",
+            maxsplit=1,
+        )[1].split(
+            "function updateNotificationResultFields",
+            maxsplit=1,
+        )[0]
+
+        self.assertIn("dry_run: true", technical_simulation)
+        self.assertNotIn("dry_run: false", technical_simulation)
+        self.assertIn("NETWORK_PREFLIGHT_VALIDITY_MS", script)
+        self.assertIn("preflight_command_id:", script)
+        self.assertIn("dry_run: false", script)
+        self.assertIn("network-execution-code", page)
+        self.assertIn("network-execution-confirm", page)
+        self.assertIn("válida por 15 minutos", page)
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

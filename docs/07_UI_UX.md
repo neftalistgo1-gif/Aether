@@ -88,14 +88,15 @@ servicio.
 El control de red comienza en modo seguro. Para `network.control`, los servicios
 activos y suspendidos ofrecen una simulación técnica de la acción
 correspondiente. El diálogo explica que no es una suspensión comercial, usa una
-clave de idempotencia nueva y fuerza `dry_run`. No existe en esta etapa un
-botón de ejecución real.
+clave de idempotencia nueva y fuerza `dry_run`. Este control técnico aislado no
+ofrece un botón de ejecución real.
 
-El backend ya exige que cualquier ejecución futura utilice una simulación
-coincidente, de un solo uso y con antigüedad máxima de quince minutos. Cuando
-se incorpore el botón real, la interfaz deberá presentar la evidencia del
-preflight y una confirmación explícita; no podrá reutilizar simulaciones ni
-convertirlas mediante reintento.
+La ejecución real sólo se ofrece dentro de suspensión o reactivación comercial
+coordinada. Primero se ejecutan todas las validaciones en modo seguro. Si la
+simulación es aprobada, una segunda ventana muestra servicio, acción e IP,
+explica el efecto operativo, exige escribir el código AMR y confirmar la
+revisión. El preflight es de un solo uso, vence en quince minutos y no puede
+convertirse mediante reintento.
 
 Cada servicio ofrece registro de comunicaciones a `notifications.write`.
 Propósito, canal, resultado, destinatario, hora y resumen se conservan como
@@ -106,8 +107,8 @@ evidencia permanece privada.
 La validación comercial de suspensión reúne el saldo calculado por la API y
 los avisos entregados del servicio. El operador confirma que revisó tolerancia
 y prórrogas, pero el backend vuelve a calcular todas las condiciones. La acción
-fuerza `dry_run`, por lo que una validación aprobada no corta internet ni cambia
-el estado del servicio.
+inicial fuerza `dry_run`; una validación aprobada por sí sola no corta internet
+ni cambia el estado del servicio. Sólo habilita la confirmación real separada.
 
 Para servicios suspendidos, la validación coordinada de reactivación consulta
 el saldo vigente y muestra deuda total, deuda vencida y cargos abiertos.
@@ -116,7 +117,8 @@ seleccionar uno; la persona autorizante se completa desde ese registro y no
 puede editarse. Con saldo cero permite una autorización directa sin inventar
 un acuerdo. La API compara nuevamente deuda, servicio, titular, vigencia y
 autorizante. La interfaz fuerza `dry_run`, de modo que una validación correcta
-tampoco modifica MikroTik ni el estado del servicio.
+tampoco modifica por sí sola MikroTik ni el estado del servicio. La ejecución
+requiere la segunda confirmación y la verificación positiva del router.
 
 La acción de prórrogas abre un historial por servicio y muestra el saldo
 actual. Una cuenta con `billing.write` puede registrar fecha original, nueva

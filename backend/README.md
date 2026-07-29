@@ -83,11 +83,13 @@ entrega digital exige referencia del proveedor o evidencia privada; un intento
 fallido exige un motivo no vacío. Los avisos entregados de suspensión pueden
 usarse posteriormente en el flujo comercial coordinado.
 
-La UI puede simular la suspensión comercial coordinada cuando la cuenta tiene
+La UI inicia la suspensión comercial coordinada cuando la cuenta tiene
 `network.control`, `billing.read` y `notifications.read`. Consulta la deuda y
-los avisos entregados, confirma tolerancia y revisión de prórroga, y fuerza
-`dry_run`. La ruta coordinada exige ahora `network.control`; una cuenta con
-`services.write` no puede usarla como atajo.
+los avisos entregados, confirma tolerancia y revisión de prórroga, y ejecuta
+primero un `dry_run`. Sólo una simulación aprobada abre la confirmación real,
+que muestra servicio, acción e IP y exige escribir el código AMR. La ruta
+coordinada exige `network.control`; una cuenta con `services.write` no puede
+usarla como atajo.
 
 ## Primer administrador y acceso
 
@@ -366,9 +368,10 @@ modifica el estado comercial. La orden verificada queda enlazada de forma
 La UI permite validar una reactivación coordinada para servicios suspendidos
 cuando la cuenta reúne `network.control` y `billing.read`. Consulta el saldo
 autoritativo y, si existe deuda, carga únicamente prórrogas y convenios vigentes
-del titular actual. El autorizante se obtiene del respaldo seleccionado. La UI
-fuerza siempre `dry_run: true`; por tanto, esta pantalla no retira el bloqueo ni
-reactiva el servicio.
+del titular actual. El autorizante se obtiene del respaldo seleccionado. Tras
+una simulación aprobada, la confirmación real vuelve a enviar los mismos datos
+y enlaza el preflight de un solo uso. El servicio sólo cambia cuando MikroTik
+confirma el resultado.
 
 Las operaciones manuales continúan disponibles para contingencias y quedan
 identificadas como `manual`. Ya no es posible declarar un resultado automático

@@ -19,7 +19,10 @@ const state = {
   selectedExtensionDueDate: null,
   selectedPaymentAgreements: [],
   selectedAgreementBalance: null,
+  pendingNetworkOperation: null,
 };
+
+const NETWORK_PREFLIGHT_VALIDITY_MS = 15 * 60 * 1000;
 
 const $ = (selector) => document.querySelector(selector);
 const loginView = $("#login-view");
@@ -1078,6 +1081,51 @@ function closeSuspensionCheckDialog() {
   state.selectedSuspensionDebt = null;
 }
 
+function openNetworkExecutionDialog(operation) {
+  state.pendingNetworkOperation = {
+    ...operation,
+    expiresAt: Date.now() + NETWORK_PREFLIGHT_VALIDITY_MS,
+  };
+  $("#network-execution-eyebrow").textContent =
+    operation.type === "suspension"
+      ? "SUSPENSIÓN REAL · CONFIRMACIÓN FINAL"
+      : "REACTIVACIÓN REAL · CONFIRMACIÓN FINAL";
+  $("#network-execution-dialog-title").textContent =
+    `${operation.actionLabel} · ${operation.serviceCode}`;
+  $("#network-execution-summary").innerHTML = `
+    <div>
+      <span>Servicio</span>
+      <strong>${escapeText(operation.serviceCode)}</strong>
+    </div>
+    <div>
+      <span>Acción real</span>
+      <strong>${escapeText(operation.actionLabel)}</strong>
+    </div>
+    <div>
+      <span>IP verificada</span>
+      <strong>${escapeText(operation.targetIp)}</strong>
+    </div>
+  `;
+  $("#network-execution-impact").textContent =
+    operation.type === "suspension"
+      ? "Aether agregará esta IP a la lista de suspendidos. El servicio sólo quedará suspendido si MikroTik confirma el bloqueo."
+      : "Aether retirará esta IP de la lista de suspendidos. El servicio sólo quedará activo si MikroTik confirma el acceso.";
+  $("#network-execution-code-label").textContent =
+    `Escribe ${operation.serviceCode} para confirmar`;
+  $("#network-execution-code").value = "";
+  $("#network-execution-confirm").checked = false;
+  $("#network-execution-error").textContent = "";
+  $("#network-execution-dialog").showModal();
+}
+
+function closeNetworkExecutionDialog() {
+  $("#network-execution-dialog").close();
+  state.pendingNetworkOperation = null;
+  $("#network-execution-code").value = "";
+  $("#network-execution-confirm").checked = false;
+  $("#network-execution-error").textContent = "";
+}
+
 async function runSuspensionCheck(event) {
   event.preventDefault();
   const serviceId = state.selectedServiceId;
@@ -1095,32 +1143,48 @@ async function runSuspensionCheck(event) {
   submitButton.disabled = true;
   errorBox.textContent = "";
   try {
+    const service = state.services?.find(
+      (item) => item.id === serviceId
+    );
+    const payload = {
+      scheduled_for: localDateValue(),
+      reason: $("#suspension-check-reason").value.trim(),
+      debt_amount: state.selectedSuspensionDebt,
+      grace_period_elapsed:
+        $("#suspension-grace-confirmed").checked,
+      extension_checked:
+        $("#suspension-extension-checked").checked,
+      has_active_extension: false,
+      notification_id: notificationId,
+      performed_by: state.user.display_name,
+      idempotency_key: `ui-suspension-${crypto.randomUUID()}`,
+      dry_run: true,
+    };
     const result = await api(
       `/api/v1/services/${serviceId}/suspensions/coordinated`,
       {
         method: "POST",
-        body: JSON.stringify({
-          scheduled_for: localDateValue(),
-          reason: $("#suspension-check-reason").value.trim(),
-          debt_amount: state.selectedSuspensionDebt,
-          grace_period_elapsed:
-            $("#suspension-grace-confirmed").checked,
-          extension_checked:
-            $("#suspension-extension-checked").checked,
-          has_active_extension: false,
-          notification_id: notificationId,
-          performed_by: state.user.display_name,
-          idempotency_key: `ui-suspension-${crypto.randomUUID()}`,
-          dry_run: true,
-        }),
+        body: JSON.stringify(payload),
       }
     );
     closeSuspensionCheckDialog();
-    setNotice(
-      result.command.status === "simulated"
-        ? "La suspensión comercial pasó todas las validaciones en modo seguro."
-        : `La validación terminó con estado ${result.command.status}.`
-    );
+    if (result.command.status === "simulated" && service) {
+      openNetworkExecutionDialog({
+        type: "suspension",
+        serviceId,
+        serviceCode: service.amr_code,
+        actionLabel: "Suspender servicio",
+        targetIp: result.command.target_ip,
+        endpoint:
+          `/api/v1/services/${serviceId}/suspensions/coordinated`,
+        payload,
+        preflightCommandId: result.command.id,
+      });
+    } else {
+      setNotice(
+        `La validación terminó con estado ${result.command.status}.`
+      );
+    }
   } catch (error) {
     errorBox.textContent = error.message;
   } finally {
@@ -1257,34 +1321,125 @@ async function runReactivationCheck(event) {
   submitButton.disabled = true;
   errorBox.textContent = "";
   try {
+    const service = state.services?.find(
+      (item) => item.id === serviceId
+    );
+    const payload = {
+      reason: $("#reactivation-check-reason").value.trim(),
+      authorized_by: $("#reactivation-authorized-by").value.trim(),
+      performed_by: state.user.display_name,
+      debt_amount: state.selectedReactivationDebt,
+      extension_id:
+        authorization?.type === "extension"
+          ? authorization.id
+          : null,
+      payment_agreement_id:
+        authorization?.type === "payment_agreement"
+          ? authorization.id
+          : null,
+      idempotency_key:
+        `ui-reactivation-${crypto.randomUUID()}`,
+      dry_run: true,
+    };
     const result = await api(
       `/api/v1/services/${serviceId}/reactivations/coordinated`,
       {
         method: "POST",
-        body: JSON.stringify({
-          reason: $("#reactivation-check-reason").value.trim(),
-          authorized_by: $("#reactivation-authorized-by").value.trim(),
-          performed_by: state.user.display_name,
-          debt_amount: state.selectedReactivationDebt,
-          extension_id:
-            authorization?.type === "extension"
-              ? authorization.id
-              : null,
-          payment_agreement_id:
-            authorization?.type === "payment_agreement"
-              ? authorization.id
-              : null,
-          idempotency_key:
-            `ui-reactivation-${crypto.randomUUID()}`,
-          dry_run: true,
-        }),
+        body: JSON.stringify(payload),
       }
     );
     closeReactivationCheckDialog();
+    if (result.command.status === "simulated" && service) {
+      openNetworkExecutionDialog({
+        type: "reactivation",
+        serviceId,
+        serviceCode: service.amr_code,
+        actionLabel: "Reactivar servicio",
+        targetIp: result.command.target_ip,
+        endpoint:
+          `/api/v1/services/${serviceId}/reactivations/coordinated`,
+        payload,
+        preflightCommandId: result.command.id,
+      });
+    } else {
+      setNotice(
+        `La validación terminó con estado ${result.command.status}.`
+      );
+    }
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function executeConfirmedNetworkOperation(event) {
+  event.preventDefault();
+  const operation = state.pendingNetworkOperation;
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const errorBox = $("#network-execution-error");
+  if (!operation) return;
+  if (Date.now() >= operation.expiresAt) {
+    errorBox.textContent =
+      "La validación segura venció. Cierra esta ventana y simula nuevamente.";
+    return;
+  }
+  if (
+    $("#network-execution-code").value.trim().toUpperCase() !==
+    operation.serviceCode.toUpperCase()
+  ) {
+    errorBox.textContent =
+      `Escribe exactamente ${operation.serviceCode} para continuar.`;
+    return;
+  }
+  if (!$("#network-execution-confirm").checked) {
+    errorBox.textContent =
+      "Confirma que revisaste el servicio, la acción y la IP.";
+    return;
+  }
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const result = await api(operation.endpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        ...operation.payload,
+        idempotency_key:
+          `ui-${operation.type}-live-${crypto.randomUUID()}`,
+        dry_run: false,
+        preflight_command_id: operation.preflightCommandId,
+      }),
+    });
+    const completedRecord =
+      operation.type === "suspension"
+        ? result.suspension
+        : result.reactivation;
+    if (
+      result.command.status !== "succeeded" ||
+      !completedRecord
+    ) {
+      closeNetworkExecutionDialog();
+      setNotice(
+        "No se cambió el servicio. La orden real no fue confirmada por MikroTik."
+      );
+      return;
+    }
+    const service = state.services?.find(
+      (item) => item.id === operation.serviceId
+    );
+    if (service) {
+      service.status =
+        operation.type === "suspension" ? "suspended" : "active";
+    }
+    closeNetworkExecutionDialog();
+    renderServices();
+    renderOverview();
     setNotice(
-      result.command.status === "simulated"
-        ? "La reactivación comercial pasó todas las validaciones en modo seguro."
-        : `La validación terminó con estado ${result.command.status}.`
+      operation.type === "suspension"
+        ? "MikroTik confirmó el bloqueo y el servicio quedó suspendido."
+        : "MikroTik confirmó el acceso y el servicio quedó reactivado."
     );
   } catch (error) {
     errorBox.textContent = error.message;
@@ -2680,6 +2835,18 @@ $("#close-reactivation-check-dialog").addEventListener(
 $("#cancel-reactivation-check").addEventListener(
   "click",
   closeReactivationCheckDialog
+);
+$("#network-execution-form").addEventListener(
+  "submit",
+  executeConfirmedNetworkOperation
+);
+$("#close-network-execution-dialog").addEventListener(
+  "click",
+  closeNetworkExecutionDialog
+);
+$("#cancel-network-execution").addEventListener(
+  "click",
+  closeNetworkExecutionDialog
 );
 $("#extension-create-form").addEventListener("submit", saveExtension);
 $("#extension-resolve-form").addEventListener(
