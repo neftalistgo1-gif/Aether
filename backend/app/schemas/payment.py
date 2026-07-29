@@ -60,6 +60,9 @@ class PaymentRead(BaseModel):
     verified_by: str | None
     verified_at: datetime | None
     verification_notes: str | None
+    applied_at: datetime | None
+    applied_by: str | None
+    application_notes: str | None
     notes: str | None
 
 

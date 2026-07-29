@@ -20,6 +20,7 @@ from app.schemas.charge import (
     MonthlyChargeCreate,
     ServiceBalanceRead,
 )
+from app.services.billing import apply_credit_to_charge
 
 router = APIRouter(prefix="/api/v1", tags=["charges"])
 
@@ -181,10 +182,18 @@ def create_monthly_charge(
         notes=charge_data.notes,
     )
     db.add(charge)
-    commit_charge(
-        db,
-        "Monthly charge already exists for this service and period",
-    )
+    try:
+        db.flush()
+        apply_credit_to_charge(charge, charge_data.generated_by, db)
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Monthly charge already exists for this service and period"
+            ),
+        ) from error
     db.refresh(charge)
     return charge
 

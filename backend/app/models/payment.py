@@ -116,6 +116,18 @@ class Payment(Base):
         Text,
         nullable=True,
     )
+    applied_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    applied_by: Mapped[str | None] = mapped_column(
+        String(150),
+        nullable=True,
+    )
+    application_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     events: Mapped[list["PaymentStatusEvent"]] = relationship(

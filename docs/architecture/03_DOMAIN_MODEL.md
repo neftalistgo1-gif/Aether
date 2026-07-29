@@ -397,6 +397,9 @@ Representa cómo se distribuye un pago entre cargos o saldo a favor.
 - Un Payment puede tener varias aplicaciones.
 - Un Charge puede recibir aplicaciones de varios pagos.
 - Primero se cubre la deuda más antigua, salvo instrucción autorizada.
+- Una aplicación dirigida exige conservar el motivo.
+- Un Payment sólo puede aplicarse una vez y distribuye todo su importe
+  confirmado entre deuda y saldo a favor.
 - El historial de aplicaciones no debe reemplazarse manualmente.
 
 ---
@@ -428,6 +431,9 @@ Representa los movimientos del saldo a favor.
 
 - El saldo a favor se calcula mediante movimientos.
 - No debe almacenarse únicamente como una cantidad editable.
+- El excedente de un pago verificado genera un movimiento positivo.
+- Las mensualidades nuevas consumen automáticamente el saldo disponible.
+- Una devolución no puede superar el saldo existente.
 - Al cancelar, el saldo no utilizado debe resolverse mediante devolución
   o ajuste documentado.
 

@@ -157,7 +157,18 @@ distinto al declarado, la explicación es obligatoria. Cada transición conserva
 responsable, motivo y fecha en `PaymentStatusEvent`.
 
 Los pagos verificados todavía no modifican cargos directamente; su aplicación
-a deuda y saldo a favor pertenece al siguiente módulo.
+a deuda se registra mediante `PaymentAllocation`.
+
+### Aplicaciones y saldo a favor
+
+Un pago verificado se distribuye por defecto entre los cargos abiertos más
+antiguos. También puede dirigirse a cargos específicos si se documenta el
+motivo. Cada aplicación reduce el saldo del cargo y lo deja parcial o pagado.
+
+El excedente se registra como un movimiento positivo de saldo a favor. Las
+nuevas mensualidades consumen automáticamente ese saldo mediante movimientos
+negativos, sin crear mensualidades futuras. Las devoluciones también quedan
+registradas y nunca pueden superar el saldo disponible.
 
 ## Pruebas
 

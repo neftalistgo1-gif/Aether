@@ -12,6 +12,7 @@ from app.models.equipment_recovery import EquipmentRecovery
 from app.models.maintenance_inspection import MaintenanceInspection
 from app.models.network_assignment import NetworkAssignment
 from app.models.payment import Payment, PaymentStatusEvent
+from app.models.payment_allocation import CreditMovement, PaymentAllocation
 from app.models.service import Service, ServiceEvent, ServiceHolder
 from app.models.service_operations import Cancellation, Reactivation, Suspension
 
