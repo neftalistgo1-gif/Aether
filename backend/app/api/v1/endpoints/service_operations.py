@@ -1,4 +1,5 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -18,6 +19,7 @@ from app.models.service import (
     ServiceEventType,
     ServiceStatus,
 )
+from app.models.charge import Charge, ChargeStatus, ChargeType
 from app.models.service_operations import (
     Cancellation,
     CancellationStatus,
@@ -112,8 +114,56 @@ def suspend_service(
             detail="Prior notification is required before suspension",
         )
 
+    open_charges = list(
+        db.scalars(
+            select(Charge)
+            .where(
+                Charge.service_id == service_id,
+                Charge.status.in_(
+                    {ChargeStatus.pending, ChargeStatus.partial}
+                ),
+                Charge.outstanding_balance > 0,
+            )
+            .order_by(Charge.due_date, Charge.id)
+        )
+    )
+    actual_debt = sum(
+        (charge.outstanding_balance for charge in open_charges),
+        Decimal("0.00"),
+    )
+    if actual_debt != suspension_data.debt_amount:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Reported debt does not match Aether balance",
+                "reported_debt": str(suspension_data.debt_amount),
+                "actual_debt": str(actual_debt),
+            },
+        )
+    overdue_monthly = [
+        charge
+        for charge in open_charges
+        if charge.charge_type == ChargeType.monthly
+        and suspension_data.scheduled_for
+        >= charge.due_date + timedelta(days=service.grace_days)
+    ]
+    if not overdue_monthly:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No monthly charge has completed its grace period",
+        )
+
     suspension = Suspension(
         service_id=service.id,
+        debt_snapshot=[
+            {
+                "charge_id": str(charge.id),
+                "type": charge.charge_type.value,
+                "due_date": charge.due_date.isoformat(),
+                "outstanding_balance": str(charge.outstanding_balance),
+            }
+            for charge in open_charges
+        ],
         **suspension_data.model_dump(),
     )
     db.add(suspension)

@@ -10,6 +10,7 @@ from sqlalchemy import (
     Enum as SqlEnum,
     ForeignKey,
     Numeric,
+    JSON,
     String,
     Text,
     Uuid,
@@ -58,6 +59,10 @@ class Suspension(Base):
     )
     reason: Mapped[str] = mapped_column(Text)
     debt_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    debt_snapshot: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON,
+        default=list,
+    )
     grace_period_elapsed: Mapped[bool] = mapped_column(Boolean)
     extension_checked: Mapped[bool] = mapped_column(Boolean)
     has_active_extension: Mapped[bool] = mapped_column(Boolean)

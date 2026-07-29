@@ -487,6 +487,9 @@ Representa una suspensión administrativa por falta de pago.
 - La suspensión no debe ejecutarse solamente porque exista deuda.
 - Deben haber transcurrido cinco días naturales posteriores a la fecha
   de pago.
+- Debe existir una mensualidad pendiente cuyo periodo de tolerancia terminó.
+- La deuda declarada debe coincidir con los cargos abiertos de Aether.
+- Cada suspensión conserva una fotografía de los cargos y saldos evaluados.
 - Debe verificarse que no exista una prórroga vigente.
 - Debe registrarse la notificación previa.
 - Una interrupción técnica no es una suspensión administrativa.

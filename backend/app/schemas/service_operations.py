@@ -44,6 +44,7 @@ class SuspensionRead(SuspensionCreate):
     id: UUID
     service_id: UUID
     executed_at: datetime
+    debt_snapshot: list[dict[str, object]]
 
 
 class ReactivationCreate(BaseModel):

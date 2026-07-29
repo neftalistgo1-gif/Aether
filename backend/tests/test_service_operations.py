@@ -24,6 +24,7 @@ from app.api.v1.endpoints.services import (
 )
 from app.db.base import Base
 from app.models.customer import Customer
+from app.models.charge import Charge, ChargeStatus, ChargeType
 from app.models.service import ServiceStatus
 from app.models.service_operations import (
     CancellationStatus,
@@ -72,6 +73,21 @@ class ServiceOperationsTestCase(unittest.TestCase):
             ),
             self.db,
         )
+        self.db.add(
+            Charge(
+                customer_id=self.customer.id,
+                service_id=self.service.id,
+                charge_type=ChargeType.monthly,
+                description="Mensualidad vencida",
+                amount=Decimal("500.00"),
+                outstanding_balance=Decimal("500.00"),
+                due_date=date.today() - timedelta(days=5),
+                billing_period=date.today().replace(day=1),
+                status=ChargeStatus.pending,
+                generated_by="Proceso mensual",
+            )
+        )
+        self.db.commit()
 
     def tearDown(self) -> None:
         self.db.close()
@@ -160,6 +176,21 @@ class ServiceOperationsTestCase(unittest.TestCase):
             ServiceStatus.active,
         )
         self.assertEqual(len(list_suspensions(self.service.id, self.db)), 1)
+        self.assertEqual(len(attempt.debt_snapshot), 1)
+        self.assertEqual(
+            attempt.debt_snapshot[0]["outstanding_balance"],
+            "500.00",
+        )
+
+    def test_suspension_debt_must_match_calculated_balance(self) -> None:
+        payload = self.suspension_payload()
+        payload.debt_amount = Decimal("400.00")
+
+        with self.assertRaises(HTTPException) as context:
+            suspend_service(self.service.id, payload, self.db)
+
+        self.assertEqual(context.exception.status_code, 409)
+        self.assertEqual(context.exception.detail["actual_debt"], "500.00")
 
     def test_suspend_and_reactivate_with_retry(self) -> None:
         suspend_service(
