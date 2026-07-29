@@ -26,7 +26,9 @@ Desde la carpeta `backend`:
    python -m alembic upgrade head
    ```
 
-6. Iniciar la API:
+6. Antes del primer inicio, establecer un valor largo y aleatorio para
+   `AETHER_BOOTSTRAP_SECRET` dentro de `.env`.
+7. Iniciar la API:
 
    ```powershell
    python -m uvicorn app.main:app --reload
@@ -35,8 +37,27 @@ Desde la carpeta `backend`:
 La documentación interactiva estará disponible en
 `http://127.0.0.1:8000/docs`.
 
+## Primer administrador y acceso
+
+Todas las rutas de negocio requieren autenticación. Para preparar una
+instalación nueva:
+
+1. Abrir `POST /api/v1/auth/bootstrap` en Swagger.
+2. Introducir el valor local de `AETHER_BOOTSTRAP_SECRET` en el encabezado
+   `X-Aether-Bootstrap`.
+3. Elegir usuario, nombre visible y una contraseña de al menos 12 caracteres.
+4. Copiar `access_token` de la respuesta.
+5. Pulsar **Authorize** en Swagger e introducir solamente el token.
+6. Eliminar `AETHER_BOOTSTRAP_SECRET` de `.env` y reiniciar la API.
+
+El bootstrap deja de funcionar en cuanto existe el primer usuario. En sesiones
+posteriores se usa `POST /api/v1/auth/login`. Los tokens vencen después de
+`AUTH_SESSION_HOURS` y se almacenan únicamente como SHA-256; las contraseñas
+usan `scrypt` con una sal distinta por usuario.
+
 ## Módulos disponibles
 
+- `Authentication`: bootstrap, login, logout y usuarios operativos.
 - `Customers`: crear, listar, buscar, consultar y actualizar personas.
 - `Services`: crear, listar, buscar, consultar y actualizar conexiones.
 

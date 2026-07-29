@@ -1,8 +1,10 @@
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
+from app.api.dependencies.auth import require_authenticated_user
 from app.api.v1.endpoints.audit import router as audit_router
 from app.api.v1.endpoints.assets import router as assets_router
+from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.charges import router as charges_router
 from app.api.v1.endpoints.contracts import router as contracts_router
 from app.api.v1.endpoints.customers import router as customers_router
@@ -42,26 +44,29 @@ app = FastAPI(
     version="0.1.0",
 )
 
+protected = [Depends(require_authenticated_user)]
+
 app.include_router(health_router)
-app.include_router(audit_router)
-app.include_router(incidents_router)
-app.include_router(installations_router)
-app.include_router(holder_transfers_router)
-app.include_router(customers_router)
-app.include_router(contracts_router)
-app.include_router(services_router)
-app.include_router(assets_router)
-app.include_router(charges_router)
-app.include_router(payments_router)
-app.include_router(plans_router)
-app.include_router(payment_allocations_router)
-app.include_router(extensions_router)
-app.include_router(network_assignments_router)
-app.include_router(service_operations_router)
-app.include_router(service_plan_changes_router)
-app.include_router(equipment_recovery_router)
-app.include_router(maintenance_inspections_router)
-app.include_router(mikrotik_router)
+app.include_router(auth_router)
+app.include_router(audit_router, dependencies=protected)
+app.include_router(incidents_router, dependencies=protected)
+app.include_router(installations_router, dependencies=protected)
+app.include_router(holder_transfers_router, dependencies=protected)
+app.include_router(customers_router, dependencies=protected)
+app.include_router(contracts_router, dependencies=protected)
+app.include_router(services_router, dependencies=protected)
+app.include_router(assets_router, dependencies=protected)
+app.include_router(charges_router, dependencies=protected)
+app.include_router(payments_router, dependencies=protected)
+app.include_router(plans_router, dependencies=protected)
+app.include_router(payment_allocations_router, dependencies=protected)
+app.include_router(extensions_router, dependencies=protected)
+app.include_router(network_assignments_router, dependencies=protected)
+app.include_router(service_operations_router, dependencies=protected)
+app.include_router(service_plan_changes_router, dependencies=protected)
+app.include_router(equipment_recovery_router, dependencies=protected)
+app.include_router(maintenance_inspections_router, dependencies=protected)
+app.include_router(mikrotik_router, dependencies=protected)
 
 
 @app.get("/")

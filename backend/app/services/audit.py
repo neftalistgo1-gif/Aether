@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.core.security import current_authenticated_actor
 from app.models.audit import AuditEvent
 
 SENSITIVE_KEY_FRAGMENTS = (
@@ -43,6 +44,7 @@ def record_audit_event(
     db: Session,
     *,
     actor: str,
+    actor_user_id: UUID | None = None,
     action: str,
     entity_type: str,
     entity_id: UUID | str,
@@ -52,8 +54,15 @@ def record_audit_event(
     source_ip: str | None = None,
     device: str | None = None,
 ) -> AuditEvent:
+    authenticated_actor = current_authenticated_actor()
+    if authenticated_actor is not None:
+        actor = authenticated_actor.display_name
+        actor_user_id = authenticated_actor.user_id
+        source_ip = source_ip or authenticated_actor.source_ip
+        device = device or authenticated_actor.device
     event = AuditEvent(
         actor=actor,
+        actor_user_id=actor_user_id,
         action=action,
         entity_type=entity_type,
         entity_id=str(entity_id),

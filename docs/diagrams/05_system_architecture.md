@@ -33,6 +33,7 @@ flowchart TD
     end
 
     subgraph operations["Operación y seguridad"]
+        authentication["Autenticación<br/>Usuarios y sesiones"]
         audit["Auditoría y registros"]
         backups["Respaldos"]
         monitoring["Monitoreo de Aether"]
@@ -40,6 +41,8 @@ flowchart TD
 
     users -->|"Usan desde el navegador"| frontend
     frontend -->|"Solicitudes HTTPS"| api
+    api -->|"Valida token y usuario activo"| authentication
+    authentication -->|"Sesiones hasheadas"| database
 
     api -->|"Lee y guarda información"| database
     api -->|"Guarda y consulta archivos"| fileStorage

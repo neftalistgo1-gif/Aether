@@ -9,6 +9,7 @@ class AuditEventRead(BaseModel):
 
     id: UUID
     actor: str
+    actor_user_id: UUID | None
     action: str
     entity_type: str
     entity_id: str

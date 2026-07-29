@@ -20,6 +20,10 @@ permita responder quién hizo qué, cuándo, sobre qué entidad y por qué.
 datos anteriores y posteriores, además de IP o dispositivo cuando estén
 disponibles.
 
+Cuando la acción proviene de HTTP, también conserva `actor_user_id` y reemplaza
+el texto declarado por la identidad autenticada. Los procesos internos que aún
+no tienen una sesión conservan el actor operativo explícito.
+
 Los eventos se agregan dentro de la misma transacción que la operación de
 negocio. Una operación revertida no deja una auditoría falsa. Después de
 confirmarse, ningún evento puede modificarse ni eliminarse:
