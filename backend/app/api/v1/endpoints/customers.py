@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.customer import Customer
 from app.schemas.customer import CustomerCreate, CustomerRead, CustomerUpdate
+from app.services.audit import record_audit_event
 
 router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
 
@@ -29,6 +30,20 @@ def create_customer(
 ) -> Customer:
     new_customer = Customer(**customer.model_dump())
     db.add(new_customer)
+    db.flush()
+    record_audit_event(
+        db,
+        actor="system",
+        action="customer.created",
+        entity_type="Customer",
+        entity_id=new_customer.id,
+        reason="Customer registration",
+        after_data={
+            "full_name": new_customer.full_name,
+            "phones": new_customer.phones,
+            "email": new_customer.email,
+        },
+    )
     db.commit()
     db.refresh(new_customer)
     return new_customer
@@ -78,10 +93,39 @@ def update_customer(
     db: Session = Depends(get_db),
 ) -> Customer:
     customer = find_customer_or_404(customer_id, db)
-
-    for field_name, value in update.model_dump(exclude_unset=True).items():
+    requested_changes = update.model_dump(
+        exclude_unset=True,
+        exclude={"reason"},
+    )
+    changes = {
+        field_name: value
+        for field_name, value in requested_changes.items()
+        if getattr(customer, field_name) != value
+    }
+    if not changes:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No customer data changed",
+        )
+    before_data = {
+        field_name: getattr(customer, field_name)
+        for field_name in changes
+    }
+    for field_name, value in changes.items():
         setattr(customer, field_name, value)
-
+    record_audit_event(
+        db,
+        actor="system",
+        action="customer.updated",
+        entity_type="Customer",
+        entity_id=customer.id,
+        reason=update.reason,
+        before_data=before_data,
+        after_data={
+            field_name: getattr(customer, field_name)
+            for field_name in changes
+        },
+    )
     db.commit()
     db.refresh(customer)
     return customer

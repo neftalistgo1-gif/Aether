@@ -40,6 +40,9 @@ class FrontendShellTestCase(unittest.TestCase):
                 self.assertIn(endpoint, script)
         self.assertIn("sessionStorage", script)
         self.assertNotIn("localStorage", script)
+        self.assertIn('hasCapability("customers.write")', script)
+        self.assertIn('method: editing ? "PATCH" : "POST"', script)
+        self.assertIn('reason: $("#customer-reason").value.trim()', script)
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

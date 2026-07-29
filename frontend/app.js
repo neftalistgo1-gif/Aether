@@ -4,6 +4,7 @@ const state = {
   customers: [],
   services: [],
   payments: [],
+  editingCustomerId: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -19,10 +20,18 @@ async function api(path, options = {}) {
   if (response.status === 204) return null;
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    const detail = payload.detail;
+    const validationMessage = Array.isArray(detail)
+      ? detail.map((item) => item.msg).join(" ")
+      : null;
     const error = new Error(
-      typeof payload.detail === "string"
-        ? payload.detail
+      validationMessage ||
+      (typeof detail === "string"
+        ? detail
+        : typeof detail?.message === "string"
+          ? detail.message
         : "No fue posible completar la solicitud."
+      )
     );
     error.status = response.status;
     throw error;
@@ -93,6 +102,18 @@ function renderUser() {
         .map((item) => `<span class="permission">${escapeText(item)}</span>`)
         .join("")
     : '<p class="empty-state">Esta cuenta aún no tiene capacidades asignadas.</p>';
+  const canWriteCustomers = hasCapability("customers.write");
+  $("#new-customer-button").hidden = !canWriteCustomers;
+  document.querySelectorAll(".customer-action-column").forEach((column) => {
+    column.hidden = !canWriteCustomers;
+  });
+}
+
+function hasCapability(capability) {
+  return (
+    state.user?.role === "administrator" ||
+    state.user?.permissions?.includes(capability)
+  );
 }
 
 function renderOverview() {
@@ -167,6 +188,7 @@ function renderCustomers(query = "") {
       .toLowerCase()
       .includes(normalized)
   );
+  const canWrite = hasCapability("customers.write");
   body.innerHTML = rows
     .map((customer) => `
       <tr>
@@ -174,6 +196,15 @@ function renderCustomers(query = "") {
         <td>${escapeText(customer.phones?.[0] || "—")}</td>
         <td>${escapeText(customer.email || "—")}</td>
         <td>${formatDate(customer.registered_at)}</td>
+        ${canWrite ? `
+          <td>
+            <button
+              class="row-action edit-customer"
+              type="button"
+              data-customer-id="${customer.id}"
+            >Editar</button>
+          </td>
+        ` : ""}
       </tr>
     `)
     .join("");
@@ -181,6 +212,106 @@ function renderCustomers(query = "") {
     ? "No hay clientes que coincidan con la búsqueda."
     : "Aún no hay clientes registrados.";
   empty.hidden = rows.length > 0;
+}
+
+function openCustomerDialog(customer = null) {
+  state.editingCustomerId = customer?.id || null;
+  $("#customer-dialog-title").textContent = customer
+    ? "Editar cliente"
+    : "Nuevo cliente";
+  $("#customer-name").value = customer?.full_name || "";
+  $("#customer-phones").value = customer?.phones?.join("\n") || "";
+  $("#customer-email").value = customer?.email || "";
+  $("#customer-notes").value = customer?.notes || "";
+  $("#customer-reason").value = "";
+  $("#customer-form-error").textContent = "";
+  const reasonField = $("#customer-reason-field");
+  reasonField.hidden = !customer;
+  $("#customer-reason").required = Boolean(customer);
+  $("#customer-dialog").showModal();
+  $("#customer-name").focus();
+}
+
+function closeCustomerDialog() {
+  $("#customer-dialog").close();
+  state.editingCustomerId = null;
+}
+
+function customerPayload() {
+  const phones = $("#customer-phones").value
+    .split(/[\n,;]+/)
+    .map((phone) => phone.trim())
+    .filter(Boolean);
+  if (!phones.length) {
+    throw new Error("Registra al menos un teléfono.");
+  }
+  return {
+    full_name: $("#customer-name").value.trim(),
+    phones,
+    email: $("#customer-email").value.trim() || null,
+    notes: $("#customer-notes").value.trim() || null,
+  };
+}
+
+async function saveCustomer(event) {
+  event.preventDefault();
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const errorBox = $("#customer-form-error");
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const editing = Boolean(state.editingCustomerId);
+    const formValues = customerPayload();
+    let payload = formValues;
+    if (editing) {
+      const original = state.customers.find(
+        (item) => item.id === state.editingCustomerId
+      );
+      const changes = Object.fromEntries(
+        Object.entries(formValues).filter(([key, value]) => {
+          const previous = original[key];
+          return Array.isArray(value)
+            ? JSON.stringify(value) !== JSON.stringify(previous)
+            : value !== previous;
+        })
+      );
+      if (!Object.keys(changes).length) {
+        throw new Error("No hay cambios para guardar.");
+      }
+      payload = {
+        ...changes,
+        reason: $("#customer-reason").value.trim(),
+      };
+    }
+    const saved = await api(
+      editing
+        ? `/api/v1/customers/${state.editingCustomerId}`
+        : "/api/v1/customers",
+      {
+        method: editing ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+    if (state.customers) {
+      const index = state.customers.findIndex((item) => item.id === saved.id);
+      if (index === -1) state.customers.push(saved);
+      else state.customers[index] = saved;
+      renderCustomers($("#customer-search").value);
+      renderOverview();
+    }
+    closeCustomerDialog();
+    setNotice(
+      editing
+        ? "Los datos del cliente se actualizaron correctamente."
+        : "El cliente quedó registrado correctamente."
+    );
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
 }
 
 function renderServices() {
@@ -312,6 +443,26 @@ document.querySelectorAll(".nav-item").forEach((item) => {
 $("#customer-search").addEventListener("input", (event) => {
   renderCustomers(event.target.value);
 });
+$("#new-customer-button").addEventListener("click", () => {
+  openCustomerDialog();
+});
+$("#customers-body").addEventListener("click", (event) => {
+  const button = event.target.closest(".edit-customer");
+  if (!button) return;
+  const customer = state.customers?.find(
+    (item) => item.id === button.dataset.customerId
+  );
+  if (customer) openCustomerDialog(customer);
+});
+$("#customer-form").addEventListener("submit", saveCustomer);
+$("#close-customer-dialog").addEventListener(
+  "click",
+  closeCustomerDialog
+);
+$("#cancel-customer-dialog").addEventListener(
+  "click",
+  closeCustomerDialog
+);
 $("#logout-button").addEventListener("click", () => logout());
 $("#menu-button").addEventListener("click", () => {
   const sidebar = $(".sidebar");

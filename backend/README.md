@@ -41,6 +41,10 @@ La interfaz operativa estará disponible en `http://127.0.0.1:8000/app/`.
 Usa las mismas cuentas y permisos de la API; no requiere iniciar otro proceso
 ni instalar herramientas de frontend.
 
+Las cuentas con `customers.write` pueden registrar y editar clientes desde la
+interfaz. Toda edición exige un motivo y genera una auditoría con los valores
+anteriores y posteriores; las cuentas de consulta no ven estas acciones.
+
 ## Primer administrador y acceso
 
 Todas las rutas de negocio requieren autenticación. Para preparar una

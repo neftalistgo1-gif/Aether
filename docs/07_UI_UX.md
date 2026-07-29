@@ -21,13 +21,17 @@ Aether. Incluye:
 - resumen con clientes, servicios y pagos pendientes de verificación;
 - distribución de estados de servicio;
 - directorio consultable de clientes;
+- alta y edición de clientes para cuentas con `customers.write`;
 - tablas de servicios y pagos recientes;
 - mensajes claros cuando la cuenta no tiene permiso para un área;
 - navegación adaptable a escritorio y móvil.
 
 Esta etapa es deliberadamente de consulta. Las acciones que cambian estado se
-añadirán módulo por módulo mediante formularios específicos, conservando
-confirmaciones, motivos y simulaciones cuando el backend ya las exige.
+añaden módulo por módulo mediante formularios específicos. El primer flujo de
+escritura es la gestión de clientes: compara los valores antes de enviarlos,
+evita actualizaciones vacías y exige un motivo que queda en auditoría. Los
+flujos siguientes conservarán confirmaciones, motivos y simulaciones cuando el
+backend ya las exige.
 
 ## Implementación
 

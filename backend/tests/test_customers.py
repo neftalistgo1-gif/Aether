@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -14,6 +14,7 @@ from app.api.v1.endpoints.customers import (
     update_customer,
 )
 from app.db.base import Base
+from app.models.audit import AuditEvent
 from app.models.customer import Customer
 from app.schemas.customer import CustomerCreate, CustomerUpdate
 
@@ -45,6 +46,12 @@ class CustomerEndpointsTestCase(unittest.TestCase):
         self.assertEqual(created.full_name, payload.full_name)
         self.assertEqual(list_customers(db=self.db), [created])
         self.assertEqual(self.db.query(Customer).count(), 1)
+        audit = self.db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action == "customer.created"
+            )
+        )
+        self.assertEqual(audit.after_data["full_name"], payload.full_name)
 
         customer_id = created.id
         self.db.close()
@@ -72,13 +79,28 @@ class CustomerEndpointsTestCase(unittest.TestCase):
 
         updated = update_customer(
             created.id,
-            CustomerUpdate(notes="Cliente actualizado", email=None),
+            CustomerUpdate(
+                notes="Cliente actualizado",
+                email=None,
+                reason="Cliente solicita actualizar sus datos",
+            ),
             self.db,
         )
 
         self.assertEqual(updated.full_name, "María García")
         self.assertIsNone(updated.email)
         self.assertEqual(updated.notes, "Cliente actualizado")
+        audit = self.db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action == "customer.updated"
+            )
+        )
+        self.assertEqual(
+            audit.reason,
+            "Cliente solicita actualizar sus datos",
+        )
+        self.assertEqual(audit.before_data["email"], "maria@example.com")
+        self.assertIsNone(audit.after_data["email"])
 
         customer_id = updated.id
         self.db.close()
@@ -110,11 +132,33 @@ class CustomerEndpointsTestCase(unittest.TestCase):
 
     def test_update_requires_at_least_one_field(self) -> None:
         with self.assertRaises(ValidationError):
-            CustomerUpdate()
+            CustomerUpdate(reason="Sin cambios")
 
     def test_update_rejects_null_required_fields(self) -> None:
         with self.assertRaises(ValidationError):
-            CustomerUpdate(full_name=None)
+            CustomerUpdate(
+                full_name=None,
+                reason="Prueba de campo obligatorio",
+            )
+
+    def test_update_rejects_unchanged_data(self) -> None:
+        created = create_customer(
+            CustomerCreate(
+                full_name="Cliente sin cambios",
+                phones=["8999001122"],
+            ),
+            self.db,
+        )
+        with self.assertRaises(HTTPException) as rejected:
+            update_customer(
+                created.id,
+                CustomerUpdate(
+                    full_name=created.full_name,
+                    reason="Intento sin cambios reales",
+                ),
+                self.db,
+            )
+        self.assertEqual(rejected.exception.status_code, 409)
 
 
 if __name__ == "__main__":

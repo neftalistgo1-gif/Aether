@@ -157,14 +157,22 @@
                 <p class="eyebrow">DIRECTORIO</p>
                 <h2>Clientes</h2>
               </div>
-              <label class="search-field">
-                <span>Buscar</span>
-                <input
-                  id="customer-search"
-                  type="search"
-                  placeholder="Nombre o teléfono"
-                >
-              </label>
+              <div class="table-actions">
+                <label class="search-field">
+                  <span>Buscar</span>
+                  <input
+                    id="customer-search"
+                    type="search"
+                    placeholder="Nombre o teléfono"
+                  >
+                </label>
+                <button
+                  id="new-customer-button"
+                  class="secondary-button"
+                  type="button"
+                  hidden
+                >Nuevo cliente</button>
+              </div>
             </div>
             <div class="table-wrap">
               <table>
@@ -174,6 +182,7 @@
                     <th>Teléfono</th>
                     <th>Correo</th>
                     <th>Registro</th>
+                    <th class="customer-action-column" hidden>Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="customers-body"></tbody>
@@ -236,6 +245,82 @@
         </section>
       </main>
     </div>
+
+    <dialog id="customer-dialog" aria-labelledby="customer-dialog-title">
+      <form id="customer-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">DIRECTORIO DE CLIENTES</p>
+            <h2 id="customer-dialog-title">Nuevo cliente</h2>
+          </div>
+          <button
+            id="close-customer-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div class="form-grid">
+          <label class="full-row">
+            Nombre completo
+            <input
+              id="customer-name"
+              name="full_name"
+              minlength="2"
+              maxlength="150"
+              required
+            >
+          </label>
+          <label>
+            Teléfonos
+            <textarea
+              id="customer-phones"
+              name="phones"
+              rows="3"
+              placeholder="Uno por línea"
+              required
+            ></textarea>
+          </label>
+          <label>
+            Correo electrónico
+            <input
+              id="customer-email"
+              name="email"
+              type="email"
+              maxlength="254"
+            >
+          </label>
+          <label class="full-row">
+            Notas
+            <textarea
+              id="customer-notes"
+              name="notes"
+              rows="3"
+              maxlength="1000"
+            ></textarea>
+          </label>
+          <label id="customer-reason-field" class="full-row" hidden>
+            Motivo de la actualización
+            <textarea
+              id="customer-reason"
+              name="reason"
+              rows="2"
+              minlength="3"
+              maxlength="500"
+            ></textarea>
+          </label>
+        </div>
+        <p id="customer-form-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-customer-dialog"
+            class="text-button"
+            type="button"
+          >Cancelar</button>
+          <button class="primary-button" type="submit">Guardar cliente</button>
+        </div>
+      </form>
+    </dialog>
     <script type="module" src="/app/app.js"></script>
   </body>
 </html>
