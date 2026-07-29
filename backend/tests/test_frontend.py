@@ -82,6 +82,15 @@ class FrontendShellTestCase(unittest.TestCase):
             "su cargo fue generado",
             script,
         )
+        self.assertIn("/reschedule", script)
+        self.assertIn(
+            "cancelled_by: state.user.display_name",
+            script,
+        )
+        self.assertIn(
+            "el historial quedó conservado",
+            script,
+        )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

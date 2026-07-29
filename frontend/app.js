@@ -9,6 +9,7 @@ const state = {
   selectedPaymentId: null,
   selectedPlanId: null,
   selectedServiceId: null,
+  selectedInstallation: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -396,12 +397,14 @@ function renderServices() {
         <td><span class="badge ${service.status}">${escapeText(service.status)}</span></td>
         ${canScheduleInstallation ? `
           <td>
-            ${service.status === "pending" && !service.has_scheduled_installation ? `
+            ${service.status === "pending" ? `
               <button
                 class="row-action assess-installation"
                 type="button"
                 data-service-id="${service.id}"
-              >Cobertura y agenda</button>
+              >${service.has_scheduled_installation
+                ? "Ver instalación"
+                : "Cobertura y agenda"}</button>
             ` : "—"}
           </td>
         ` : ""}
@@ -518,9 +521,12 @@ async function openInstallationDialog(service) {
         `/api/v1/services/${service.id}/installations`
       );
       if (installations.some((item) => item.status === "scheduled")) {
+        const scheduled = installations.find(
+          (item) => item.status === "scheduled"
+        );
         service.has_scheduled_installation = true;
         renderServices();
-        setNotice("Este servicio ya tiene una instalación programada.");
+        openInstallationManageDialog(service, scheduled);
         return;
       }
     } catch (error) {
@@ -547,6 +553,115 @@ async function openInstallationDialog(service) {
 function closeInstallationDialog() {
   $("#installation-dialog").close();
   state.selectedServiceId = null;
+}
+
+function openInstallationManageDialog(service, installation) {
+  state.selectedServiceId = service.id;
+  state.selectedInstallation = installation;
+  $("#installation-manage-dialog-title").textContent =
+    `Instalación · ${service.amr_code}`;
+  $("#installation-manage-summary").innerHTML = `
+    <div>
+      <span>Fecha programada</span>
+      <strong>${formatDate(installation.scheduled_for)}</strong>
+    </div>
+    <div>
+      <span>Costo</span>
+      <strong>${formatMoney(installation.cost)}</strong>
+    </div>
+    <div>
+      <span>Cargo</span>
+      <strong>${installation.charge_id ? "Generado" : "Sin cargo"}</strong>
+    </div>
+  `;
+  $("#installation-new-date").value = installation.scheduled_for;
+  $("#installation-change-reason").value = "";
+  $("#installation-manage-error").textContent = "";
+  $("#installation-manage-dialog").showModal();
+}
+
+function closeInstallationManageDialog() {
+  $("#installation-manage-dialog").close();
+  state.selectedServiceId = null;
+  state.selectedInstallation = null;
+}
+
+function setInstallationManageBusy(busy) {
+  $("#installation-manage-form")
+    .querySelectorAll("button")
+    .forEach((button) => {
+      button.disabled = busy;
+    });
+}
+
+async function rescheduleSelectedInstallation(event) {
+  event.preventDefault();
+  const installation = state.selectedInstallation;
+  const serviceId = state.selectedServiceId;
+  const errorBox = $("#installation-manage-error");
+  if (!installation || !serviceId) return;
+  errorBox.textContent = "";
+  setInstallationManageBusy(true);
+  try {
+    const saved = await api(
+      `/api/v1/services/${serviceId}/installations/${installation.id}/reschedule`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          new_date: $("#installation-new-date").value,
+          changed_by: state.user.display_name,
+          reason: $("#installation-change-reason").value.trim(),
+        }),
+      }
+    );
+    state.selectedInstallation = saved;
+    closeInstallationManageDialog();
+    setNotice(
+      "La instalación fue reprogramada y el historial quedó conservado."
+    );
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    setInstallationManageBusy(false);
+  }
+}
+
+async function cancelSelectedInstallation() {
+  const installation = state.selectedInstallation;
+  const serviceId = state.selectedServiceId;
+  const reason = $("#installation-change-reason").value.trim();
+  const errorBox = $("#installation-manage-error");
+  if (!installation || !serviceId) return;
+  errorBox.textContent = "";
+  if (reason.length < 3) {
+    errorBox.textContent =
+      "Escribe un motivo de al menos tres caracteres.";
+    return;
+  }
+  setInstallationManageBusy(true);
+  try {
+    await api(
+      `/api/v1/services/${serviceId}/installations/${installation.id}/cancel`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          cancelled_by: state.user.display_name,
+          reason,
+        }),
+      }
+    );
+    const service = state.services?.find((item) => item.id === serviceId);
+    if (service) service.has_scheduled_installation = false;
+    renderServices();
+    closeInstallationManageDialog();
+    setNotice(
+      "La instalación y su cargo sin aplicaciones fueron cancelados."
+    );
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    setInstallationManageBusy(false);
+  }
 }
 
 async function saveInstallation(event) {
@@ -1338,6 +1453,22 @@ $("#close-installation-dialog").addEventListener(
 $("#cancel-installation-dialog").addEventListener(
   "click",
   closeInstallationDialog
+);
+$("#installation-manage-form").addEventListener(
+  "submit",
+  rescheduleSelectedInstallation
+);
+$("#cancel-scheduled-installation").addEventListener(
+  "click",
+  cancelSelectedInstallation
+);
+$("#close-installation-manage-dialog").addEventListener(
+  "click",
+  closeInstallationManageDialog
+);
+$("#dismiss-installation-manage").addEventListener(
+  "click",
+  closeInstallationManageDialog
 );
 $("#new-payment-button").addEventListener("click", openPaymentDialog);
 $("#payment-customer").addEventListener("change", updatePaymentServices);

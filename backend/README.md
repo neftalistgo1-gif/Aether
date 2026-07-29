@@ -61,6 +61,10 @@ evaluación de cobertura de un servicio pendiente. Una evaluación viable se
 agenda y genera el cargo correspondiente cuando el costo es mayor que cero;
 un resultado fuera de cobertura no se agenda ni cobra. Completar el trabajo y
 activar el servicio permanece en un flujo posterior con evidencias obligatorias.
+Cuando ya existe una instalación programada, la UI permite reprogramarla o
+cancelarla. Ambos caminos exigen motivo; reprogramar conserva el historial y
+mueve el vencimiento del cargo, mientras cancelar sólo procede si el cargo no
+tiene pagos aplicados.
 
 ## Primer administrador y acceso
 

@@ -856,6 +856,65 @@
       </form>
     </dialog>
 
+    <dialog
+      id="installation-manage-dialog"
+      aria-labelledby="installation-manage-dialog-title"
+    >
+      <form id="installation-manage-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">TRABAJO PROGRAMADO</p>
+            <h2 id="installation-manage-dialog-title">Instalación</h2>
+          </div>
+          <button
+            id="close-installation-manage-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div id="installation-manage-summary" class="decision-summary"></div>
+        <div class="form-grid">
+          <label>
+            Nueva fecha
+            <input id="installation-new-date" type="date" required>
+          </label>
+          <label class="full-row">
+            Motivo de la decisión
+            <textarea
+              id="installation-change-reason"
+              rows="3"
+              minlength="3"
+              maxlength="1000"
+              required
+            ></textarea>
+          </label>
+        </div>
+        <p class="form-help">
+          Reprogramar conserva el historial y mueve el vencimiento del cargo.
+          Cancelar también cancela un cargo sin aplicaciones.
+        </p>
+        <p id="installation-manage-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions split-actions">
+          <div>
+            <button
+              id="cancel-scheduled-installation"
+              class="danger-button"
+              type="button"
+            >Cancelar instalación</button>
+          </div>
+          <div>
+            <button
+              id="dismiss-installation-manage"
+              class="text-button"
+              type="button"
+            >Volver</button>
+            <button class="primary-button" type="submit">Reprogramar</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="plan-price-dialog" aria-labelledby="plan-price-dialog-title">
       <form id="plan-price-form">
         <div class="dialog-heading">

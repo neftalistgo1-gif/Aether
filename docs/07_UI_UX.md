@@ -72,6 +72,12 @@ equipo especial y fuera de cobertura; sólo los resultados viables aceptan
 fecha y costo. Registrar esta etapa nunca activa el servicio. Si hay costo, la
 API crea el cargo que deberá pagarse antes de completar la instalación.
 
+Si el servicio ya tiene trabajo programado, la misma acción abre su detalle en
+lugar de crear otro. Desde allí puede reprogramarse con fecha y motivo, o
+cancelarse con motivo. La interfaz deja estas decisiones separadas de la
+finalización técnica y refleja que el cargo acompaña la nueva fecha o la
+cancelación según las reglas del backend.
+
 ## Implementación
 
 La superficie actual usa HTML, CSS y JavaScript modular sin dependencias. Se
