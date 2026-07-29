@@ -159,6 +159,28 @@ class FrontendShellTestCase(unittest.TestCase):
             "La prórroga no elimina",
             page,
         )
+        self.assertIn(".manage-payment-agreements", script)
+        self.assertIn("/payment-agreements", script)
+        self.assertIn(
+            "promised_amount:",
+            script,
+        )
+        self.assertIn(
+            "installment_count:",
+            script,
+        )
+        self.assertIn(
+            "Sin monto, fecha ni parcialidades pactadas",
+            script,
+        )
+        self.assertIn(
+            "El convenio quedó registrado sin completar datos no acordados",
+            script,
+        )
+        self.assertIn(
+            "convenio no reduce la deuda",
+            page,
+        )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:
         content = "\n".join(

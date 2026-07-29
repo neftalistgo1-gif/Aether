@@ -117,6 +117,13 @@ y no hay otra prórroga vigente. Resolverla como cumplida o cancelada requiere
 `billing.approve`; su historial no se elimina y la referencia interna de
 evidencia nunca se presenta en pantalla.
 
+La acción de convenios muestra el saldo, el número de convenios vigentes y el
+historial completo. El formulario obliga únicamente a capturar los términos
+realmente acordados y quién autorizó; monto, fecha, parcialidades, evidencia y
+notas permanecen opcionales. Las cuentas con `billing.approve` seleccionan el
+convenio vigente que desean cumplir o cancelar. Ninguna de estas acciones
+reduce la deuda ni registra pagos automáticamente.
+
 ## Implementación
 
 La superficie actual usa HTML, CSS y JavaScript modular sin dependencias. Se

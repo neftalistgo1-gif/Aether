@@ -16,6 +16,8 @@ const state = {
   selectedExtensions: [],
   selectedExtensionBalance: null,
   selectedExtensionDueDate: null,
+  selectedPaymentAgreements: [],
+  selectedAgreementBalance: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -471,6 +473,11 @@ function renderServices() {
                 type="button"
                 data-service-id="${service.id}"
               >Prórrogas</button>
+              <button
+                class="row-action manage-payment-agreements"
+                type="button"
+                data-service-id="${service.id}"
+              >Convenios</button>
             ` : ""}
           </td>
         ` : ""}
@@ -1430,6 +1437,254 @@ async function resolveExtension(event) {
   }
 }
 
+const agreementStatusLabels = {
+  active: "Vigente",
+  fulfilled: "Cumplido",
+  cancelled: "Cancelado",
+};
+
+function renderPaymentAgreementManagement() {
+  const service = state.services?.find(
+    (item) => item.id === state.selectedServiceId
+  );
+  if (!service) return;
+  const agreements = state.selectedPaymentAgreements || [];
+  const activeAgreements = agreements.filter(
+    (item) => item.status === "active"
+  );
+  const balance = Number(state.selectedAgreementBalance || 0);
+  $("#agreement-summary").innerHTML = `
+    <div>
+      <span>Servicio</span>
+      <strong>${escapeText(service.amr_code)}</strong>
+    </div>
+    <div>
+      <span>Deuda actual</span>
+      <strong>${formatMoney(balance)}</strong>
+    </div>
+    <div>
+      <span>Convenios vigentes</span>
+      <strong>${activeAgreements.length}</strong>
+    </div>
+  `;
+  $("#agreement-history").innerHTML = agreements.length
+    ? agreements
+        .slice()
+        .reverse()
+        .map(
+          (item) => {
+            const optionalTerms = [
+              item.promised_amount !== null
+                ? `Monto ${formatMoney(item.promised_amount)}`
+                : null,
+              item.promised_date
+                ? `Fecha ${formatDate(item.promised_date)}`
+                : null,
+              item.installment_count !== null
+                ? `${item.installment_count} parcialidad${
+                    item.installment_count === 1 ? "" : "es"
+                  }`
+                : null,
+            ].filter(Boolean);
+            return `
+              <article class="history-item">
+                <div>
+                  <strong>${escapeText(item.folio)}</strong>
+                  <span>${escapeText(
+                    agreementStatusLabels[item.status] || item.status
+                  )}</span>
+                </div>
+                <p>${escapeText(item.terms)}</p>
+                <small>
+                  Autorizó ${escapeText(item.authorized_by)} ·
+                  ${optionalTerms.length
+                    ? optionalTerms.map(escapeText).join(" · ")
+                    : "Sin monto, fecha ni parcialidades pactadas"}
+                </small>
+                <small>
+                  Evidencia ${item.has_evidence
+                    ? "registrada"
+                    : "no registrada"}
+                </small>
+                ${item.resolution_reason ? `
+                  <small>
+                    Resolución: ${escapeText(item.resolution_reason)}
+                  </small>
+                ` : ""}
+              </article>
+            `;
+          }
+        )
+        .join("")
+    : '<p class="empty-state">No hay convenios registrados.</p>';
+  const canCreate = (
+    hasCapability("billing.write") &&
+    ["active", "suspended"].includes(service.status) &&
+    balance > 0
+  );
+  $("#agreement-create-form").hidden = !canCreate;
+  const createNote = $("#agreement-create-note");
+  createNote.hidden = canCreate;
+  if (!hasCapability("billing.write")) {
+    createNote.textContent =
+      "Tu cuenta puede consultar convenios, pero no registrarlos.";
+  } else if (balance <= 0) {
+    createNote.textContent =
+      "No se puede crear un convenio porque el servicio no tiene deuda.";
+  } else if (!["active", "suspended"].includes(service.status)) {
+    createNote.textContent =
+      "El estado actual del servicio no admite nuevos convenios.";
+  } else {
+    createNote.textContent = "";
+  }
+  const canResolve = (
+    hasCapability("billing.approve") && activeAgreements.length > 0
+  );
+  $("#agreement-resolve-form").hidden = !canResolve;
+  $("#agreement-resolve-note").hidden =
+    canResolve || activeAgreements.length === 0;
+  $("#agreement-resolution-id").innerHTML = activeAgreements
+    .map(
+      (item) =>
+        `<option value="${item.id}">${escapeText(item.folio)} · ${escapeText(item.terms.slice(0, 70))}</option>`
+    )
+    .join("");
+}
+
+async function openPaymentAgreementDialog(service) {
+  state.selectedServiceId = service.id;
+  state.selectedPaymentAgreements = [];
+  state.selectedAgreementBalance = null;
+  $("#agreement-dialog-title").textContent =
+    `Convenios · ${service.amr_code}`;
+  $("#agreement-summary").innerHTML =
+    '<p class="empty-state">Consultando convenios y deuda…</p>';
+  $("#agreement-history").innerHTML = "";
+  $("#agreement-create-form").hidden = true;
+  $("#agreement-resolve-form").hidden = true;
+  $("#agreement-create-note").hidden = true;
+  $("#agreement-resolve-note").hidden = true;
+  $("#agreement-dialog-status").textContent = "";
+  $("#agreement-dialog").showModal();
+  try {
+    const [balance, agreements] = await Promise.all([
+      api(`/api/v1/services/${service.id}/balance`),
+      api(`/api/v1/services/${service.id}/payment-agreements`),
+    ]);
+    state.selectedAgreementBalance = balance.outstanding_balance;
+    state.selectedPaymentAgreements = agreements;
+    $("#agreement-terms").value = "";
+    $("#agreement-promised-amount").value = "";
+    $("#agreement-promised-amount").max =
+      balance.outstanding_balance;
+    $("#agreement-promised-date").value = "";
+    $("#agreement-promised-date").min = localDateValue();
+    $("#agreement-installments").value = "";
+    $("#agreement-authorized-by").value = state.user.display_name;
+    $("#agreement-evidence-reference").value = "";
+    $("#agreement-notes").value = "";
+    $("#agreement-resolution-action").value = "fulfill";
+    $("#agreement-resolution-reason").value = "";
+    renderPaymentAgreementManagement();
+  } catch (error) {
+    $("#agreement-dialog-status").textContent = error.message;
+  }
+}
+
+function closePaymentAgreementDialog() {
+  $("#agreement-dialog").close();
+  state.selectedServiceId = null;
+  state.selectedPaymentAgreements = [];
+  state.selectedAgreementBalance = null;
+}
+
+function optionalNumberValue(selector) {
+  const value = $(selector).value;
+  return value === "" ? null : Number(value);
+}
+
+async function savePaymentAgreement(event) {
+  event.preventDefault();
+  const serviceId = state.selectedServiceId;
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const statusBox = $("#agreement-dialog-status");
+  if (!serviceId) return;
+  submitButton.disabled = true;
+  statusBox.textContent = "";
+  try {
+    const saved = await api(
+      `/api/v1/services/${serviceId}/payment-agreements`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          terms: $("#agreement-terms").value.trim(),
+          promised_amount:
+            optionalNumberValue("#agreement-promised-amount"),
+          promised_date:
+            $("#agreement-promised-date").value || null,
+          installment_count:
+            optionalNumberValue("#agreement-installments"),
+          authorized_by:
+            $("#agreement-authorized-by").value.trim(),
+          evidence_reference:
+            $("#agreement-evidence-reference").value.trim() || null,
+          notes: $("#agreement-notes").value.trim() || null,
+        }),
+      }
+    );
+    state.selectedPaymentAgreements.push(saved);
+    renderPaymentAgreementManagement();
+    statusBox.textContent =
+      "El convenio quedó registrado sin completar datos no acordados.";
+  } catch (error) {
+    statusBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function resolvePaymentAgreement(event) {
+  event.preventDefault();
+  const serviceId = state.selectedServiceId;
+  const agreementId = $("#agreement-resolution-id").value;
+  const action = $("#agreement-resolution-action").value;
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const statusBox = $("#agreement-dialog-status");
+  if (!serviceId || !agreementId) return;
+  submitButton.disabled = true;
+  statusBox.textContent = "";
+  try {
+    const saved = await api(
+      `/api/v1/services/${serviceId}/payment-agreements/` +
+      `${agreementId}/${action}`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          performed_by: state.user.display_name,
+          reason: $("#agreement-resolution-reason").value.trim(),
+        }),
+      }
+    );
+    state.selectedPaymentAgreements =
+      state.selectedPaymentAgreements.map(
+        (item) => item.id === saved.id ? saved : item
+      );
+    renderPaymentAgreementManagement();
+    statusBox.textContent =
+      action === "fulfill"
+        ? "El convenio quedó marcado como cumplido."
+        : "El convenio quedó cancelado y su historial se conservó.";
+  } catch (error) {
+    statusBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 async function saveInstallation(event) {
   event.preventDefault();
   const service = state.services?.find(
@@ -2210,13 +2465,17 @@ $("#services-body").addEventListener("click", (event) => {
     ".check-commercial-reactivation"
   );
   const extensionButton = event.target.closest(".manage-extensions");
+  const agreementButton = event.target.closest(
+    ".manage-payment-agreements"
+  );
   if (
     !button &&
     !networkButton &&
     !notificationButton &&
     !suspensionButton &&
     !reactivationButton &&
-    !extensionButton
+    !extensionButton &&
+    !agreementButton
   ) return;
   const service = state.services?.find(
     (item) =>
@@ -2227,7 +2486,8 @@ $("#services-body").addEventListener("click", (event) => {
         notificationButton ||
         suspensionButton ||
         reactivationButton ||
-        extensionButton
+        extensionButton ||
+        agreementButton
       ).dataset.serviceId
   );
   if (!service) return;
@@ -2236,6 +2496,7 @@ $("#services-body").addEventListener("click", (event) => {
   else if (suspensionButton) openSuspensionCheckDialog(service);
   else if (reactivationButton) openReactivationCheckDialog(service);
   else if (extensionButton) openExtensionDialog(service);
+  else if (agreementButton) openPaymentAgreementDialog(service);
   else openInstallationDialog(service);
 });
 $("#installation-coverage-result").addEventListener(
@@ -2344,6 +2605,22 @@ $("#close-extension-dialog").addEventListener(
 $("#dismiss-extension-dialog").addEventListener(
   "click",
   closeExtensionDialog
+);
+$("#agreement-create-form").addEventListener(
+  "submit",
+  savePaymentAgreement
+);
+$("#agreement-resolve-form").addEventListener(
+  "submit",
+  resolvePaymentAgreement
+);
+$("#close-agreement-dialog").addEventListener(
+  "click",
+  closePaymentAgreementDialog
+);
+$("#dismiss-agreement-dialog").addEventListener(
+  "click",
+  closePaymentAgreementDialog
 );
 $("#new-payment-button").addEventListener("click", openPaymentDialog);
 $("#payment-customer").addEventListener("change", updatePaymentServices);

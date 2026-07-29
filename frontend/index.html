@@ -1407,6 +1407,155 @@
       </div>
     </dialog>
 
+    <dialog id="agreement-dialog" aria-labelledby="agreement-dialog-title">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">CONVENIO FLEXIBLE Y AUDITABLE</p>
+            <h2 id="agreement-dialog-title">Convenios de pago</h2>
+          </div>
+          <button
+            id="close-agreement-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div id="agreement-summary" class="decision-summary"></div>
+
+        <section class="extension-section">
+          <h3>Historial</h3>
+          <div id="agreement-history" class="extension-history"></div>
+        </section>
+
+        <p id="agreement-create-note" class="form-help" hidden></p>
+        <form id="agreement-create-form" class="embedded-form" hidden>
+          <section class="extension-section">
+            <h3>Nuevo convenio</h3>
+            <div class="form-grid">
+              <label class="full-row">
+                Términos realmente acordados
+                <textarea
+                  id="agreement-terms"
+                  rows="4"
+                  minlength="3"
+                  maxlength="2000"
+                  required
+                ></textarea>
+              </label>
+              <label>
+                Monto prometido (opcional)
+                <input
+                  id="agreement-promised-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                >
+              </label>
+              <label>
+                Fecha prometida (opcional)
+                <input id="agreement-promised-date" type="date">
+              </label>
+              <label>
+                Parcialidades (opcional)
+                <input
+                  id="agreement-installments"
+                  type="number"
+                  min="1"
+                  max="60"
+                  step="1"
+                >
+              </label>
+              <label>
+                Autorizado por
+                <input
+                  id="agreement-authorized-by"
+                  minlength="2"
+                  maxlength="150"
+                  required
+                >
+              </label>
+              <label class="full-row">
+                Referencia privada de evidencia (opcional)
+                <input
+                  id="agreement-evidence-reference"
+                  minlength="3"
+                  maxlength="500"
+                >
+              </label>
+              <label class="full-row">
+                Notas (opcional)
+                <textarea
+                  id="agreement-notes"
+                  rows="2"
+                  maxlength="1000"
+                ></textarea>
+              </label>
+            </div>
+            <p class="form-help">
+              Deja vacíos los datos que no fueron pactados. Registrar un
+              convenio no reduce la deuda ni aplica pagos automáticamente.
+            </p>
+            <div class="dialog-actions">
+              <button class="primary-button" type="submit">
+                Registrar convenio
+              </button>
+            </div>
+          </section>
+        </form>
+
+        <p id="agreement-resolve-note" class="form-help" hidden>
+          Existen convenios vigentes, pero tu cuenta no puede resolverlos.
+        </p>
+        <form id="agreement-resolve-form" class="embedded-form" hidden>
+          <section class="extension-section">
+            <h3>Resolver convenio vigente</h3>
+            <div class="form-grid">
+              <label class="full-row">
+                Convenio
+                <select id="agreement-resolution-id" required></select>
+              </label>
+              <label>
+                Resultado
+                <select id="agreement-resolution-action" required>
+                  <option value="fulfill">Cumplido</option>
+                  <option value="cancel">Cancelado</option>
+                </select>
+              </label>
+              <label class="full-row">
+                Motivo de resolución
+                <textarea
+                  id="agreement-resolution-reason"
+                  rows="3"
+                  minlength="3"
+                  maxlength="1000"
+                  required
+                ></textarea>
+              </label>
+            </div>
+            <div class="dialog-actions">
+              <button class="primary-button" type="submit">
+                Guardar resolución
+              </button>
+            </div>
+          </section>
+        </form>
+
+        <p
+          id="agreement-dialog-status"
+          class="form-error"
+          role="status"
+        ></p>
+        <div class="dialog-actions">
+          <button
+            id="dismiss-agreement-dialog"
+            class="text-button"
+            type="button"
+          >Cerrar</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="plan-price-dialog" aria-labelledby="plan-price-dialog-title">
       <form id="plan-price-form">
         <div class="dialog-heading">

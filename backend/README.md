@@ -319,8 +319,12 @@ pasado.
 Cada convenio conserva folio, titular actual, servicio, datos opcionales,
 estado y resolución. La evidencia es opcional y su referencia permanece
 privada. `billing.write` crea convenios; cumplirlos o cancelarlos requiere
-`billing.approve`. La UI se incorporará después de validar esta primera
-migración en PostgreSQL.
+`billing.approve`.
+
+La UI muestra saldo, convenios vigentes e historial. Permite dejar vacíos
+monto, fecha, parcialidades, evidencia y notas cuando no fueron pactados.
+Registrar o resolver un convenio no modifica cargos, pagos ni saldo; esas
+operaciones financieras conservan sus propios flujos de aprobación.
 
 La suspensión también calcula la deuda directamente desde los cargos abiertos,
 exige al menos una mensualidad cuyo periodo de tolerancia haya terminado y
