@@ -91,12 +91,13 @@ correspondiente. El diálogo explica que no es una suspensión comercial, usa un
 clave de idempotencia nueva y fuerza `dry_run`. Este control técnico aislado no
 ofrece un botón de ejecución real.
 
-**Reconciliar red** es una excepción explícita porque no cambia el estado
-comercial: vuelve a aplicar en MikroTik lo que Aether ya considera verdadero.
-Sólo aparece para servicios activos o suspendidos con `network.control`.
-Primero crea un preflight y después muestra servicio, IP y efecto esperado;
-la ejecución real exige código AMR y confirmación. Pendientes y cancelados no
-se reconcilian por esta vía.
+**Revisar red** consulta primero la address list sin modificarla y compara el
+resultado con el estado comercial. Sólo aparece para servicios activos o
+suspendidos con `network.control`. Si ambos estados coinciden, informa que no
+hay trabajo pendiente. Si existe una desviación, crea un preflight enlazado a
+la inspección y después muestra servicio, IP y efecto esperado; la corrección
+real exige código AMR y confirmación. La inspección vence a los cinco minutos,
+no puede respaldar dos preflights y pendientes o cancelados no usan esta vía.
 
 La ejecución real sólo se ofrece dentro de suspensión o reactivación comercial
 coordinada. Primero se ejecutan todas las validaciones en modo seguro. Si la

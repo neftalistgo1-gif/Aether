@@ -88,7 +88,12 @@ auditoría y reconciliación periódica.
 - Reconciliación tomando el estado comercial de Aether como fuente de verdad.
 - Reconciliación limitada a servicios activos o suspendidos; pendientes y
   cancelados conservan sus flujos de alta o baja.
-- Ejecución de reconciliación desde la UI sólo después de simulación vigente,
+- Inspección real de sólo lectura antes de reconciliar, con estado esperado,
+  observado, coincidencia, IP, router, responsable y resultado persistidos.
+- Una coincidencia no autoriza escrituras; sólo una desviación confirmada
+  durante los últimos cinco minutos puede crear un preflight.
+- Cada inspección autoriza como máximo un preflight de reconciliación.
+- Ejecución desde la UI sólo después de inspección, simulación vigente,
   revisión de servicio e IP y confirmación del código AMR.
 
 El control de red no cambia por sí solo el estado comercial del servicio.

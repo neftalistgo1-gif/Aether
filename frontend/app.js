@@ -465,7 +465,7 @@ function renderServices() {
                 class="row-action reconcile-network"
                 type="button"
                 data-service-id="${service.id}"
-              >Reconciliar red</button>
+              >Revisar red</button>
             ` : ""}
             ${canWriteNotifications ? `
               <button
@@ -948,11 +948,35 @@ async function startNetworkReconciliation(service, button) {
   button.disabled = true;
   setNotice();
   try {
+    const inspection = await api(
+      `/api/v1/services/${service.id}/network-control/inspect`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          requested_by: state.user.display_name,
+          idempotency_key:
+            `ui-network-inspection-${crypto.randomUUID()}`,
+        }),
+      }
+    );
+    if (inspection.status !== "succeeded") {
+      throw new Error(
+        inspection.error_message ||
+        "No fue posible inspeccionar el estado real de MikroTik."
+      );
+    }
+    if (inspection.matches_expected) {
+      setNotice(
+        "MikroTik ya coincide con el estado comercial de Aether; no se requiere corrección."
+      );
+      return;
+    }
     const payload = {
       requested_by: state.user.display_name,
       idempotency_key:
         `ui-reconciliation-preflight-${crypto.randomUUID()}`,
       dry_run: true,
+      network_inspection_id: inspection.id,
     };
     const command = await api(
       `/api/v1/services/${service.id}/network-control/reconcile`,
@@ -971,7 +995,7 @@ async function startNetworkReconciliation(service, button) {
       serviceId: service.id,
       serviceCode: service.amr_code,
       commercialStatus: service.status,
-      actionLabel: "Reconciliar estado de red",
+      actionLabel: "Corregir desviación de red",
       targetIp: command.target_ip,
       endpoint:
         `/api/v1/services/${service.id}/network-control/reconcile`,

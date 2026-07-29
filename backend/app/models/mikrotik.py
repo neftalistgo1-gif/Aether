@@ -11,6 +11,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -28,6 +29,12 @@ class NetworkControlAction(str, Enum):
 
 class NetworkCommandStatus(str, Enum):
     simulated = "simulated"
+    succeeded = "succeeded"
+    failed = "failed"
+
+
+class NetworkInspectionStatus(str, Enum):
+    pending = "pending"
     succeeded = "succeeded"
     failed = "failed"
 
@@ -52,6 +59,13 @@ class MikrotikRouter(Base):
 
 class NetworkControlCommand(Base):
     __tablename__ = "network_control_commands"
+    __table_args__ = (
+        UniqueConstraint(
+            "network_inspection_id",
+            "dry_run",
+            name="uq_network_control_commands_inspection_mode",
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     idempotency_key: Mapped[str] = mapped_column(String(100), unique=True, index=True)
@@ -68,6 +82,12 @@ class NetworkControlCommand(Base):
         ),
         nullable=True,
         unique=True,
+        index=True,
+    )
+    network_inspection_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("network_state_inspections.id", ondelete="RESTRICT"),
+        nullable=True,
         index=True,
     )
     network_assignment_id: Mapped[UUID] = mapped_column(
@@ -104,4 +124,61 @@ class NetworkControlCommand(Base):
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     changed_router: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     result_details: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class NetworkStateInspection(Base):
+    __tablename__ = "network_state_inspections"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    idempotency_key: Mapped[str] = mapped_column(
+        String(100),
+        unique=True,
+        index=True,
+    )
+    service_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("services.id", ondelete="RESTRICT"),
+        index=True,
+    )
+    network_assignment_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("network_assignments.id", ondelete="RESTRICT"),
+    )
+    router_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("mikrotik_routers.id", ondelete="RESTRICT"),
+    )
+    target_ip: Mapped[str] = mapped_column(String(45))
+    expected_blocked: Mapped[bool] = mapped_column(Boolean)
+    observed_blocked: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+    )
+    matches_expected: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+    )
+    entry_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[NetworkInspectionStatus] = mapped_column(
+        SqlEnum(
+            NetworkInspectionStatus,
+            name="network_inspection_status",
+            native_enum=False,
+            validate_strings=True,
+        )
+    )
+    requested_by: Mapped[str] = mapped_column(String(150))
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -270,7 +270,17 @@ class FrontendShellTestCase(unittest.TestCase):
         )[0]
 
         self.assertIn(".reconcile-network", script)
+        self.assertIn("/network-control/inspect", reconciliation)
         self.assertIn("/network-control/reconcile", reconciliation)
+        self.assertLess(
+            reconciliation.index("/network-control/inspect"),
+            reconciliation.index("/network-control/reconcile"),
+        )
+        self.assertIn("inspection.matches_expected", reconciliation)
+        self.assertIn(
+            "network_inspection_id: inspection.id",
+            reconciliation,
+        )
         self.assertIn("dry_run: true", reconciliation)
         self.assertNotIn("dry_run: false", reconciliation)
         self.assertIn('type: "reconciliation"', reconciliation)
@@ -282,6 +292,10 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn(
             "El estado comercial no cambiará",
             script,
+        )
+        self.assertIn(
+            "no se requiere corrección",
+            reconciliation,
         )
 
     def test_frontend_contains_no_embedded_credentials(self) -> None:

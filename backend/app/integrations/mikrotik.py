@@ -102,3 +102,11 @@ class RouterOSRestClient:
             changed=changed,
             entry_count=len(verified),
         )
+
+    def inspect_blocked(self, target_ip: str) -> RouterExecutionResult:
+        entries = self._matching_entries(target_ip)
+        return RouterExecutionResult(
+            blocked=bool(entries),
+            changed=False,
+            entry_count=len(entries),
+        )

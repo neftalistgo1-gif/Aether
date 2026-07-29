@@ -13,6 +13,8 @@ from sqlalchemy.pool import StaticPool
 from app.api.v1.endpoints.mikrotik import (
     control_service_network,
     create_router,
+    inspect_service_network,
+    list_network_inspections,
     retry_network_command,
     update_router,
 )
@@ -43,6 +45,7 @@ from app.models.mikrotik import (
     MikrotikRouter,
     NetworkCommandStatus,
     NetworkControlAction,
+    NetworkInspectionStatus,
 )
 from app.models.network_assignment import NetworkAssignment
 from app.models.notification import (
@@ -58,6 +61,7 @@ from app.schemas.mikrotik import (
     MikrotikRouterUpdate,
     NetworkControlRequest,
     NetworkControlRetry,
+    NetworkInspectionRequest,
 )
 from app.schemas.service_operations import (
     CancellationCreate,
@@ -174,30 +178,76 @@ class MikroTikControlTestCase(unittest.TestCase):
         key: str = "mikrotik-test-001",
         dry_run: bool = True,
         preflight_command_id=None,
+        network_inspection_id=None,
     ) -> NetworkControlRequest:
         return NetworkControlRequest(
             requested_by="Operador de red",
             idempotency_key=key,
             dry_run=dry_run,
             preflight_command_id=preflight_command_id,
+            network_inspection_id=network_inspection_id,
         )
 
     def live_request(
         self,
         action: NetworkControlAction,
         key: str,
+        network_inspection_id=None,
     ) -> NetworkControlRequest:
         preflight = control_service_network(
             self.service.id,
             action,
-            self.request(f"{key}-preflight"),
+            self.request(
+                f"{key}-preflight",
+                network_inspection_id=network_inspection_id,
+            ),
             self.db,
         )
         return self.request(
             key,
             dry_run=False,
             preflight_command_id=preflight.id,
+            network_inspection_id=network_inspection_id,
         )
+
+    def inspect_network(
+        self,
+        key: str,
+        *,
+        observed_blocked: bool,
+        entry_count: int | None = None,
+    ):
+        stored_router = self.db.get(MikrotikRouter, self.router.id)
+        stored_router.enabled = True
+        self.db.commit()
+        with patch(
+            "app.api.v1.endpoints.mikrotik.RouterOSRestClient.inspect_blocked",
+            return_value=RouterExecutionResult(
+                blocked=observed_blocked,
+                changed=False,
+                entry_count=(
+                    entry_count
+                    if entry_count is not None
+                    else int(observed_blocked)
+                ),
+            ),
+        ):
+            with patch.dict(
+                os.environ,
+                {
+                    "MIKROTIK_PRINCIPAL_USERNAME": "aether",
+                    "MIKROTIK_PRINCIPAL_PASSWORD": "secret",
+                },
+                clear=False,
+            ):
+                return inspect_service_network(
+                    self.service.id,
+                    NetworkInspectionRequest(
+                        requested_by="Supervisor de red",
+                        idempotency_key=key,
+                    ),
+                    self.db,
+                )
 
     def test_router_requires_https(self) -> None:
         with self.assertRaises(ValidationError):
@@ -334,6 +384,10 @@ class MikroTikControlTestCase(unittest.TestCase):
         self.assertEqual(context.exception.status_code, 409)
 
     def test_preflight_must_match_the_requested_action(self) -> None:
+        inspection = self.inspect_network(
+            "mikrotik-action-inspection",
+            observed_blocked=True,
+        )
         preflight = control_service_network(
             self.service.id,
             NetworkControlAction.suspend,
@@ -348,6 +402,7 @@ class MikroTikControlTestCase(unittest.TestCase):
                     "mikrotik-action-live",
                     dry_run=False,
                     preflight_command_id=preflight.id,
+                    network_inspection_id=inspection.id,
                 ),
                 self.db,
             )
@@ -470,13 +525,180 @@ class MikroTikControlTestCase(unittest.TestCase):
     def test_reconcile_uses_commercial_state_as_source_of_truth(self) -> None:
         self.service.status = ServiceStatus.suspended
         self.db.commit()
+        inspection = self.inspect_network(
+            "mikrotik-reconcile-state-inspection",
+            observed_blocked=False,
+        )
         command = control_service_network(
             self.service.id,
             NetworkControlAction.reconcile,
-            self.request("mikrotik-reconcile-001"),
+            self.request(
+                "mikrotik-reconcile-001",
+                network_inspection_id=inspection.id,
+            ),
             self.db,
         )
         self.assertTrue(command.desired_blocked)
+        self.assertEqual(command.network_inspection_id, inspection.id)
+
+    def test_read_only_inspection_reports_matching_network_state(
+        self,
+    ) -> None:
+        inspection = self.inspect_network(
+            "mikrotik-inspection-matching",
+            observed_blocked=False,
+        )
+        repeated = inspect_service_network(
+            self.service.id,
+            NetworkInspectionRequest(
+                requested_by="Otro operador",
+                idempotency_key="mikrotik-inspection-matching",
+            ),
+            self.db,
+        )
+        history = list_network_inspections(self.service.id, self.db)
+
+        self.assertEqual(
+            inspection.status,
+            NetworkInspectionStatus.succeeded,
+        )
+        self.assertFalse(inspection.expected_blocked)
+        self.assertFalse(inspection.observed_blocked)
+        self.assertTrue(inspection.matches_expected)
+        self.assertEqual(inspection.entry_count, 0)
+        self.assertEqual(repeated.id, inspection.id)
+        self.assertEqual([item.id for item in history], [inspection.id])
+
+    def test_failed_inspection_is_preserved_without_observed_state(
+        self,
+    ) -> None:
+        inspection = inspect_service_network(
+            self.service.id,
+            NetworkInspectionRequest(
+                requested_by="Supervisor de red",
+                idempotency_key="mikrotik-inspection-disabled",
+            ),
+            self.db,
+        )
+
+        self.assertEqual(
+            inspection.status,
+            NetworkInspectionStatus.failed,
+        )
+        self.assertIsNone(inspection.observed_blocked)
+        self.assertIsNone(inspection.matches_expected)
+        self.assertEqual(
+            inspection.error_message,
+            "Router integration is disabled",
+        )
+
+    def test_matching_inspection_cannot_authorize_reconciliation(
+        self,
+    ) -> None:
+        inspection = self.inspect_network(
+            "mikrotik-inspection-no-drift",
+            observed_blocked=False,
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            control_service_network(
+                self.service.id,
+                NetworkControlAction.reconcile,
+                self.request(
+                    "mikrotik-reconcile-unnecessary",
+                    network_inspection_id=inspection.id,
+                ),
+                self.db,
+            )
+
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_expired_inspection_cannot_authorize_reconciliation(
+        self,
+    ) -> None:
+        inspection = self.inspect_network(
+            "mikrotik-inspection-expired",
+            observed_blocked=True,
+        )
+        inspection.completed_at = datetime.now(UTC) - timedelta(minutes=6)
+        self.db.commit()
+
+        with self.assertRaises(HTTPException) as context:
+            control_service_network(
+                self.service.id,
+                NetworkControlAction.reconcile,
+                self.request(
+                    "mikrotik-reconcile-expired-inspection",
+                    network_inspection_id=inspection.id,
+                ),
+                self.db,
+            )
+
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_inspection_authorizes_only_one_reconciliation_preflight(
+        self,
+    ) -> None:
+        inspection = self.inspect_network(
+            "mikrotik-inspection-single-preflight",
+            observed_blocked=True,
+        )
+        control_service_network(
+            self.service.id,
+            NetworkControlAction.reconcile,
+            self.request(
+                "mikrotik-reconcile-first-preflight",
+                network_inspection_id=inspection.id,
+            ),
+            self.db,
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            control_service_network(
+                self.service.id,
+                NetworkControlAction.reconcile,
+                self.request(
+                    "mikrotik-reconcile-second-preflight",
+                    network_inspection_id=inspection.id,
+                ),
+                self.db,
+            )
+
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_reconciliation_rechecks_commercial_state_after_preflight(
+        self,
+    ) -> None:
+        inspection = self.inspect_network(
+            "mikrotik-inspection-state-change",
+            observed_blocked=True,
+        )
+        preflight = control_service_network(
+            self.service.id,
+            NetworkControlAction.reconcile,
+            self.request(
+                "mikrotik-reconcile-state-change-preflight",
+                network_inspection_id=inspection.id,
+            ),
+            self.db,
+        )
+        self.service.status = ServiceStatus.suspended
+        self.db.commit()
+
+        with self.assertRaises(HTTPException) as context:
+            control_service_network(
+                self.service.id,
+                NetworkControlAction.reconcile,
+                self.request(
+                    "mikrotik-reconcile-state-change-live",
+                    dry_run=False,
+                    preflight_command_id=preflight.id,
+                    network_inspection_id=inspection.id,
+                ),
+                self.db,
+            )
+
+        self.assertEqual(context.exception.status_code, 409)
 
     def test_reconcile_rejects_pending_and_cancelled_services(self) -> None:
         for service_status in (
@@ -500,9 +722,14 @@ class MikroTikControlTestCase(unittest.TestCase):
     def test_live_reconcile_verifies_router_without_commercial_change(
         self,
     ) -> None:
+        inspection = self.inspect_network(
+            "mikrotik-reconcile-live-inspection",
+            observed_blocked=True,
+        )
         live_request = self.live_request(
             NetworkControlAction.reconcile,
             "mikrotik-reconcile-live",
+            network_inspection_id=inspection.id,
         )
         stored_router = self.db.get(MikrotikRouter, self.router.id)
         stored_router.enabled = True

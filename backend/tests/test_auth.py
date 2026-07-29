@@ -400,6 +400,20 @@ class AuthenticationTestCase(unittest.TestCase):
                     capability_for_operation("POST", path),
                     Capability.network_control,
                 )
+        inspection_path = (
+            "/api/v1/services/{service_id}/network-control/inspect"
+        )
+        self.assertEqual(
+            capability_for_operation("POST", inspection_path),
+            Capability.network_control,
+        )
+        self.assertEqual(
+            capability_for_operation(
+                "GET",
+                "/api/v1/services/{service_id}/network-control/inspections",
+            ),
+            Capability.network_read,
+        )
 
     def test_cancellation_requires_dedicated_capability(self) -> None:
         base = "/api/v1/services/{service_id}/cancellation"

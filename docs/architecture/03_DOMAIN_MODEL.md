@@ -313,7 +313,8 @@ Representa la configuración técnica actual de un servicio.
 - Un servicio sólo puede tener una configuración de red vigente.
 - La combinación de router e IP debe ser única entre configuraciones vigentes.
 - La configuración no puede cambiar mientras el servicio esté suspendido.
-- La baja definitiva cierra la configuración vigente.
+- La baja definitiva reserva la configuración vigente; sólo una liberación de
+  red verificada después del retiro físico la cierra.
 
 ---
 
@@ -330,6 +331,7 @@ servicio en MikroTik.
 - Modo simulado o real.
 - Responsable, clave de idempotencia, intentos y resultado verificado.
 - Preflight que autorizó la ejecución real.
+- Inspección que confirmó una desviación, cuando la acción es reconciliar.
 
 ## Reglas
 
@@ -341,6 +343,30 @@ servicio en MikroTik.
 - Un cambio de asignación, router o IP invalida la operación pendiente.
 - Sólo una verificación positiva del router permite completar una suspensión o
   reactivación coordinada.
+
+---
+
+# 9.2. NetworkStateInspection
+
+Representa una lectura auditada de la address list antes de corregir una
+posible diferencia entre Aether y MikroTik.
+
+## Información principal
+
+- Service, NetworkAssignment, router e IP vigentes.
+- Estado de bloqueo esperado y observado.
+- Número de entradas encontradas y resultado de coincidencia.
+- Responsable, clave de idempotencia y fechas.
+- Estado exitoso, fallido o pendiente y error seguro cuando exista.
+
+## Reglas
+
+- La inspección nunca agrega ni retira entradas.
+- Sólo aplica a servicios activos o suspendidos.
+- Una lectura coincidente no autoriza reconciliación.
+- Una desviación vence después de cinco minutos.
+- Debe coincidir con servicio, asignación, router, IP y estado comercial.
+- Cada inspección puede respaldar un solo preflight y una sola ejecución real.
 
 ---
 

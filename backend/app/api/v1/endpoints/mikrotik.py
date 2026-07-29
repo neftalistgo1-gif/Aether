@@ -17,6 +17,8 @@ from app.models.mikrotik import (
     NetworkCommandStatus,
     NetworkControlAction,
     NetworkControlCommand,
+    NetworkInspectionStatus,
+    NetworkStateInspection,
 )
 from app.models.service import ServiceStatus
 from app.schemas.mikrotik import (
@@ -26,6 +28,8 @@ from app.schemas.mikrotik import (
     NetworkControlCommandRead,
     NetworkControlRequest,
     NetworkControlRetry,
+    NetworkInspectionRequest,
+    NetworkStateInspectionRead,
     credentials_configured,
 )
 from app.services.audit import record_audit_event
@@ -33,6 +37,7 @@ from app.services.audit import record_audit_event
 router = APIRouter(prefix="/api/v1", tags=["mikrotik"])
 
 PREFLIGHT_MAX_AGE = timedelta(minutes=15)
+INSPECTION_MAX_AGE = timedelta(minutes=5)
 
 
 def as_utc(value: datetime) -> datetime:
@@ -55,6 +60,7 @@ def audit_network_command(
         after_data={
             "service_id": command.service_id,
             "preflight_command_id": command.preflight_command_id,
+            "network_inspection_id": command.network_inspection_id,
             "router_id": command.router_id,
             "target_ip": command.target_ip,
             "desired_blocked": command.desired_blocked,
@@ -62,6 +68,32 @@ def audit_network_command(
             "status": command.status,
             "attempt": command.attempts,
             "verified_at": command.verified_at,
+        },
+    )
+
+
+def audit_network_inspection(
+    inspection: NetworkStateInspection,
+    db: Session,
+) -> None:
+    record_audit_event(
+        db,
+        actor=inspection.requested_by,
+        action=f"network.inspection.{inspection.status.value}",
+        entity_type="NetworkStateInspection",
+        entity_id=inspection.id,
+        reason=inspection.error_message or "Read-only network state inspection",
+        after_data={
+            "service_id": inspection.service_id,
+            "network_assignment_id": inspection.network_assignment_id,
+            "router_id": inspection.router_id,
+            "target_ip": inspection.target_ip,
+            "expected_blocked": inspection.expected_blocked,
+            "observed_blocked": inspection.observed_blocked,
+            "matches_expected": inspection.matches_expected,
+            "entry_count": inspection.entry_count,
+            "status": inspection.status,
+            "completed_at": inspection.completed_at,
         },
     )
 
@@ -93,6 +125,8 @@ def validate_live_preflight(
         or preflight.router_id != router_config.id
         or preflight.target_ip != assignment.ip_address
         or preflight.desired_blocked != desired_blocked
+        or preflight.network_inspection_id
+        != control.network_inspection_id
     ):
         raise HTTPException(
             status_code=409,
@@ -118,6 +152,71 @@ def validate_live_preflight(
             detail="Network preflight was already used",
         )
     return preflight
+
+
+def validate_reconciliation_inspection(
+    control: NetworkControlRequest,
+    service_id: UUID,
+    action: NetworkControlAction,
+    assignment,
+    router_config: MikrotikRouter,
+    desired_blocked: bool,
+    db: Session,
+) -> NetworkStateInspection | None:
+    if action != NetworkControlAction.reconcile:
+        if control.network_inspection_id is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Network inspection is only valid for reconciliation",
+            )
+        return None
+    if control.network_inspection_id is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Reconciliation requires a recent mismatching inspection",
+        )
+    inspection = db.get(
+        NetworkStateInspection,
+        control.network_inspection_id,
+    )
+    now = datetime.now(UTC)
+    if (
+        inspection is None
+        or inspection.status != NetworkInspectionStatus.succeeded
+        or inspection.matches_expected is not False
+        or inspection.completed_at is None
+        or inspection.service_id != service_id
+        or inspection.network_assignment_id != assignment.id
+        or inspection.router_id != router_config.id
+        or inspection.target_ip != assignment.ip_address
+        or inspection.expected_blocked != desired_blocked
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Reconciliation requires a matching inspection that "
+                "confirmed network drift"
+            ),
+        )
+    completed_at = as_utc(inspection.completed_at)
+    if completed_at > now or now - completed_at > INSPECTION_MAX_AGE:
+        raise HTTPException(
+            status_code=409,
+            detail="Network inspection expired; inspect the service again",
+        )
+    if control.dry_run:
+        used = db.scalar(
+            select(NetworkControlCommand).where(
+                NetworkControlCommand.network_inspection_id == inspection.id,
+                NetworkControlCommand.dry_run.is_(True),
+            )
+        )
+        if used is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Network inspection already has a reconciliation preflight",
+            )
+    return inspection
 
 
 def router_read(item: MikrotikRouter) -> MikrotikRouterRead:
@@ -246,6 +345,156 @@ def execute_command(
     return command
 
 
+def execute_network_inspection(
+    inspection: NetworkStateInspection,
+    router_config: MikrotikRouter,
+    db: Session,
+) -> NetworkStateInspection:
+    inspection.completed_at = datetime.now(UTC)
+    if not router_config.enabled:
+        inspection.status = NetworkInspectionStatus.failed
+        inspection.error_message = "Router integration is disabled"
+    else:
+        try:
+            result = RouterOSRestClient(router_config).inspect_blocked(
+                inspection.target_ip
+            )
+            inspection.status = NetworkInspectionStatus.succeeded
+            inspection.observed_blocked = result.blocked
+            inspection.matches_expected = (
+                result.blocked == inspection.expected_blocked
+            )
+            inspection.entry_count = result.entry_count
+            inspection.error_message = None
+        except RuntimeError as exc:
+            inspection.status = NetworkInspectionStatus.failed
+            inspection.error_message = str(exc)
+    audit_network_inspection(inspection, db)
+    db.commit()
+    db.refresh(inspection)
+    return inspection
+
+
+@router.post(
+    "/services/{service_id}/network-control/inspect",
+    response_model=NetworkStateInspectionRead,
+)
+def inspect_service_network(
+    service_id: UUID,
+    request: NetworkInspectionRequest,
+    db: Session = Depends(get_db),
+) -> NetworkStateInspection:
+    existing = db.scalar(
+        select(NetworkStateInspection).where(
+            NetworkStateInspection.idempotency_key
+            == request.idempotency_key
+        )
+    )
+    if existing is not None:
+        if existing.service_id != service_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Idempotency key belongs to another inspection",
+            )
+        if (
+            existing.status == NetworkInspectionStatus.pending
+            and existing.completed_at is None
+        ):
+            router_config = db.get(MikrotikRouter, existing.router_id)
+            if router_config is None:
+                existing.status = NetworkInspectionStatus.failed
+                existing.completed_at = datetime.now(UTC)
+                existing.error_message = "MikroTik router not found"
+                audit_network_inspection(existing, db)
+                db.commit()
+                db.refresh(existing)
+                return existing
+            return execute_network_inspection(
+                existing,
+                router_config,
+                db,
+            )
+        return existing
+    service = find_service_or_404(service_id, db)
+    if service.status not in {
+        ServiceStatus.active,
+        ServiceStatus.suspended,
+    }:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Only an active or suspended service can inspect "
+                "network access"
+            ),
+        )
+    assignment = find_current_network_assignment(service_id, db)
+    if assignment is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Service has no current network assignment",
+        )
+    router_config = db.scalar(
+        select(MikrotikRouter).where(
+            MikrotikRouter.name == assignment.router_name
+        )
+    )
+    if router_config is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Network router is not registered for MikroTik control",
+        )
+    inspection = NetworkStateInspection(
+        idempotency_key=request.idempotency_key,
+        service_id=service.id,
+        network_assignment_id=assignment.id,
+        router_id=router_config.id,
+        target_ip=assignment.ip_address,
+        expected_blocked=service.status == ServiceStatus.suspended,
+        status=NetworkInspectionStatus.pending,
+        requested_by=request.requested_by,
+    )
+    db.add(inspection)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        existing = db.scalar(
+            select(NetworkStateInspection).where(
+                NetworkStateInspection.idempotency_key
+                == request.idempotency_key
+            )
+        )
+        if existing is not None and existing.service_id == service_id:
+            return existing
+        raise HTTPException(
+            status_code=409,
+            detail="Idempotency key belongs to another inspection",
+        ) from exc
+    db.refresh(inspection)
+    return execute_network_inspection(inspection, router_config, db)
+
+
+@router.get(
+    "/services/{service_id}/network-control/inspections",
+    response_model=list[NetworkStateInspectionRead],
+)
+def list_network_inspections(
+    service_id: UUID,
+    db: Session = Depends(get_db),
+) -> list[NetworkStateInspection]:
+    find_service_or_404(service_id, db)
+    return list(
+        db.scalars(
+            select(NetworkStateInspection)
+            .where(NetworkStateInspection.service_id == service_id)
+            .order_by(
+                NetworkStateInspection.requested_at,
+                NetworkStateInspection.id,
+            )
+        )
+    )
+
+
 @router.post(
     "/services/{service_id}/network-control/{action}",
     response_model=NetworkControlCommandRead,
@@ -268,6 +517,8 @@ def control_service_network(
             existing.dry_run != control.dry_run
             or existing.preflight_command_id
             != control.preflight_command_id
+            or existing.network_inspection_id
+            != control.network_inspection_id
         ):
             raise HTTPException(
                 status_code=409,
@@ -321,6 +572,15 @@ def control_service_network(
         desired_blocked = service.status == ServiceStatus.suspended
     else:
         raise HTTPException(status_code=409, detail="Unsupported network action")
+    validate_reconciliation_inspection(
+        control,
+        service.id,
+        action,
+        assignment,
+        router_config,
+        desired_blocked,
+        db,
+    )
     preflight = validate_live_preflight(
         control,
         service.id,
@@ -337,6 +597,7 @@ def control_service_network(
         preflight_command_id=(
             preflight.id if preflight is not None else None
         ),
+        network_inspection_id=control.network_inspection_id,
         network_assignment_id=assignment.id,
         router_id=router_config.id,
         action=action,
@@ -364,6 +625,8 @@ def control_service_network(
             and existing.dry_run == control.dry_run
             and existing.preflight_command_id
             == control.preflight_command_id
+            and existing.network_inspection_id
+            == control.network_inspection_id
         ):
             return existing
         raise HTTPException(
@@ -430,6 +693,22 @@ def retry_network_command(
                 "run a new simulation"
             ),
         )
+    if command.action == NetworkControlAction.reconcile:
+        service = find_service_or_404(command.service_id, db)
+        expected_blocked = service.status == ServiceStatus.suspended
+        if (
+            service.status
+            not in {ServiceStatus.active, ServiceStatus.suspended}
+            or command.network_inspection_id is None
+            or command.desired_blocked != expected_blocked
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Reconciliation retry no longer matches the current "
+                    "commercial state; inspect the service again"
+                ),
+            )
     assignment = find_current_network_assignment(command.service_id, db)
     if (
         assignment is None

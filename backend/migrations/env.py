@@ -18,7 +18,11 @@ from app.models.holder_transfer import HolderTransfer
 from app.models.incident import Incident, IncidentServiceImpact
 from app.models.installation import Installation, InstallationScheduleChange
 from app.models.maintenance_inspection import MaintenanceInspection
-from app.models.mikrotik import MikrotikRouter, NetworkControlCommand
+from app.models.mikrotik import (
+    MikrotikRouter,
+    NetworkControlCommand,
+    NetworkStateInspection,
+)
 from app.models.network_assignment import NetworkAssignment
 from app.models.notification import CustomerNotification
 from app.models.payment import Payment, PaymentStatusEvent
