@@ -1,6 +1,6 @@
 import os
 import unittest
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -16,11 +16,16 @@ from app.api.v1.endpoints.mikrotik import (
     retry_network_command,
     update_router,
 )
+from app.api.v1.endpoints.service_operations import (
+    coordinate_reactivation,
+    coordinate_suspension,
+)
 from app.api.v1.endpoints.network_assignments import create_network_assignment
 from app.api.v1.endpoints.services import create_service
 from app.db.base import Base
 from app.integrations.mikrotik import RouterExecutionResult
 from app.models.customer import Customer
+from app.models.charge import Charge, ChargeStatus, ChargeType
 from app.models.mikrotik import (
     MikrotikRouter,
     NetworkCommandStatus,
@@ -33,6 +38,10 @@ from app.schemas.mikrotik import (
     MikrotikRouterUpdate,
     NetworkControlRequest,
     NetworkControlRetry,
+)
+from app.schemas.service_operations import (
+    CoordinatedReactivationCreate,
+    CoordinatedSuspensionCreate,
 )
 from app.schemas.network_assignment import NetworkAssignmentCreate
 from app.schemas.service import ServiceCreate
@@ -80,6 +89,21 @@ class MikroTikControlTestCase(unittest.TestCase):
             ),
             self.db,
         )
+        self.db.add(
+            Charge(
+                customer_id=customer.id,
+                service_id=self.service.id,
+                charge_type=ChargeType.monthly,
+                description="Mensualidad vencida",
+                amount=Decimal("600.00"),
+                outstanding_balance=Decimal("600.00"),
+                due_date=date.today() - timedelta(days=10),
+                billing_period=date.today().replace(day=1),
+                status=ChargeStatus.pending,
+                generated_by="Proceso mensual",
+            )
+        )
+        self.db.commit()
         self.router = create_router(
             MikrotikRouterCreate(
                 name="CCR-Principal",
@@ -298,6 +322,248 @@ class MikroTikControlTestCase(unittest.TestCase):
                 self.db,
             )
         self.assertEqual(context.exception.status_code, 409)
+
+    def coordinated_suspension(
+        self,
+        key: str,
+        dry_run: bool,
+    ) -> CoordinatedSuspensionCreate:
+        return CoordinatedSuspensionCreate(
+            scheduled_for=date.today(),
+            reason="Mensualidad vencida",
+            debt_amount=Decimal("600.00"),
+            grace_period_elapsed=True,
+            extension_checked=True,
+            has_active_extension=False,
+            notification_sent=True,
+            notification_sent_at=datetime.now(UTC),
+            performed_by="Tecnico de red",
+            idempotency_key=key,
+            dry_run=dry_run,
+        )
+
+    def test_coordinated_dry_run_does_not_suspend_service(self) -> None:
+        result = coordinate_suspension(
+            self.service.id,
+            self.coordinated_suspension(
+                "coordinated-dry-run-001",
+                dry_run=True,
+            ),
+            self.db,
+        )
+        self.assertEqual(
+            result.command.status,
+            NetworkCommandStatus.simulated,
+        )
+        self.assertIsNone(result.suspension)
+        self.db.refresh(self.service)
+        self.assertEqual(self.service.status, ServiceStatus.active)
+
+    def test_verified_command_and_commercial_suspension_are_linked(self) -> None:
+        stored_router = self.db.get(MikrotikRouter, self.router.id)
+        stored_router.enabled = True
+        self.db.commit()
+        with patch(
+            "app.api.v1.endpoints.mikrotik.RouterOSRestClient.set_blocked",
+            return_value=RouterExecutionResult(
+                blocked=True,
+                changed=True,
+                entry_count=1,
+            ),
+        ):
+            with patch.dict(
+                os.environ,
+                {
+                    "MIKROTIK_PRINCIPAL_USERNAME": "aether",
+                    "MIKROTIK_PRINCIPAL_PASSWORD": "secret",
+                },
+                clear=False,
+            ):
+                result = coordinate_suspension(
+                    self.service.id,
+                    self.coordinated_suspension(
+                        "coordinated-live-001",
+                        dry_run=False,
+                    ),
+                    self.db,
+                )
+
+        self.assertEqual(
+            result.command.status,
+            NetworkCommandStatus.succeeded,
+        )
+        self.assertIsNotNone(result.suspension)
+        self.assertEqual(
+            result.suspension.network_command_id,
+            result.command.id,
+        )
+        self.db.refresh(self.service)
+        self.assertEqual(self.service.status, ServiceStatus.suspended)
+
+    def test_coordinator_rejects_success_for_an_obsolete_ip(self) -> None:
+        stored_router = self.db.get(MikrotikRouter, self.router.id)
+        stored_router.enabled = True
+        self.db.commit()
+        key = "coordinated-obsolete-001"
+        with patch(
+            "app.api.v1.endpoints.mikrotik.RouterOSRestClient.set_blocked",
+            return_value=RouterExecutionResult(
+                blocked=True,
+                changed=True,
+                entry_count=1,
+            ),
+        ):
+            with patch.dict(
+                os.environ,
+                {
+                    "MIKROTIK_PRINCIPAL_USERNAME": "aether",
+                    "MIKROTIK_PRINCIPAL_PASSWORD": "secret",
+                },
+                clear=False,
+            ):
+                command = control_service_network(
+                    self.service.id,
+                    NetworkControlAction.suspend,
+                    self.request(key, dry_run=False),
+                    self.db,
+                )
+        assignment = self.db.get(
+            NetworkAssignment,
+            command.network_assignment_id,
+        )
+        assignment.ended_at = datetime.now(UTC)
+        self.db.commit()
+
+        with self.assertRaises(HTTPException) as context:
+            coordinate_suspension(
+                self.service.id,
+                self.coordinated_suspension(key, dry_run=False),
+                self.db,
+            )
+        self.assertEqual(context.exception.status_code, 409)
+        self.db.refresh(self.service)
+        self.assertEqual(self.service.status, ServiceStatus.active)
+
+    def test_failed_command_can_finish_same_coordinated_operation(self) -> None:
+        payload = self.coordinated_suspension(
+            "coordinated-retry-001",
+            dry_run=False,
+        )
+        failed = coordinate_suspension(
+            self.service.id,
+            payload,
+            self.db,
+        )
+        self.assertEqual(
+            failed.command.status,
+            NetworkCommandStatus.failed,
+        )
+        self.assertIsNone(failed.suspension)
+
+        stored_router = self.db.get(MikrotikRouter, self.router.id)
+        stored_router.enabled = True
+        self.db.commit()
+        with patch(
+            "app.api.v1.endpoints.mikrotik.RouterOSRestClient.set_blocked",
+            return_value=RouterExecutionResult(
+                blocked=True,
+                changed=False,
+                entry_count=1,
+            ),
+        ):
+            with patch.dict(
+                os.environ,
+                {
+                    "MIKROTIK_PRINCIPAL_USERNAME": "aether",
+                    "MIKROTIK_PRINCIPAL_PASSWORD": "secret",
+                },
+                clear=False,
+            ):
+                retry_network_command(
+                    failed.command.id,
+                    NetworkControlRetry(
+                        requested_by="Supervisor de red",
+                        dry_run=False,
+                    ),
+                    self.db,
+                )
+
+        finished = coordinate_suspension(
+            self.service.id,
+            payload,
+            self.db,
+        )
+        repeated = coordinate_suspension(
+            self.service.id,
+            payload,
+            self.db,
+        )
+        self.assertIsNotNone(finished.suspension)
+        self.assertEqual(finished.suspension.id, repeated.suspension.id)
+        self.assertEqual(
+            finished.suspension.network_command_id,
+            failed.command.id,
+        )
+
+    def test_coordinated_reactivation_removes_block_before_activation(
+        self,
+    ) -> None:
+        stored_router = self.db.get(MikrotikRouter, self.router.id)
+        stored_router.enabled = True
+        self.db.commit()
+        credentials = {
+            "MIKROTIK_PRINCIPAL_USERNAME": "aether",
+            "MIKROTIK_PRINCIPAL_PASSWORD": "secret",
+        }
+        with patch.dict(os.environ, credentials, clear=False):
+            with patch(
+                "app.api.v1.endpoints.mikrotik.RouterOSRestClient.set_blocked",
+                return_value=RouterExecutionResult(
+                    blocked=True,
+                    changed=True,
+                    entry_count=1,
+                ),
+            ):
+                coordinate_suspension(
+                    self.service.id,
+                    self.coordinated_suspension(
+                        "coordinated-cycle-suspend",
+                        dry_run=False,
+                    ),
+                    self.db,
+                )
+            with patch(
+                "app.api.v1.endpoints.mikrotik.RouterOSRestClient.set_blocked",
+                return_value=RouterExecutionResult(
+                    blocked=False,
+                    changed=True,
+                    entry_count=0,
+                ),
+            ):
+                result = coordinate_reactivation(
+                    self.service.id,
+                    CoordinatedReactivationCreate(
+                        reason="Pago verificado",
+                        authorized_by="Atencion a clientes",
+                        performed_by="Tecnico de red",
+                        debt_amount=Decimal("600.00"),
+                        idempotency_key="coordinated-cycle-reactivate",
+                        dry_run=False,
+                    ),
+                    self.db,
+                )
+
+        self.assertEqual(
+            result.command.status,
+            NetworkCommandStatus.succeeded,
+        )
+        self.assertIsNotNone(result.reactivation)
+        self.assertEqual(
+            result.reactivation.network_command_id,
+            result.command.id,
+        )
+        self.db.refresh(self.service)
+        self.assertEqual(self.service.status, ServiceStatus.active)
 
 
 if __name__ == "__main__":

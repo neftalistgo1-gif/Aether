@@ -10,9 +10,16 @@ from sqlalchemy.orm import Session
 from app.api.v1.endpoints.services import find_service_or_404
 from app.api.v1.endpoints.network_assignments import (
     close_current_network_assignment,
+    find_current_network_assignment,
 )
 from app.api.v1.endpoints.extensions import find_active_extension
+from app.api.v1.endpoints.mikrotik import control_service_network
 from app.db.session import get_db
+from app.models.mikrotik import (
+    NetworkCommandStatus,
+    NetworkControlAction,
+    NetworkControlCommand,
+)
 from app.models.service import (
     Service,
     ServiceEvent,
@@ -31,11 +38,16 @@ from app.schemas.service_operations import (
     CancellationCreate,
     CancellationExecute,
     CancellationRead,
+    CoordinatedReactivationCreate,
+    CoordinatedReactivationRead,
+    CoordinatedSuspensionCreate,
+    CoordinatedSuspensionRead,
     ReactivationCreate,
     ReactivationRead,
     SuspensionCreate,
     SuspensionRead,
 )
+from app.schemas.mikrotik import NetworkControlRequest
 
 router = APIRouter(prefix="/api/v1/services", tags=["service operations"])
 
@@ -63,16 +75,11 @@ def add_status_event(
     )
 
 
-@router.post(
-    "/{service_id}/suspensions",
-    response_model=SuspensionRead,
-    status_code=status.HTTP_201_CREATED,
-)
-def suspend_service(
+def prepare_suspension(
     service_id: UUID,
     suspension_data: SuspensionCreate,
-    db: Session = Depends(get_db),
-) -> Suspension:
+    db: Session,
+) -> tuple[Service, list[Charge]]:
     service = find_service_or_404(service_id, db)
     if service.status != ServiceStatus.active:
         raise HTTPException(
@@ -152,9 +159,23 @@ def suspend_service(
             status_code=status.HTTP_409_CONFLICT,
             detail="No monthly charge has completed its grace period",
         )
+    return service, open_charges
 
+
+def record_suspension(
+    service_id: UUID,
+    suspension_data: SuspensionCreate,
+    db: Session,
+    network_command_id: UUID | None = None,
+) -> Suspension:
+    service, open_charges = prepare_suspension(
+        service_id,
+        suspension_data,
+        db,
+    )
     suspension = Suspension(
         service_id=service.id,
+        network_command_id=network_command_id,
         debt_snapshot=[
             {
                 "charge_id": str(charge.id),
@@ -185,6 +206,27 @@ def suspend_service(
     return suspension
 
 
+@router.post(
+    "/{service_id}/suspensions",
+    response_model=SuspensionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def suspend_service(
+    service_id: UUID,
+    suspension_data: SuspensionCreate,
+    db: Session = Depends(get_db),
+) -> Suspension:
+    if suspension_data.mikrotik_result == NetworkOperationResult.success:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Automatic success requires a verified MikroTik command; "
+                "use the coordinated suspension endpoint"
+            ),
+        )
+    return record_suspension(service_id, suspension_data, db)
+
+
 @router.get(
     "/{service_id}/suspensions",
     response_model=list[SuspensionRead],
@@ -202,16 +244,127 @@ def list_suspensions(
     return list(db.scalars(statement))
 
 
+def find_command_by_idempotency_key(
+    idempotency_key: str,
+    service_id: UUID,
+    action: NetworkControlAction,
+    db: Session,
+) -> NetworkControlCommand | None:
+    command = db.scalar(
+        select(NetworkControlCommand).where(
+            NetworkControlCommand.idempotency_key == idempotency_key
+        )
+    )
+    if command is not None and (
+        command.service_id != service_id or command.action != action
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Idempotency key belongs to another command",
+        )
+    return command
+
+
+def validate_command_assignment(
+    command: NetworkControlCommand,
+    db: Session,
+) -> None:
+    assignment = find_current_network_assignment(command.service_id, db)
+    if (
+        assignment is None
+        or assignment.id != command.network_assignment_id
+        or assignment.ip_address != command.target_ip
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Network assignment changed after router execution; "
+                "reconciliation is required"
+            ),
+        )
+
+
 @router.post(
-    "/{service_id}/reactivations",
-    response_model=ReactivationRead,
-    status_code=status.HTTP_201_CREATED,
+    "/{service_id}/suspensions/coordinated",
+    response_model=CoordinatedSuspensionRead,
 )
-def reactivate_service(
+def coordinate_suspension(
+    service_id: UUID,
+    suspension_data: CoordinatedSuspensionCreate,
+    db: Session = Depends(get_db),
+) -> CoordinatedSuspensionRead:
+    operation_data = SuspensionCreate(
+        scheduled_for=suspension_data.scheduled_for,
+        reason=suspension_data.reason,
+        debt_amount=suspension_data.debt_amount,
+        grace_period_elapsed=suspension_data.grace_period_elapsed,
+        extension_checked=suspension_data.extension_checked,
+        has_active_extension=suspension_data.has_active_extension,
+        notification_sent=suspension_data.notification_sent,
+        notification_sent_at=suspension_data.notification_sent_at,
+        performed_by=suspension_data.performed_by,
+        mikrotik_result=NetworkOperationResult.success,
+        mikrotik_details=None,
+    )
+    command = find_command_by_idempotency_key(
+        suspension_data.idempotency_key,
+        service_id,
+        NetworkControlAction.suspend,
+        db,
+    )
+    if command is None:
+        prepare_suspension(service_id, operation_data, db)
+        command = control_service_network(
+            service_id,
+            NetworkControlAction.suspend,
+            NetworkControlRequest(
+                requested_by=suspension_data.performed_by,
+                idempotency_key=suspension_data.idempotency_key,
+                dry_run=suspension_data.dry_run,
+            ),
+            db,
+        )
+
+    suspension = db.scalar(
+        select(Suspension).where(
+            Suspension.network_command_id == command.id
+        )
+    )
+    if (
+        suspension is None
+        and command.status == NetworkCommandStatus.succeeded
+    ):
+        validate_command_assignment(command, db)
+        operation_data.mikrotik_details = (
+            f"Verified MikroTik command {command.id}"
+        )
+        try:
+            suspension = record_suspension(
+                service_id,
+                operation_data,
+                db,
+                network_command_id=command.id,
+            )
+        except IntegrityError:
+            db.rollback()
+            suspension = db.scalar(
+                select(Suspension).where(
+                    Suspension.network_command_id == command.id
+                )
+            )
+            if suspension is None:
+                raise
+    return CoordinatedSuspensionRead(
+        command=command,
+        suspension=suspension,
+    )
+
+
+def prepare_reactivation(
     service_id: UUID,
     reactivation_data: ReactivationCreate,
-    db: Session = Depends(get_db),
-) -> Reactivation:
+    db: Session,
+) -> tuple[Service, Suspension]:
     service = find_service_or_404(service_id, db)
     if service.status != ServiceStatus.suspended:
         raise HTTPException(
@@ -236,9 +389,23 @@ def reactivate_service(
             status_code=status.HTTP_409_CONFLICT,
             detail="No open successful suspension was found",
         )
+    return service, effective_suspension
 
+
+def record_reactivation(
+    service_id: UUID,
+    reactivation_data: ReactivationCreate,
+    db: Session,
+    network_command_id: UUID | None = None,
+) -> Reactivation:
+    service, effective_suspension = prepare_reactivation(
+        service_id,
+        reactivation_data,
+        db,
+    )
     reactivation = Reactivation(
         suspension_id=effective_suspension.id,
+        network_command_id=network_command_id,
         **reactivation_data.model_dump(),
     )
     db.add(reactivation)
@@ -260,6 +427,27 @@ def reactivate_service(
     return reactivation
 
 
+@router.post(
+    "/{service_id}/reactivations",
+    response_model=ReactivationRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def reactivate_service(
+    service_id: UUID,
+    reactivation_data: ReactivationCreate,
+    db: Session = Depends(get_db),
+) -> Reactivation:
+    if reactivation_data.mikrotik_result == NetworkOperationResult.success:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Automatic success requires a verified MikroTik command; "
+                "use the coordinated reactivation endpoint"
+            ),
+        )
+    return record_reactivation(service_id, reactivation_data, db)
+
+
 @router.get(
     "/{service_id}/reactivations",
     response_model=list[ReactivationRead],
@@ -276,6 +464,77 @@ def list_reactivations(
         .order_by(Reactivation.executed_at, Reactivation.id)
     )
     return list(db.scalars(statement))
+
+
+@router.post(
+    "/{service_id}/reactivations/coordinated",
+    response_model=CoordinatedReactivationRead,
+)
+def coordinate_reactivation(
+    service_id: UUID,
+    reactivation_data: CoordinatedReactivationCreate,
+    db: Session = Depends(get_db),
+) -> CoordinatedReactivationRead:
+    operation_data = ReactivationCreate(
+        reason=reactivation_data.reason,
+        authorized_by=reactivation_data.authorized_by,
+        performed_by=reactivation_data.performed_by,
+        debt_amount=reactivation_data.debt_amount,
+        mikrotik_result=NetworkOperationResult.success,
+        mikrotik_details=None,
+    )
+    command = find_command_by_idempotency_key(
+        reactivation_data.idempotency_key,
+        service_id,
+        NetworkControlAction.reactivate,
+        db,
+    )
+    if command is None:
+        prepare_reactivation(service_id, operation_data, db)
+        command = control_service_network(
+            service_id,
+            NetworkControlAction.reactivate,
+            NetworkControlRequest(
+                requested_by=reactivation_data.performed_by,
+                idempotency_key=reactivation_data.idempotency_key,
+                dry_run=reactivation_data.dry_run,
+            ),
+            db,
+        )
+
+    reactivation = db.scalar(
+        select(Reactivation).where(
+            Reactivation.network_command_id == command.id
+        )
+    )
+    if (
+        reactivation is None
+        and command.status == NetworkCommandStatus.succeeded
+    ):
+        validate_command_assignment(command, db)
+        operation_data.mikrotik_details = (
+            f"Verified MikroTik command {command.id}"
+        )
+        try:
+            reactivation = record_reactivation(
+                service_id,
+                operation_data,
+                db,
+                network_command_id=command.id,
+            )
+        except IntegrityError:
+            db.rollback()
+            reactivation = db.scalar(
+                select(Reactivation).where(
+                    Reactivation.network_command_id == command.id
+                )
+            )
+            if reactivation is None:
+                raise
+    return CoordinatedReactivationRead(
+        command=command,
+        reactivation=reactivation,
+    )
 
 
 def execute_cancellation(

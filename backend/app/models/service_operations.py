@@ -52,6 +52,12 @@ class Suspension(Base):
         ForeignKey("services.id", ondelete="CASCADE"),
         index=True,
     )
+    network_command_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("network_control_commands.id", ondelete="RESTRICT"),
+        unique=True,
+        nullable=True,
+    )
     scheduled_for: Mapped[date] = mapped_column(Date)
     executed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -103,6 +109,12 @@ class Reactivation(Base):
         Uuid(as_uuid=True),
         ForeignKey("suspensions.id", ondelete="CASCADE"),
         index=True,
+    )
+    network_command_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("network_control_commands.id", ondelete="RESTRICT"),
+        unique=True,
+        nullable=True,
     )
     executed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

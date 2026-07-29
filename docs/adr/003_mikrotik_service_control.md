@@ -81,3 +81,12 @@ auditoría y reconciliación periódica.
 El control de red no cambia por sí solo el estado comercial del servicio.
 Esto evita que una prueba o una falla del router altere suspensiones,
 reactivaciones o bajas registradas en Aether.
+
+Las rutas coordinadas agregadas en el módulo 15 realizan la transición
+comercial únicamente después de recibir y conservar una verificación exitosa
+del router. La suspensión o reactivación resultante referencia la orden de red
+que la justificó. Si la IP vigente cambió entre ambas etapas, la transición se
+bloquea y exige reconciliación.
+
+El resultado `manual` se conserva para contingencias operativas. El resultado
+automático `success` no puede declararse desde las rutas manuales.

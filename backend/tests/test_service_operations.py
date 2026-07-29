@@ -96,7 +96,7 @@ class ServiceOperationsTestCase(unittest.TestCase):
 
     def suspension_payload(
         self,
-        result: NetworkOperationResult = NetworkOperationResult.success,
+        result: NetworkOperationResult = NetworkOperationResult.manual,
     ) -> SuspensionCreate:
         return SuspensionCreate(
             scheduled_for=date.today(),
@@ -114,7 +114,7 @@ class ServiceOperationsTestCase(unittest.TestCase):
 
     def reactivation_payload(
         self,
-        result: NetworkOperationResult = NetworkOperationResult.success,
+        result: NetworkOperationResult = NetworkOperationResult.manual,
     ) -> ReactivationCreate:
         return ReactivationCreate(
             reason="Pago verificado",
@@ -181,6 +181,15 @@ class ServiceOperationsTestCase(unittest.TestCase):
             attempt.debt_snapshot[0]["outstanding_balance"],
             "500.00",
         )
+
+    def test_claimed_automatic_success_requires_verified_command(self) -> None:
+        with self.assertRaises(HTTPException) as context:
+            suspend_service(
+                self.service.id,
+                self.suspension_payload(NetworkOperationResult.success),
+                self.db,
+            )
+        self.assertEqual(context.exception.status_code, 409)
 
     def test_suspension_debt_must_match_calculated_balance(self) -> None:
         payload = self.suspension_payload()

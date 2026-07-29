@@ -202,6 +202,16 @@ intentos y resultado. Aether consulta la address list después de cada cambio;
 sólo marca éxito cuando el estado real coincide. Los fallos pueden reintentarse
 y la reconciliación vuelve a aplicar el estado comercial que conserva Aether.
 
+Las rutas coordinadas de suspensión y reactivación validan primero las reglas
+comerciales, ejecutan después el cambio de red y sólo actualizan el estado del
+servicio cuando MikroTik confirma el resultado. Una simulación o un fallo no
+modifica el estado comercial. La orden verificada queda enlazada de forma
+única con la suspensión o reactivación que originó.
+
+Las operaciones manuales continúan disponibles para contingencias y quedan
+identificadas como `manual`. Ya no es posible declarar un resultado automático
+`success` desde las rutas manuales sin una orden MikroTik verificada.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:
