@@ -23,6 +23,7 @@ class NetworkControlAction(str, Enum):
     reactivate = "reactivate"
     reconcile = "reconcile"
     decommission = "decommission"
+    release = "release"
 
 
 class NetworkCommandStatus(str, Enum):

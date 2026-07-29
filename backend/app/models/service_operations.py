@@ -182,6 +182,12 @@ class Cancellation(Base):
         unique=True,
         nullable=True,
     )
+    network_release_command_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("network_control_commands.id", ondelete="RESTRICT"),
+        unique=True,
+        nullable=True,
+    )
     requested_at: Mapped[date] = mapped_column(Date)
     effective_date: Mapped[date] = mapped_column(Date)
     reason: Mapped[str] = mapped_column(Text)
@@ -220,9 +226,25 @@ class Cancellation(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    network_released_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    network_released_by: Mapped[str | None] = mapped_column(
+        String(150),
+        nullable=True,
+    )
+    network_release_evidence_reference: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     service: Mapped["Service"] = relationship(back_populates="cancellation")
+
+    @property
+    def has_network_release_evidence(self) -> bool:
+        return bool(self.network_release_evidence_reference)
 
 
 from app.models.service import Service

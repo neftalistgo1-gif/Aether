@@ -299,6 +299,13 @@ def control_service_network(
                 detail="A cancelled service cannot start network shutdown",
             )
         desired_blocked = True
+    elif action == NetworkControlAction.release:
+        if service.status != ServiceStatus.cancelled:
+            raise HTTPException(
+                status_code=409,
+                detail="Only a cancelled service can release its network IP",
+            )
+        desired_blocked = False
     else:
         desired_blocked = service.status == ServiceStatus.suspended
     preflight = validate_live_preflight(

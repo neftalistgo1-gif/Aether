@@ -18,14 +18,22 @@ from app.api.v1.endpoints.mikrotik import (
 )
 from app.api.v1.endpoints.service_operations import (
     coordinate_cancellation,
+    coordinate_network_release,
     coordinate_reactivation,
     coordinate_suspension,
     create_cancellation,
 )
+from app.api.v1.endpoints.equipment_recovery import (
+    complete_equipment_recovery,
+    create_equipment_recovery,
+)
 from app.api.v1.endpoints.payment_agreements import (
     create_payment_agreement,
 )
-from app.api.v1.endpoints.network_assignments import create_network_assignment
+from app.api.v1.endpoints.network_assignments import (
+    create_network_assignment,
+    get_current_network_assignment,
+)
 from app.api.v1.endpoints.services import create_service
 from app.db.base import Base
 from app.integrations.mikrotik import RouterExecutionResult
@@ -54,8 +62,13 @@ from app.schemas.mikrotik import (
 from app.schemas.service_operations import (
     CancellationCreate,
     CoordinatedCancellationCreate,
+    CoordinatedNetworkReleaseCreate,
     CoordinatedReactivationCreate,
     CoordinatedSuspensionCreate,
+)
+from app.schemas.equipment_recovery import (
+    EquipmentRecoveryComplete,
+    EquipmentRecoveryCreate,
 )
 from app.schemas.payment_agreement import PaymentAgreementCreate
 from app.schemas.network_assignment import NetworkAssignmentCreate
@@ -936,6 +949,237 @@ class MikroTikControlTestCase(unittest.TestCase):
         )
         self.db.refresh(self.service)
         self.assertEqual(self.service.status, ServiceStatus.active)
+
+    def execute_verified_cancellation(self, key: str):
+        self.cancellation_request()
+        preflight = coordinate_cancellation(
+            self.service.id,
+            CoordinatedCancellationCreate(
+                performed_by="Tecnico de red",
+                idempotency_key=f"{key}-shutdown-preflight",
+                dry_run=True,
+            ),
+            self.db,
+        )
+        stored_router = self.db.get(MikrotikRouter, self.router.id)
+        stored_router.enabled = True
+        self.db.commit()
+        with patch(
+            "app.api.v1.endpoints.mikrotik.RouterOSRestClient.set_blocked",
+            return_value=RouterExecutionResult(
+                blocked=True,
+                changed=True,
+                entry_count=1,
+            ),
+        ):
+            with patch.dict(
+                os.environ,
+                {
+                    "MIKROTIK_PRINCIPAL_USERNAME": "aether",
+                    "MIKROTIK_PRINCIPAL_PASSWORD": "secret",
+                },
+                clear=False,
+            ):
+                return coordinate_cancellation(
+                    self.service.id,
+                    CoordinatedCancellationCreate(
+                        performed_by="Tecnico de red",
+                        idempotency_key=f"{key}-shutdown-live",
+                        dry_run=False,
+                        preflight_command_id=preflight.command.id,
+                    ),
+                    self.db,
+                )
+
+    def complete_cancellation_recovery(self) -> None:
+        create_equipment_recovery(
+            self.service.id,
+            EquipmentRecoveryCreate(
+                scheduled_for=date.today(),
+                assigned_technician="Tecnico instalador",
+                expected_equipment=["Antena", "Modem"],
+            ),
+            self.db,
+        )
+        complete_equipment_recovery(
+            self.service.id,
+            EquipmentRecoveryComplete(
+                performed_by="Tecnico instalador",
+                recovered_equipment=["Antena", "Modem"],
+                missing_equipment=[],
+                condition_notes="Instalacion retirada y energia desconectada",
+                evidence_references=[
+                    "private/recovery/disconnected-installation.jpg"
+                ],
+                receipt_reference="REC-CANCEL-001",
+            ),
+            self.db,
+        )
+
+    def network_release_payload(
+        self,
+        key: str,
+        *,
+        dry_run: bool,
+        preflight_command_id=None,
+    ) -> CoordinatedNetworkReleaseCreate:
+        return CoordinatedNetworkReleaseCreate(
+            performed_by="Tecnico de red",
+            physical_disconnect_confirmed=True,
+            disconnect_evidence_reference=(
+                "private/network/disconnected-installation.jpg"
+            ),
+            idempotency_key=key,
+            dry_run=dry_run,
+            preflight_command_id=preflight_command_id,
+        )
+
+    def test_network_release_requires_disconnect_confirmation(self) -> None:
+        with self.assertRaises(ValidationError):
+            CoordinatedNetworkReleaseCreate(
+                performed_by="Tecnico de red",
+                physical_disconnect_confirmed=False,
+                disconnect_evidence_reference=(
+                    "private/network/disconnected-installation.jpg"
+                ),
+                idempotency_key="release-unconfirmed",
+                dry_run=True,
+            )
+
+    def test_network_release_requires_final_equipment_recovery(self) -> None:
+        self.execute_verified_cancellation("release-early")
+
+        with self.assertRaises(HTTPException) as context:
+            coordinate_network_release(
+                self.service.id,
+                self.network_release_payload(
+                    "release-early-preflight",
+                    dry_run=True,
+                ),
+                self.db,
+            )
+
+        self.assertEqual(context.exception.status_code, 409)
+        self.assertIsNotNone(
+            get_current_network_assignment(self.service.id, self.db)
+        )
+
+    def test_verified_network_release_closes_reserved_assignment(
+        self,
+    ) -> None:
+        shutdown = self.execute_verified_cancellation("release-success")
+        self.complete_cancellation_recovery()
+        preflight = coordinate_network_release(
+            self.service.id,
+            self.network_release_payload(
+                "release-success-preflight",
+                dry_run=True,
+            ),
+            self.db,
+        )
+        self.assertEqual(
+            preflight.command.status,
+            NetworkCommandStatus.simulated,
+        )
+        assignment = self.db.get(
+            NetworkAssignment,
+            shutdown.command.network_assignment_id,
+        )
+        self.assertIsNone(assignment.ended_at)
+
+        with patch(
+            "app.api.v1.endpoints.mikrotik.RouterOSRestClient.set_blocked",
+            return_value=RouterExecutionResult(
+                blocked=False,
+                changed=True,
+                entry_count=0,
+            ),
+        ):
+            with patch.dict(
+                os.environ,
+                {
+                    "MIKROTIK_PRINCIPAL_USERNAME": "aether",
+                    "MIKROTIK_PRINCIPAL_PASSWORD": "secret",
+                },
+                clear=False,
+            ):
+                live_release = self.network_release_payload(
+                    "release-success-live",
+                    dry_run=False,
+                    preflight_command_id=preflight.command.id,
+                )
+                result = coordinate_network_release(
+                    self.service.id,
+                    live_release,
+                    self.db,
+                )
+                repeated = coordinate_network_release(
+                    self.service.id,
+                    live_release,
+                    self.db,
+                )
+
+        self.assertEqual(
+            result.command.status,
+            NetworkCommandStatus.succeeded,
+        )
+        self.assertEqual(
+            result.cancellation.network_release_command_id,
+            result.command.id,
+        )
+        self.assertTrue(
+            result.cancellation.has_network_release_evidence
+        )
+        self.assertNotIn(
+            "network_release_evidence_reference",
+            result.cancellation.model_dump(),
+        )
+        self.assertIsNotNone(result.cancellation.network_released_at)
+        self.assertEqual(repeated.command.id, result.command.id)
+        self.db.refresh(assignment)
+        self.assertIsNotNone(assignment.ended_at)
+        with self.assertRaises(HTTPException) as current:
+            get_current_network_assignment(self.service.id, self.db)
+        self.assertEqual(current.exception.status_code, 404)
+
+    def test_failed_network_release_keeps_assignment_reserved(
+        self,
+    ) -> None:
+        shutdown = self.execute_verified_cancellation("release-failed")
+        self.complete_cancellation_recovery()
+        preflight = coordinate_network_release(
+            self.service.id,
+            self.network_release_payload(
+                "release-failed-preflight",
+                dry_run=True,
+            ),
+            self.db,
+        )
+        stored_router = self.db.get(MikrotikRouter, self.router.id)
+        stored_router.enabled = False
+        self.db.commit()
+        result = coordinate_network_release(
+            self.service.id,
+            self.network_release_payload(
+                "release-failed-live",
+                dry_run=False,
+                preflight_command_id=preflight.command.id,
+            ),
+            self.db,
+        )
+
+        assignment = self.db.get(
+            NetworkAssignment,
+            shutdown.command.network_assignment_id,
+        )
+        self.assertEqual(
+            result.command.status,
+            NetworkCommandStatus.failed,
+        )
+        self.assertIsNone(
+            result.cancellation.network_release_command_id
+        )
+        self.assertIsNone(assignment.ended_at)
 
 
 if __name__ == "__main__":

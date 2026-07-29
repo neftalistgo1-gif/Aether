@@ -104,5 +104,7 @@ La baja definitiva usa una transición técnica en dos fases. Primero,
 `decommission` confirma que la IP vigente quedó bloqueada y la orden se enlaza
 a `Cancellation`; sólo entonces el servicio pasa a cancelado. La asignación no
 se cierra todavía, porque una IP presente en la address list no debe volver al
-inventario. Después de la recuperación física, una fase independiente retirará
-el bloqueo, verificará el resultado y cerrará la asignación.
+inventario. Después de una recuperación final y de confirmar la desconexión
+física con evidencia, `release` retira el bloqueo y verifica el resultado. Sólo
+una orden exitosa se enlaza a `Cancellation` y cierra la asignación. Una
+simulación o un fallo conserva la reserva.

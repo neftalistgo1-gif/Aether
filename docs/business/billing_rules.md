@@ -248,7 +248,9 @@ vuelven a calcular en la fecha efectiva.
 Si el servicio tiene configuración de red, Aether debe bloquear y verificar la
 IP antes de confirmar la baja. La IP no se libera mientras siga presente en la
 lista de suspendidos; primero debe concluir el retiro físico y después retirarse
-el bloqueo de forma verificada.
+el bloqueo de forma verificada. La desconexión física debe confirmarse con una
+referencia de evidencia que permanece privada. Si MikroTik no confirma el
+retiro, la asignación continúa reservada y no puede reutilizarse.
 
 Después de la fecha efectiva de baja dejan de generarse nuevas
 mensualidades.

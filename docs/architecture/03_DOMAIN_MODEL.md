@@ -617,6 +617,8 @@ Representa la solicitud y ejecución de la baja definitiva.
 - Saldo a favor.
 - Estado de recuperación de equipos.
 - Orden de red que verificó el bloqueo previo.
+- Orden de red que verificó la liberación posterior.
+- Fecha, responsable y existencia de evidencia de desconexión física.
 - Usuario responsable.
 
 ## Reglas
@@ -636,6 +638,10 @@ Representa la solicitud y ejecución de la baja definitiva.
   `decommission` verificado.
 - La asignación IP permanece vigente y reservada hasta retirar el bloqueo
   después de la recuperación física.
+- La liberación requiere una recuperación final y confirmación expresa de la
+  desconexión física con evidencia privada.
+- Sólo un comando `release` verificado retira la IP de la lista y cierra la
+  asignación; una simulación o un fallo conserva la reserva.
 - Debe iniciarse la recuperación de equipos.
 
 ---

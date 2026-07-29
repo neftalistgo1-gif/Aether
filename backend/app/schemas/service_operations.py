@@ -211,6 +211,28 @@ class CoordinatedCancellationCreate(BaseModel):
         return self
 
 
+class CoordinatedNetworkReleaseCreate(BaseModel):
+    performed_by: str = Field(min_length=2, max_length=150)
+    physical_disconnect_confirmed: bool
+    disconnect_evidence_reference: str = Field(
+        min_length=3,
+        max_length=500,
+    )
+    idempotency_key: str = Field(min_length=8, max_length=100)
+    dry_run: bool = True
+    preflight_command_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def validate_release(self) -> Self:
+        if not self.physical_disconnect_confirmed:
+            raise ValueError("Physical disconnection must be confirmed")
+        if self.dry_run and self.preflight_command_id is not None:
+            raise ValueError("Dry-run operations cannot reference a preflight")
+        if not self.dry_run and self.preflight_command_id is None:
+            raise ValueError("Live operations require a preflight command")
+        return self
+
+
 class CancellationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -218,6 +240,7 @@ class CancellationRead(BaseModel):
     service_id: UUID
     requester_customer_id: UUID
     network_command_id: UUID | None
+    network_release_command_id: UUID | None
     requested_at: date
     effective_date: date
     reason: str
@@ -230,9 +253,17 @@ class CancellationRead(BaseModel):
     status: CancellationStatus
     executed_by: str | None
     executed_at: datetime | None
+    network_released_at: datetime | None
+    network_released_by: str | None
+    has_network_release_evidence: bool
     notes: str | None
 
 
 class CoordinatedCancellationRead(BaseModel):
+    command: NetworkControlCommandRead
+    cancellation: CancellationRead
+
+
+class CoordinatedNetworkReleaseRead(BaseModel):
     command: NetworkControlCommandRead
     cancellation: CancellationRead

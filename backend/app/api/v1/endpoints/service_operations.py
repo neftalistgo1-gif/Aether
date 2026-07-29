@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints.services import find_service_or_404
 from app.api.v1.endpoints.network_assignments import (
+    close_current_network_assignment,
     find_current_network_assignment,
 )
 from app.api.v1.endpoints.extensions import find_active_extension
@@ -18,6 +19,7 @@ from app.models.payment_agreement import (
     PaymentAgreement,
     PaymentAgreementStatus,
 )
+from app.models.equipment_recovery import EquipmentRecovery
 from app.models.mikrotik import (
     NetworkCommandStatus,
     NetworkControlAction,
@@ -38,6 +40,7 @@ from app.models.charge import Charge, ChargeStatus, ChargeType
 from app.models.service_operations import (
     Cancellation,
     CancellationStatus,
+    EquipmentRecoveryStatus,
     NetworkOperationResult,
     Reactivation,
     Suspension,
@@ -48,6 +51,8 @@ from app.schemas.service_operations import (
     CancellationRead,
     CoordinatedCancellationCreate,
     CoordinatedCancellationRead,
+    CoordinatedNetworkReleaseCreate,
+    CoordinatedNetworkReleaseRead,
     CoordinatedReactivationCreate,
     CoordinatedReactivationRead,
     CoordinatedSuspensionCreate,
@@ -66,6 +71,12 @@ router = APIRouter(prefix="/api/v1/services", tags=["service operations"])
 SUCCESSFUL_NETWORK_RESULTS = {
     NetworkOperationResult.success,
     NetworkOperationResult.manual,
+}
+
+FINAL_EQUIPMENT_RECOVERY_STATUSES = {
+    EquipmentRecoveryStatus.partial,
+    EquipmentRecoveryStatus.complete,
+    EquipmentRecoveryStatus.unrecoverable,
 }
 
 
@@ -1064,6 +1075,172 @@ def coordinate_cancellation(
                 raise
         db.refresh(cancellation)
     return CoordinatedCancellationRead(
+        command=existing,
+        cancellation=cancellation,
+    )
+
+
+def validate_network_release_readiness(
+    cancellation: Cancellation,
+    db: Session,
+) -> EquipmentRecovery:
+    if cancellation.status != CancellationStatus.executed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cancellation must be executed before network release",
+        )
+    if cancellation.network_command_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cancellation has no verified network shutdown to release",
+        )
+    recovery = db.scalar(
+        select(EquipmentRecovery).where(
+            EquipmentRecovery.cancellation_id == cancellation.id
+        )
+    )
+    if (
+        recovery is None
+        or recovery.status not in FINAL_EQUIPMENT_RECOVERY_STATUSES
+        or recovery.performed_at is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Equipment recovery must have a final documented result "
+                "before network release"
+            ),
+        )
+    return recovery
+
+
+def validate_network_release_command(
+    service: Service,
+    command: NetworkControlCommand,
+    db: Session,
+) -> None:
+    assignment = find_current_network_assignment(service.id, db)
+    if (
+        assignment is None
+        or command.status != NetworkCommandStatus.succeeded
+        or command.action != NetworkControlAction.release
+        or command.desired_blocked
+        or command.verified_at is None
+        or command.service_id != service.id
+        or command.network_assignment_id != assignment.id
+        or command.target_ip != assignment.ip_address
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Network release requires verified removal for the "
+                "current assignment"
+            ),
+        )
+
+
+@router.post(
+    "/{service_id}/cancellation/network-release/coordinated",
+    response_model=CoordinatedNetworkReleaseRead,
+)
+def coordinate_network_release(
+    service_id: UUID,
+    release: CoordinatedNetworkReleaseCreate,
+    db: Session = Depends(get_db),
+) -> CoordinatedNetworkReleaseRead:
+    service = find_service_or_404(service_id, db)
+    cancellation = db.scalar(
+        select(Cancellation).where(Cancellation.service_id == service_id)
+    )
+    if cancellation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cancellation not found",
+        )
+    existing = find_command_by_idempotency_key(
+        release.idempotency_key,
+        service_id,
+        NetworkControlAction.release,
+        db,
+    )
+    validate_coordinated_command_mode(
+        existing,
+        dry_run=release.dry_run,
+        preflight_command_id=release.preflight_command_id,
+    )
+    if cancellation.network_release_command_id is not None:
+        if (
+            existing is not None
+            and cancellation.network_release_command_id == existing.id
+        ):
+            return CoordinatedNetworkReleaseRead(
+                command=existing,
+                cancellation=cancellation,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The cancellation network assignment was already released",
+        )
+    validate_network_release_readiness(cancellation, db)
+    if find_current_network_assignment(service.id, db) is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cancellation has no current network assignment to release",
+        )
+    if existing is None:
+        existing = control_service_network(
+            service_id,
+            NetworkControlAction.release,
+            NetworkControlRequest(
+                requested_by=release.performed_by,
+                idempotency_key=release.idempotency_key,
+                dry_run=release.dry_run,
+                preflight_command_id=release.preflight_command_id,
+            ),
+            db,
+        )
+    if existing.status == NetworkCommandStatus.succeeded:
+        validate_network_release_command(service, existing, db)
+        cancellation.network_release_command_id = existing.id
+        cancellation.network_released_at = datetime.now(UTC)
+        cancellation.network_released_by = release.performed_by
+        cancellation.network_release_evidence_reference = (
+            release.disconnect_evidence_reference
+        )
+        close_current_network_assignment(service.id, db)
+        record_audit_event(
+            db,
+            actor=release.performed_by,
+            action="service.cancellation.network_released",
+            entity_type="Cancellation",
+            entity_id=cancellation.id,
+            reason="Physical disconnection confirmed and IP released",
+            before_data={
+                "network_release_command_id": None,
+                "network_assignment_open": True,
+            },
+            after_data={
+                "network_release_command_id": existing.id,
+                "network_assignment_open": False,
+                "has_disconnect_evidence": True,
+            },
+        )
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            cancellation = db.scalar(
+                select(Cancellation).where(
+                    Cancellation.service_id == service_id
+                )
+            )
+            if (
+                cancellation is None
+                or cancellation.network_release_command_id != existing.id
+            ):
+                raise
+        db.refresh(cancellation)
+    return CoordinatedNetworkReleaseRead(
         command=existing,
         cancellation=cancellation,
     )

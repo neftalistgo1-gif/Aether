@@ -198,8 +198,12 @@ realiza primero un `decommission` en modo simulación y después exige un
 preflight vigente para bloquear y verificar la IP. Sólo entonces ejecuta la
 baja y enlaza la orden de red. Un fallo deja la solicitud programada. La
 asignación IP permanece reservada tras la baja para evitar reutilizarla mientras
-siga bloqueada; su liberación se realizará después de la recuperación física y
-del retiro verificado de la address list.
+siga bloqueada. Después de finalizar la recuperación de equipos,
+`POST /api/v1/services/{service_id}/cancellation/network-release/coordinated`
+exige confirmar y documentar la desconexión física. Primero simula la acción
+`release`; la ejecución real requiere ese preflight, retira la IP de la address
+list, verifica el resultado y sólo entonces cierra la asignación. Un fallo
+mantiene la IP reservada.
 
 ### Recuperación de equipos
 
@@ -262,7 +266,9 @@ servicios.
 
 Para evitar inconsistencias con la lista de suspendidos, la configuración no
 puede cambiar mientras el servicio esté suspendido. Al ejecutar una baja
-definitiva se cierra automáticamente la asignación de red vigente.
+definitiva la asignación de red permanece reservada; se cierra únicamente
+después de la recuperación final, la desconexión física documentada y el retiro
+verificado de la IP.
 
 ### Cargos y saldos
 
