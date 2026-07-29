@@ -236,6 +236,17 @@ PostgreSQL bloquea actualizaciones o eliminaciones. Contraseñas, secretos,
 tokens, credenciales y contenido de archivos se excluyen o redactan
 automáticamente.
 
+### Catálogo de planes
+
+`Plan` conserva nombre, velocidad, descripción y estado de cada oferta.
+`PlanPrice` mantiene todas sus tarifas con fecha inicial y final; cambiar el
+precio cierra la vigencia anterior y abre una nueva sin sobrescribir el
+historial.
+
+El catálogo y los acuerdos individuales son independientes. Cada `Service`
+continúa usando su `monthly_price` acordado, por lo que modificar o desactivar
+un plan nunca cambia automáticamente lo que pagan los clientes existentes.
+
 ## Pruebas
 
 Las pruebas usan una base SQLite temporal y no modifican PostgreSQL:

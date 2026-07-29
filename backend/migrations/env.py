@@ -17,6 +17,7 @@ from app.models.mikrotik import MikrotikRouter, NetworkControlCommand
 from app.models.network_assignment import NetworkAssignment
 from app.models.payment import Payment, PaymentStatusEvent
 from app.models.payment_allocation import CreditMovement, PaymentAllocation
+from app.models.plan import Plan, PlanPrice
 from app.models.service import Service, ServiceEvent, ServiceHolder
 from app.models.service_operations import Cancellation, Reactivation, Suspension
 
