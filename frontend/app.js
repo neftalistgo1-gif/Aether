@@ -33,6 +33,22 @@ const loginView = $("#login-view");
 const appView = $("#app-view");
 const notice = $("#notice");
 
+function getQueryParam(name) {
+  return new URLSearchParams(window.location.search).get(name) || "";
+}
+
+function bootstrapLoginFromUrl() {
+  const username = getQueryParam("username").trim();
+  const password = getQueryParam("password");
+  if (!username || !password) {
+    return false;
+  }
+  $("#username").value = username;
+  $("#password").value = password;
+  void handleLogin();
+  return true;
+}
+
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
@@ -3889,17 +3905,33 @@ async function logout(callApi = true) {
   $("#password").value = "";
 }
 
-$("#login-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const button = event.currentTarget.querySelector("button");
+let loginInFlight = false;
+
+async function handleLogin(event) {
+  if (event) {
+    event.preventDefault();
+  }
+  if (loginInFlight) {
+    return;
+  }
+  const form = $("#login-form");
+  const button = form?.querySelector("button");
   const errorBox = $("#login-error");
+  if (!form || !button) {
+    return;
+  }
+  if (!form.checkValidity()) {
+    form.reportValidity();
+    return;
+  }
+  loginInFlight = true;
   button.disabled = true;
   errorBox.textContent = "";
   try {
     const response = await api("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify({
-        username: $("#username").value,
+        username: $("#username").value.trim(),
         password: $("#password").value,
       }),
     });
@@ -3913,7 +3945,23 @@ $("#login-form").addEventListener("submit", async (event) => {
         : error.message;
   } finally {
     button.disabled = false;
+    loginInFlight = false;
   }
+}
+
+$("#login-form").addEventListener("submit", handleLogin);
+$("#login-form button").addEventListener("click", (event) => {
+  if (event.detail !== 0) {
+    handleLogin(event);
+  }
+});
+
+window.addEventListener("load", () => {
+  if (state.token) {
+    void enterApp();
+    return;
+  }
+  bootstrapLoginFromUrl();
 });
 
 document.querySelectorAll(".nav-item").forEach((item) => {
