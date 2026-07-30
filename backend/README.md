@@ -296,7 +296,7 @@ El estado de cuenta consolidado por cliente reúne deuda total, deuda vencida,
 cargos abiertos y saldo a favor para una fecha de corte. El cálculo permanece
 en la API; la interfaz no reconstruye reglas financieras en el navegador.
 
-### Recepción y verificación de pagos
+### Recepción y verificación de pagos 
 
 `Payment` registra el monto declarado, fecha, método, referencia, comprobante,
 titular de la cuenta de origen y persona que lo recibió. Todo pago inicia en

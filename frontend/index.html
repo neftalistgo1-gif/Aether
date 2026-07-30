@@ -88,6 +88,9 @@
           <button class="nav-item" data-view="plans">
             <span>05</span> Planes
           </button>
+          <button class="nav-item" data-view="incidents">
+            <span>06</span> Incidencias
+          </button>
         </nav>
         <div class="sidebar-foot">
           <div class="secure-dot"></div>
@@ -294,8 +297,125 @@
             <p id="plans-empty" class="empty-state" hidden></p>
           </div>
         </section>
+
+        <section id="incidents-panel" class="view-panel" hidden>
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">OPERACION TECNICA</p>
+                <h2>Incidencias</h2>
+              </div>
+              <button
+                id="new-incident-button"
+                class="secondary-button"
+                type="button"
+                hidden
+              >Nueva incidencia</button>
+            </div>
+            <p id="incident-write-note" class="inline-note" hidden></p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Incidencia</th>
+                    <th>Zona</th>
+                    <th>Inicio</th>
+                    <th>Servicios</th>
+                    <th>Estado</th>
+                    <th class="incident-action-column" hidden>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="incidents-body"></tbody>
+              </table>
+            </div>
+            <p id="incidents-empty" class="empty-state" hidden></p>
+          </div>
+        </section>
       </main>
     </div>
+
+    <dialog id="incident-dialog" aria-labelledby="incident-dialog-title">
+      <form id="incident-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">INCIDENCIA OPERATIVA</p>
+            <h2 id="incident-dialog-title">Nueva incidencia</h2>
+          </div>
+          <button
+            id="close-incident-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >x</button>
+        </div>
+        <div class="form-grid">
+          <label class="full-row">
+            Titulo
+            <input id="incident-title" minlength="3" maxlength="200" required>
+          </label>
+          <label>
+            Torre
+            <input id="incident-tower" minlength="2" maxlength="150">
+          </label>
+          <label>
+            Punto de acceso
+            <input id="incident-ap" minlength="2" maxlength="150">
+          </label>
+          <label>
+            Inicio
+            <input id="incident-started-at" type="datetime-local" required>
+          </label>
+          <label>
+            Reportado por
+            <input id="incident-reported-by" minlength="2" maxlength="150" required>
+          </label>
+          <label class="full-row">
+            Servicios afectados al inicio
+            <select id="incident-services" multiple size="6"></select>
+          </label>
+          <label class="full-row">
+            Notas
+            <textarea id="incident-notes" rows="3" maxlength="2000"></textarea>
+          </label>
+        </div>
+        <p id="incident-form-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="cancel-incident-dialog"
+            class="text-button"
+            type="button"
+          >Cancelar</button>
+          <button class="primary-button" type="submit">Guardar incidencia</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="incident-detail-dialog" aria-labelledby="incident-detail-title">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">SEGUIMIENTO DE INCIDENCIA</p>
+            <h2 id="incident-detail-title">Incidencia</h2>
+          </div>
+          <button
+            id="close-incident-detail-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >x</button>
+        </div>
+        <div id="incident-detail-summary" class="decision-summary"></div>
+        <div id="incident-workspace" class="cancellation-workspace"></div>
+        <p id="incident-detail-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button
+            id="dismiss-incident-detail-dialog"
+            class="text-button"
+            type="button"
+          >Cerrar</button>
+        </div>
+      </div>
+    </dialog>
 
     <dialog id="customer-dialog" aria-labelledby="customer-dialog-title">
       <form id="customer-form">

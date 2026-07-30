@@ -5,6 +5,7 @@ const state = {
   services: [],
   payments: [],
   plans: [],
+  incidents: [],
   editingCustomerId: null,
   selectedPaymentId: null,
   selectedPlanId: null,
@@ -21,6 +22,7 @@ const state = {
   selectedAgreementBalance: null,
   selectedCancellation: null,
   selectedRecovery: null,
+  selectedIncidentId: null,
   pendingNetworkOperation: null,
 };
 
@@ -97,22 +99,25 @@ async function loadResource(path) {
 
 async function loadWorkspace() {
   state.user = await api("/api/v1/auth/me");
-  const [customers, services, payments, plans] = await Promise.all([
+  const [customers, services, payments, plans, incidents] = await Promise.all([
     loadResource("/api/v1/customers"),
     loadResource("/api/v1/services"),
     loadResource("/api/v1/payments"),
     loadResource("/api/v1/plans"),
+    loadResource("/api/v1/incidents"),
   ]);
   state.customers = customers;
   state.services = services;
   state.payments = payments;
   state.plans = plans;
+  state.incidents = incidents;
   renderUser();
   renderOverview();
   renderCustomers();
   renderServices();
   renderPayments();
   renderPlans();
+  renderIncidents();
 }
 
 function renderUser() {
@@ -167,6 +172,19 @@ function renderUser() {
   $("#new-plan-button").hidden = !canWritePlans;
   document.querySelectorAll(".plan-action-column").forEach((column) => {
     column.hidden = !canWritePlans;
+  });
+  const canReadIncidents = hasCapability("incidents.read");
+  const canWriteIncidents = hasCapability("incidents.write");
+  document.querySelector('[data-view="incidents"]').hidden =
+    !canReadIncidents;
+  $("#new-incident-button").hidden = !canWriteIncidents;
+  const incidentWriteNote = $("#incident-write-note");
+  incidentWriteNote.hidden = !canWriteIncidents || Boolean(state.services);
+  incidentWriteNote.textContent = state.services
+    ? ""
+    : "Puedes registrar incidencias por torre o AP; para asociar servicios se necesita acceso a servicios.";
+  document.querySelectorAll(".incident-action-column").forEach((column) => {
+    column.hidden = !canReadIncidents;
   });
   document.querySelectorAll(".service-action-column").forEach(
     (column) => {
@@ -3186,6 +3204,432 @@ function closeAccountDialog() {
   $("#account-dialog").close();
 }
 
+function localDateTimeValue(date = new Date()) {
+  const localTime = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60000
+  );
+  return localTime.toISOString().slice(0, 16);
+}
+
+function incidentServiceLabel(serviceId) {
+  const service = state.services?.find((item) => item.id === serviceId);
+  return service
+    ? `${service.amr_code} · ${service.plan_name}`
+    : serviceId;
+}
+
+function selectedIncident() {
+  return state.incidents?.find((item) => item.id === state.selectedIncidentId);
+}
+
+function upsertIncident(saved) {
+  if (!state.incidents) state.incidents = [];
+  const index = state.incidents.findIndex((item) => item.id === saved.id);
+  if (index >= 0) state.incidents[index] = saved;
+  else state.incidents.push(saved);
+  state.incidents.sort(
+    (a, b) => new Date(b.started_at) - new Date(a.started_at)
+  );
+  renderIncidents();
+}
+
+function renderIncidents() {
+  const body = $("#incidents-body");
+  const empty = $("#incidents-empty");
+  if (!state.incidents) {
+    body.innerHTML = "";
+    empty.textContent = "Tu cuenta no puede consultar incidencias.";
+    empty.hidden = false;
+    return;
+  }
+  const canRead = hasCapability("incidents.read");
+  body.innerHTML = state.incidents
+    .map((incident) => `
+      <tr>
+        <td>
+          <strong>${escapeText(incident.title)}</strong>
+          <small class="table-subtitle">
+            ${escapeText(incident.cause || incident.notes || "Sin causa registrada")}
+          </small>
+        </td>
+        <td>
+          ${escapeText(incident.tower_name || "Sin torre")}
+          <small class="table-subtitle">
+            ${escapeText(incident.access_point_name || "Sin AP")}
+          </small>
+        </td>
+        <td>${formatDate(incident.started_at)}</td>
+        <td>${incident.impacts?.length || 0}</td>
+        <td><span class="badge ${incident.status}">${escapeText(incident.status)}</span></td>
+        ${canRead ? `
+          <td>
+            <button
+              class="row-action view-incident"
+              type="button"
+              data-incident-id="${incident.id}"
+            >Seguimiento</button>
+          </td>
+        ` : ""}
+      </tr>
+    `)
+    .join("");
+  empty.textContent = "Aun no hay incidencias registradas.";
+  empty.hidden = state.incidents.length > 0;
+}
+
+function openIncidentDialog() {
+  $("#incident-title").value = "";
+  $("#incident-tower").value = "";
+  $("#incident-ap").value = "";
+  $("#incident-started-at").value = localDateTimeValue();
+  $("#incident-reported-by").value = state.user.display_name;
+  $("#incident-notes").value = "";
+  $("#incident-services").innerHTML = (state.services || [])
+    .map((service) => `
+      <option value="${service.id}">
+        ${escapeText(service.amr_code)} · ${escapeText(service.plan_name)}
+      </option>
+    `)
+    .join("");
+  $("#incident-form-error").textContent = "";
+  $("#incident-dialog").showModal();
+  $("#incident-title").focus();
+}
+
+function closeIncidentDialog() {
+  $("#incident-dialog").close();
+}
+
+async function saveIncident(event) {
+  event.preventDefault();
+  const submitButton = event.currentTarget.querySelector(
+    'button[type="submit"]'
+  );
+  const errorBox = $("#incident-form-error");
+  const serviceIds = Array.from($("#incident-services").selectedOptions)
+    .map((option) => option.value);
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const saved = await api("/api/v1/incidents", {
+      method: "POST",
+      body: JSON.stringify({
+        title: $("#incident-title").value.trim(),
+        tower_name: $("#incident-tower").value.trim() || null,
+        access_point_name: $("#incident-ap").value.trim() || null,
+        started_at: new Date($("#incident-started-at").value).toISOString(),
+        reported_by: $("#incident-reported-by").value.trim(),
+        service_ids: serviceIds,
+        notes: $("#incident-notes").value.trim() || null,
+      }),
+    });
+    upsertIncident(saved);
+    closeIncidentDialog();
+    setNotice("La incidencia quedo registrada para seguimiento operativo.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+function renderIncidentWorkspace(incident) {
+  const canWrite = hasCapability("incidents.write");
+  const canCompensate = hasCapability("incidents.compensate");
+  const open = incident.status === "open";
+  const affectedIds = new Set(
+    (incident.impacts || []).map((impact) => impact.service_id)
+  );
+  const availableServices = (state.services || [])
+    .filter((service) => !affectedIds.has(service.id));
+  $("#incident-detail-title").textContent = incident.title;
+  $("#incident-detail-summary").innerHTML = `
+    <div>
+      <span>Estado</span>
+      <strong>${escapeText(incident.status)}</strong>
+    </div>
+    <div>
+      <span>Inicio</span>
+      <strong>${formatDate(incident.started_at)}</strong>
+    </div>
+    <div>
+      <span>Duracion</span>
+      <strong>${incident.duration_minutes ?? "Abierta"} min</strong>
+    </div>
+  `;
+  $("#incident-workspace").innerHTML = `
+    <section class="cancellation-stage-card">
+      <div class="stage-status">
+        <h3>Servicios afectados</h3>
+        <span class="badge ${incident.status}">${escapeText(incident.status)}</span>
+      </div>
+      <div class="extension-history">
+        ${(incident.impacts || []).map((impact) => `
+          <article class="history-item">
+            <strong>${escapeText(incidentServiceLabel(impact.service_id))}</strong>
+            <span>
+              Afectado ${formatDate(impact.affected_from)} ·
+              ${impact.restored_at
+                ? `restaurado ${formatDate(impact.restored_at)}`
+                : "pendiente de restauracion"}
+            </span>
+            <span>Compensacion: ${formatMoney(impact.compensation_amount)}</span>
+            ${canWrite && open && !impact.restored_at ? `
+              <form class="incident-restore-form" data-impact-id="${impact.id}">
+                <div class="form-grid">
+                  <label>
+                    Restaurado en
+                    <input
+                      name="restored_at"
+                      type="datetime-local"
+                      value="${localDateTimeValue()}"
+                      required
+                    >
+                  </label>
+                  <div class="dialog-actions">
+                    <button class="primary-button" type="submit">
+                      Registrar restauracion
+                    </button>
+                  </div>
+                </div>
+              </form>
+            ` : ""}
+            ${canCompensate && incident.status === "resolved" && !impact.compensation_movement_id ? `
+              <form class="incident-compensation-form" data-impact-id="${impact.id}">
+                <div class="form-grid">
+                  <label>
+                    Monto
+                    <input name="amount" type="number" min="0.01" step="0.01" required>
+                  </label>
+                  <label>
+                    Autorizo
+                    <input
+                      name="authorized_by"
+                      value="${escapeText(state.user.display_name)}"
+                      minlength="2"
+                      maxlength="150"
+                      required
+                    >
+                  </label>
+                  <label class="full-row">
+                    Motivo
+                    <textarea name="reason" rows="2" minlength="3" maxlength="1000" required></textarea>
+                  </label>
+                  <div class="dialog-actions full-row">
+                    <button class="primary-button" type="submit">
+                      Aplicar compensacion
+                    </button>
+                  </div>
+                </div>
+              </form>
+            ` : ""}
+          </article>
+        `).join("") || '<p class="empty-state">Sin servicios afectados.</p>'}
+      </div>
+    </section>
+    ${canWrite && open ? `
+      <form id="incident-add-impact-form" class="cancellation-stage-card">
+        <h3>Agregar servicio afectado</h3>
+        <div class="form-grid">
+          <label>
+            Servicio
+            <select id="incident-impact-service" required>
+              ${availableServices.map((service) => `
+                <option value="${service.id}">
+                  ${escapeText(service.amr_code)} · ${escapeText(service.plan_name)}
+                </option>
+              `).join("")}
+            </select>
+          </label>
+          <label>
+            Afectado desde
+            <input
+              id="incident-impact-from"
+              type="datetime-local"
+              value="${localDateTimeValue()}"
+              required
+            >
+          </label>
+          <label class="full-row">
+            Notas
+            <textarea id="incident-impact-notes" rows="2" maxlength="1000"></textarea>
+          </label>
+          <div class="dialog-actions full-row">
+            <button
+              class="primary-button"
+              type="submit"
+              ${availableServices.length ? "" : "disabled"}
+            >Agregar afectacion</button>
+          </div>
+        </div>
+      </form>
+      <form id="incident-resolve-form" class="cancellation-stage-card">
+        <h3>Cerrar incidencia</h3>
+        <div class="form-grid">
+          <label>
+            Resuelta en
+            <input
+              id="incident-resolved-at"
+              type="datetime-local"
+              value="${localDateTimeValue()}"
+              required
+            >
+          </label>
+          <label>
+            Responsable
+            <input
+              id="incident-responsible"
+              value="${escapeText(state.user.display_name)}"
+              minlength="2"
+              maxlength="150"
+              required
+            >
+          </label>
+          <label class="full-row">
+            Causa
+            <textarea id="incident-cause" rows="3" minlength="3" maxlength="2000" required></textarea>
+          </label>
+          <div class="dialog-actions full-row">
+            <button class="primary-button" type="submit">Cerrar incidencia</button>
+          </div>
+        </div>
+      </form>
+    ` : ""}
+  `;
+}
+
+function openIncidentDetailDialog(incident) {
+  state.selectedIncidentId = incident.id;
+  $("#incident-detail-error").textContent = "";
+  renderIncidentWorkspace(incident);
+  $("#incident-detail-dialog").showModal();
+}
+
+function closeIncidentDetailDialog() {
+  $("#incident-detail-dialog").close();
+  state.selectedIncidentId = null;
+}
+
+async function refreshSelectedIncident() {
+  const incident = selectedIncident();
+  if (!incident) return null;
+  const saved = await api(`/api/v1/incidents/${incident.id}`);
+  upsertIncident(saved);
+  renderIncidentWorkspace(saved);
+  return saved;
+}
+
+async function addIncidentImpact(event) {
+  event.preventDefault();
+  const incident = selectedIncident();
+  const errorBox = $("#incident-detail-error");
+  if (!incident) return;
+  const submitButton = event.target.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    await api(`/api/v1/incidents/${incident.id}/impacts`, {
+      method: "POST",
+      body: JSON.stringify({
+        service_id: $("#incident-impact-service").value,
+        affected_from: new Date($("#incident-impact-from").value).toISOString(),
+        notes: $("#incident-impact-notes").value.trim() || null,
+      }),
+    });
+    await refreshSelectedIncident();
+    setNotice("El servicio quedo agregado a la incidencia.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function restoreIncidentImpact(event) {
+  event.preventDefault();
+  const incident = selectedIncident();
+  const errorBox = $("#incident-detail-error");
+  if (!incident) return;
+  const form = event.target;
+  const submitButton = form.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    await api(
+      `/api/v1/incidents/${incident.id}/impacts/${form.dataset.impactId}/restore`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          restored_at: new Date(form.elements.restored_at.value).toISOString(),
+        }),
+      }
+    );
+    await refreshSelectedIncident();
+    setNotice("La restauracion del servicio quedo registrada.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function resolveIncident(event) {
+  event.preventDefault();
+  const incident = selectedIncident();
+  const errorBox = $("#incident-detail-error");
+  if (!incident) return;
+  const submitButton = event.target.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const saved = await api(`/api/v1/incidents/${incident.id}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({
+        resolved_at: new Date($("#incident-resolved-at").value).toISOString(),
+        cause: $("#incident-cause").value.trim(),
+        responsible: $("#incident-responsible").value.trim(),
+      }),
+    });
+    upsertIncident(saved);
+    renderIncidentWorkspace(saved);
+    setNotice("La incidencia quedo cerrada con sus tiempos consistentes.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function compensateIncidentImpact(event) {
+  event.preventDefault();
+  const incident = selectedIncident();
+  const errorBox = $("#incident-detail-error");
+  if (!incident) return;
+  const form = event.target;
+  const submitButton = form.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    await api(
+      `/api/v1/incidents/${incident.id}/impacts/${form.dataset.impactId}/compensation`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          amount: form.elements.amount.value,
+          authorized_by: form.elements.authorized_by.value.trim(),
+          reason: form.elements.reason.value.trim(),
+        }),
+      }
+    );
+    await refreshSelectedIncident();
+    setNotice("La compensacion quedo aplicada como ajuste autorizado.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 function localDateValue(date = new Date()) {
   const localTime = new Date(
     date.getTime() - date.getTimezoneOffset() * 60000
@@ -3411,6 +3855,7 @@ function showView(name) {
     services: "Servicios",
     payments: "Pagos",
     plans: "Planes",
+    incidents: "Incidencias",
   };
   $("#page-title").textContent = titles[name];
   $(".sidebar").classList.remove("open");
@@ -3793,6 +4238,39 @@ $("#plans-body").addEventListener("click", (event) => {
   if (priceButton) openPlanPriceDialog(plan);
   else openPlanDeactivateDialog(plan);
 });
+$("#new-incident-button").addEventListener("click", openIncidentDialog);
+$("#incident-form").addEventListener("submit", saveIncident);
+$("#close-incident-dialog").addEventListener("click", closeIncidentDialog);
+$("#cancel-incident-dialog").addEventListener("click", closeIncidentDialog);
+$("#incidents-body").addEventListener("click", (event) => {
+  const button = event.target.closest(".view-incident");
+  if (!button) return;
+  const incident = state.incidents?.find(
+    (item) => item.id === button.dataset.incidentId
+  );
+  if (incident) openIncidentDetailDialog(incident);
+});
+$("#incident-workspace").addEventListener("submit", (event) => {
+  if (event.target.id === "incident-add-impact-form") {
+    addIncidentImpact(event);
+  } else if (event.target.id === "incident-resolve-form") {
+    resolveIncident(event);
+  } else if (event.target.classList.contains("incident-restore-form")) {
+    restoreIncidentImpact(event);
+  } else if (
+    event.target.classList.contains("incident-compensation-form")
+  ) {
+    compensateIncidentImpact(event);
+  }
+});
+$("#close-incident-detail-dialog").addEventListener(
+  "click",
+  closeIncidentDetailDialog
+);
+$("#dismiss-incident-detail-dialog").addEventListener(
+  "click",
+  closeIncidentDetailDialog
+);
 $("#plan-price-form").addEventListener("submit", savePlanPrice);
 $("#close-plan-price-dialog").addEventListener(
   "click",

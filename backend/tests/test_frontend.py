@@ -39,6 +39,7 @@ class FrontendShellTestCase(unittest.TestCase):
             "/api/v1/services",
             "/api/v1/payments",
             "/api/v1/plans",
+            "/api/v1/incidents",
         ):
             with self.subTest(endpoint=endpoint):
                 self.assertIn(endpoint, script)
@@ -203,6 +204,16 @@ class FrontendShellTestCase(unittest.TestCase):
             "convenio no reduce la deuda",
             page,
         )
+        self.assertIn('hasCapability("incidents.read")', script)
+        self.assertIn('hasCapability("incidents.write")', script)
+        self.assertIn('hasCapability("incidents.compensate")', script)
+        self.assertIn("incident-add-impact-form", script)
+        self.assertIn("/api/v1/incidents", script)
+        self.assertIn("/restore", script)
+        self.assertIn("/resolve", script)
+        self.assertIn("/compensation", script)
+        self.assertIn("Incidencias", page)
+        self.assertIn("SEGUIMIENTO DE INCIDENCIA", page)
 
     def test_live_network_ui_requires_coordinated_preflight_confirmation(
         self,

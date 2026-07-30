@@ -20,9 +20,11 @@ from app.api.v1.endpoints.payment_allocations import customer_credit_balance
 from app.api.v1.endpoints.services import create_service
 from app.db.base import Base
 from app.models.customer import Customer
+from app.models.extension import Extension
 from app.models.incident import IncidentStatus
 from app.models.mikrotik import MikrotikRouter, NetworkControlCommand
 from app.models.network_assignment import NetworkAssignment
+from app.models.payment_agreement import PaymentAgreement
 from app.models.service import ServiceStatus
 from app.schemas.incident import (
     IncidentCompensationCreate,
@@ -116,6 +118,75 @@ class IncidentTestCase(unittest.TestCase):
         self.assertEqual(resolved.status, IncidentStatus.resolved)
         self.assertEqual(resolved.duration_minutes, 95)
         self.assertEqual(resolved.impacts[0].duration_minutes, 95)
+
+    def test_resolution_cannot_precede_a_later_service_impact(self) -> None:
+        incident = create_incident(self.incident_data(), self.db)
+        second_customer = Customer(
+            full_name="Segundo cliente afectado",
+            phones=["8995557788"],
+        )
+        self.db.add(second_customer)
+        self.db.commit()
+        second_service = create_service(
+            ServiceCreate(
+                customer_id=second_customer.id,
+                amr_code="AMR952",
+                address="Calle Incidencia 12, Reynosa",
+                plan_name="Hogar 20 Mbps",
+                monthly_price=Decimal("500.00"),
+                payment_day=12,
+            ),
+            self.db,
+        )
+        add_incident_impact(
+            incident.id,
+            IncidentImpactAdd(
+                service_id=second_service.id,
+                affected_from=self.started_at + timedelta(minutes=90),
+            ),
+            self.db,
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            resolve_incident(
+                incident.id,
+                IncidentResolve(
+                    resolved_at=self.started_at + timedelta(minutes=60),
+                    cause="Restablecimiento parcial",
+                    responsible="Tecnico de red",
+                ),
+                self.db,
+            )
+
+        self.assertEqual(context.exception.status_code, 409)
+        self.db.refresh(incident)
+        self.assertEqual(incident.status, IncidentStatus.open)
+
+    def test_resolution_cannot_precede_recorded_restoration(self) -> None:
+        incident = create_incident(self.incident_data(), self.db)
+        restore_incident_impact(
+            incident.id,
+            incident.impacts[0].id,
+            IncidentImpactRestore(
+                restored_at=self.started_at + timedelta(minutes=90)
+            ),
+            self.db,
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            resolve_incident(
+                incident.id,
+                IncidentResolve(
+                    resolved_at=self.started_at + timedelta(minutes=60),
+                    cause="Hora de cierre inconsistente",
+                    responsible="Tecnico de red",
+                ),
+                self.db,
+            )
+
+        self.assertEqual(context.exception.status_code, 409)
+        self.db.refresh(incident)
+        self.assertEqual(incident.status, IncidentStatus.open)
 
     def test_duplicate_affected_service_is_rejected(self) -> None:
         incident = create_incident(self.incident_data(), self.db)

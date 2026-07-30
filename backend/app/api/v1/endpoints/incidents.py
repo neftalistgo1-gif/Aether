@@ -230,16 +230,37 @@ def resolve_incident(
     incident = find_incident_or_404(incident_id, db)
     if incident.status == IncidentStatus.resolved:
         raise HTTPException(status_code=409, detail="Incident is already resolved")
-    if as_utc(resolution.resolved_at) < as_utc(incident.started_at):
+    resolved_at = as_utc(resolution.resolved_at)
+    if resolved_at < as_utc(incident.started_at):
         raise HTTPException(
             status_code=409,
             detail="resolved_at cannot be before started_at",
         )
-    if as_utc(resolution.resolved_at) > datetime.now(UTC):
+    if resolved_at > datetime.now(UTC):
         raise HTTPException(
             status_code=409,
             detail="resolved_at cannot be in the future",
         )
+    for impact in incident.impacts:
+        if resolved_at < as_utc(impact.affected_from):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "resolved_at cannot be before an affected service "
+                    "started"
+                ),
+            )
+        if (
+            impact.restored_at is not None
+            and resolved_at < as_utc(impact.restored_at)
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "resolved_at cannot be before an affected service "
+                    "was restored"
+                ),
+            )
     incident.status = IncidentStatus.resolved
     incident.resolved_at = resolution.resolved_at
     incident.cause = resolution.cause
