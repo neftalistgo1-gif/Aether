@@ -5,9 +5,12 @@ const state = {
   services: [],
   payments: [],
   dailyOperations: [],
+  assets: [],
   plans: [],
   incidents: [],
   latestDailyOperationResult: null,
+  selectedAssetId: null,
+  selectedAssetAssignments: [],
   editingCustomerId: null,
   selectedPaymentId: null,
   selectedPlanId: null,
@@ -125,11 +128,12 @@ async function loadResource(path) {
 
 async function loadWorkspace() {
   state.user = await api("/api/v1/auth/me");
-  const [customers, services, payments, dailyOperations, plans, incidents] = await Promise.all([
+  const [customers, services, payments, dailyOperations, assets, plans, incidents] = await Promise.all([
     loadResource("/api/v1/customers"),
     loadResource("/api/v1/services"),
     loadResource("/api/v1/payments"),
     loadResource("/api/v1/operations/daily"),
+    loadResource("/api/v1/assets"),
     loadResource("/api/v1/plans"),
     loadResource("/api/v1/incidents"),
   ]);
@@ -138,6 +142,7 @@ async function loadWorkspace() {
   state.payments = payments;
   state.dailyOperations = dailyOperations;
   state.latestDailyOperationResult = dailyOperations?.[0] || null;
+  state.assets = assets;
   state.plans = plans;
   state.incidents = incidents;
   renderUser();
@@ -146,6 +151,7 @@ async function loadWorkspace() {
   renderServices();
   renderPayments();
   renderDailyOperations();
+  renderAssets();
   renderPlans();
   renderIncidents();
 }
@@ -206,6 +212,17 @@ function renderUser() {
   operationsRunNote.textContent = canRunOperations
     ? ""
     : "Esta cuenta puede consultar ejecuciones previas, pero no iniciar la operación diaria.";
+  const canReadAssets = hasCapability("assets.read");
+  const canWriteAssets = hasCapability("assets.write");
+  document.querySelector('[data-view="assets"]').hidden = !canReadAssets;
+  $("#new-asset-button").hidden = !canWriteAssets;
+  $("#assets-write-note").hidden = canWriteAssets;
+  $("#assets-write-note").textContent = canWriteAssets
+    ? ""
+    : "Esta cuenta puede consultar el inventario, pero no registrar ni mover activos.";
+  document.querySelectorAll(".asset-action-column").forEach((column) => {
+    column.hidden = !canReadAssets;
+  });
   const canReadPlans = hasCapability("plans.read");
   const canWritePlans = hasCapability("plans.write");
   document.querySelector('[data-view="plans"]').hidden = !canReadPlans;
@@ -387,6 +404,366 @@ function renderDailyOperations() {
     .join("");
   empty.textContent = "Aún no hay ejecuciones registradas.";
   empty.hidden = state.dailyOperations.length > 0;
+}
+
+function assetTypeLabel(value) {
+  const labels = {
+    antenna: "Antena",
+    router_modem: "Router o módem",
+    poe: "PoE",
+    power_supply: "Fuente",
+    mast: "Mástil",
+    ethernet_cable: "Cable",
+    other: "Otro",
+  };
+  return labels[value] || value;
+}
+
+function assetStatusLabel(value) {
+  const labels = {
+    available: "Disponible",
+    quarantine: "Cuarentena",
+    needs_repair: "Requiere reparación",
+    defective: "Defectuoso",
+    ready_for_reuse: "Listo para reutilizar",
+    assigned: "Asignado",
+    discarded: "Descartado",
+    not_recovered: "No recuperado",
+    sold_to_customer: "Vendido al cliente",
+  };
+  return labels[value] || value;
+}
+
+function assetOwnerLabel(value) {
+  return value === "customer" ? "Cliente" : "AMR";
+}
+
+function selectedAsset() {
+  return state.assets?.find((item) => item.id === state.selectedAssetId);
+}
+
+function renderAssets() {
+  const body = $("#assets-body");
+  const empty = $("#assets-empty");
+  if (!state.assets) {
+    body.innerHTML = "";
+    empty.textContent = "Tu cuenta no puede consultar activos.";
+    empty.hidden = false;
+    return;
+  }
+  const query = $("#asset-search")?.value.trim().toLowerCase() || "";
+  const statusFilter = $("#asset-status-filter")?.value || "";
+  const rows = state.assets.filter((asset) => {
+    const matchesQuery = !query || [
+      asset.internal_code,
+      asset.description,
+      asset.serial_number || "",
+      asset.mac_address || "",
+    ].join(" ").toLowerCase().includes(query);
+    const matchesStatus = !statusFilter || asset.status === statusFilter;
+    return matchesQuery && matchesStatus;
+  });
+  body.innerHTML = rows
+    .slice()
+    .sort((a, b) => a.internal_code.localeCompare(b.internal_code))
+    .map((asset) => `
+      <tr>
+        <td>
+          <strong>${escapeText(asset.internal_code)}</strong>
+          <small class="table-subtitle">${escapeText(asset.description)}</small>
+        </td>
+        <td>${escapeText(assetTypeLabel(asset.asset_type))}</td>
+        <td>
+          ${escapeText(asset.serial_number || asset.mac_address || "Sin serie o MAC")}
+          <small class="table-subtitle">${escapeText(asset.brand || "Sin marca")} · ${escapeText(asset.model || "Sin modelo")}</small>
+        </td>
+        <td>${escapeText(assetOwnerLabel(asset.owner))}</td>
+        <td><span class="badge ${asset.status}">${escapeText(assetStatusLabel(asset.status))}</span></td>
+        <td>
+          <button
+            class="row-action view-asset"
+            type="button"
+            data-asset-id="${asset.id}"
+          >Detalle</button>
+        </td>
+      </tr>
+    `)
+    .join("");
+  empty.textContent = query || statusFilter
+    ? "No hay activos que coincidan con el filtro actual."
+    : "Aún no hay activos registrados.";
+  empty.hidden = rows.length > 0;
+}
+
+function openAssetDialog() {
+  $("#asset-type").value = "antenna";
+  $("#asset-owner").value = "amr";
+  $("#asset-description").value = "";
+  $("#asset-brand").value = "";
+  $("#asset-model").value = "";
+  $("#asset-serial-number").value = "";
+  $("#asset-mac-address").value = "";
+  $("#asset-acquired-on").value = localDateValue();
+  $("#asset-notes").value = "";
+  $("#asset-form-error").textContent = "";
+  $("#asset-dialog").showModal();
+  $("#asset-description").focus();
+}
+
+function closeAssetDialog() {
+  $("#asset-dialog").close();
+}
+
+async function saveAsset(event) {
+  event.preventDefault();
+  const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+  const errorBox = $("#asset-form-error");
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const saved = await api("/api/v1/assets", {
+      method: "POST",
+      body: JSON.stringify({
+        asset_type: $("#asset-type").value,
+        description: $("#asset-description").value.trim(),
+        brand: $("#asset-brand").value.trim() || null,
+        model: $("#asset-model").value.trim() || null,
+        serial_number: $("#asset-serial-number").value.trim() || null,
+        mac_address: $("#asset-mac-address").value.trim() || null,
+        owner: $("#asset-owner").value,
+        acquired_on: $("#asset-acquired-on").value || null,
+        notes: $("#asset-notes").value.trim() || null,
+      }),
+    });
+    if (!state.assets) state.assets = [];
+    state.assets.push(saved);
+    renderAssets();
+    closeAssetDialog();
+    setNotice(`Activo registrado: ${saved.internal_code}.`);
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+function renderAssetWorkspace(asset) {
+  const activeAssignment = state.selectedAssetAssignments.find(
+    (item) => item.returned_at === null
+  );
+  const activeServices = (state.services || []).filter(
+    (service) => service.status === "active"
+  );
+  $("#asset-detail-title").textContent = asset.internal_code;
+  $("#asset-detail-summary").innerHTML = `
+    <div>
+      <span>Tipo</span>
+      <strong>${escapeText(assetTypeLabel(asset.asset_type))}</strong>
+    </div>
+    <div>
+      <span>Estado</span>
+      <strong>${escapeText(assetStatusLabel(asset.status))}</strong>
+    </div>
+    <div>
+      <span>Propiedad</span>
+      <strong>${escapeText(assetOwnerLabel(asset.owner))}</strong>
+    </div>
+    <div>
+      <span>Serie</span>
+      <strong>${escapeText(asset.serial_number || "Sin serie")}</strong>
+    </div>
+    <div>
+      <span>MAC</span>
+      <strong>${escapeText(asset.mac_address || "Sin MAC")}</strong>
+    </div>
+    <div>
+      <span>Adquirido</span>
+      <strong>${formatDate(asset.acquired_on)}</strong>
+    </div>
+  `;
+  $("#asset-detail-workspace").innerHTML = `
+    ${hasCapability("assets.write") && !activeAssignment && ["available", "ready_for_reuse"].includes(asset.status) ? `
+      <form id="asset-assign-form" class="cancellation-stage-card">
+        <h3>Asignar a servicio activo</h3>
+        <div class="form-grid">
+          <label>
+            Servicio
+            <select id="asset-assign-service" required>
+              ${activeServices.map((service) => `
+                <option value="${service.id}">
+                  ${escapeText(service.amr_code)} · ${escapeText(service.plan_name)}
+                </option>
+              `).join("")}
+            </select>
+          </label>
+          <label>
+            Asignó
+            <input id="asset-assigned-by" value="${escapeText(state.user.display_name)}" minlength="2" maxlength="150" required>
+          </label>
+          <label class="full-row">
+            Condición de entrega
+            <textarea id="asset-condition-delivery" rows="2" minlength="3" maxlength="2000" required></textarea>
+          </label>
+          <label class="full-row">
+            Notas
+            <textarea id="asset-assignment-notes" rows="2" maxlength="1000"></textarea>
+          </label>
+          <div class="dialog-actions full-row">
+            <button class="primary-button" type="submit" ${activeServices.length ? "" : "disabled"}>Asignar activo</button>
+          </div>
+        </div>
+      </form>
+    ` : ""}
+    ${hasCapability("assets.write") && activeAssignment ? `
+      <form id="asset-return-form" class="cancellation-stage-card" data-service-id="${activeAssignment.service_id}" data-assignment-id="${activeAssignment.id}">
+        <h3>Registrar devolución</h3>
+        <div class="form-grid">
+          <label>
+            Devolvió
+            <input id="asset-returned-by" value="${escapeText(state.user.display_name)}" minlength="2" maxlength="150" required>
+          </label>
+          <label>
+            Resultado
+            <select id="asset-return-outcome" required>
+              <option value="recovered">Recuperado</option>
+              <option value="not_recovered">No recuperado</option>
+              <option value="sold_to_customer">Vendido al cliente</option>
+            </select>
+          </label>
+          <label class="full-row">
+            Condición de retorno
+            <textarea id="asset-condition-return" rows="2" minlength="3" maxlength="2000" required></textarea>
+          </label>
+          <label class="full-row">
+            Notas
+            <textarea id="asset-return-notes" rows="2" maxlength="1000"></textarea>
+          </label>
+          <div class="dialog-actions full-row">
+            <button class="primary-button" type="submit">Registrar devolución</button>
+          </div>
+        </div>
+      </form>
+    ` : ""}
+    <section class="cancellation-stage-card">
+      <div class="stage-status">
+        <h3>Historial de asignaciones</h3>
+        <span class="badge ${asset.status}">${escapeText(assetStatusLabel(asset.status))}</span>
+      </div>
+      <div class="extension-history">
+        ${state.selectedAssetAssignments.length ? state.selectedAssetAssignments.map((assignment) => {
+          const service = state.services?.find((item) => item.id === assignment.service_id);
+          return `
+            <article class="history-item">
+              <div>
+                <strong>${escapeText(service ? `${service.amr_code} · ${service.plan_name}` : assignment.service_id)}</strong>
+                <span>${assignment.returned_at ? 'Cerrada' : 'Activa'}</span>
+              </div>
+              <small>
+                Entregada ${formatDateTime(assignment.assigned_at)} por ${escapeText(assignment.assigned_by)}
+              </small>
+              <small>${escapeText(assignment.condition_on_delivery)}</small>
+              <small>
+                ${assignment.returned_at
+                  ? `Devuelta ${formatDateTime(assignment.returned_at)} · ${escapeText(assignment.return_outcome || '')}`
+                  : 'Pendiente de devolución'}
+              </small>
+            </article>
+          `;
+        }).join("") : '<p class="empty-state">Este activo aún no tiene asignaciones.</p>'}
+      </div>
+    </section>
+  `;
+}
+
+async function openAssetDetailDialog(asset) {
+  state.selectedAssetId = asset.id;
+  state.selectedAssetAssignments = [];
+  $("#asset-detail-error").textContent = "";
+  $("#asset-detail-summary").innerHTML = "";
+  $("#asset-detail-workspace").innerHTML = '<p class="empty-state">Cargando historial del activo...</p>';
+  $("#asset-detail-dialog").showModal();
+  try {
+    state.selectedAssetAssignments = await api(`/api/v1/assets/${asset.id}/assignments`);
+    renderAssetWorkspace(asset);
+  } catch (error) {
+    $("#asset-detail-error").textContent = error.message;
+  }
+}
+
+function closeAssetDetailDialog() {
+  $("#asset-detail-dialog").close();
+  state.selectedAssetId = null;
+  state.selectedAssetAssignments = [];
+}
+
+async function assignSelectedAsset(event) {
+  event.preventDefault();
+  const asset = selectedAsset();
+  const errorBox = $("#asset-detail-error");
+  const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+  if (!asset) return;
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    await api(`/api/v1/services/${$("#asset-assign-service").value}/asset-assignments`, {
+      method: "POST",
+      body: JSON.stringify({
+        asset_id: asset.id,
+        assigned_by: $("#asset-assigned-by").value.trim(),
+        condition_on_delivery: $("#asset-condition-delivery").value.trim(),
+        notes: $("#asset-assignment-notes").value.trim() || null,
+      }),
+    });
+    state.assets = await loadResource("/api/v1/assets");
+    renderAssets();
+    const updated = selectedAsset();
+    if (updated) {
+      state.selectedAssetAssignments = await api(`/api/v1/assets/${updated.id}/assignments`);
+      renderAssetWorkspace(updated);
+    }
+    setNotice(`Activo ${asset.internal_code} asignado correctamente.`);
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function returnSelectedAsset(event) {
+  event.preventDefault();
+  const asset = selectedAsset();
+  const form = event.currentTarget;
+  const errorBox = $("#asset-detail-error");
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (!asset) return;
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    await api(
+      `/api/v1/services/${form.dataset.serviceId}/asset-assignments/${form.dataset.assignmentId}/return`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          returned_by: $("#asset-returned-by").value.trim(),
+          condition_on_return: $("#asset-condition-return").value.trim(),
+          outcome: $("#asset-return-outcome").value,
+          notes: $("#asset-return-notes").value.trim() || null,
+        }),
+      }
+    );
+    state.assets = await loadResource("/api/v1/assets");
+    renderAssets();
+    const updated = selectedAsset();
+    if (updated) {
+      state.selectedAssetAssignments = await api(`/api/v1/assets/${updated.id}/assignments`);
+      renderAssetWorkspace(updated);
+    }
+    setNotice(`Devolución registrada para ${asset.internal_code}.`);
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
 }
 
 function setDailyOperationsBusy(busy) {
@@ -4114,6 +4491,7 @@ function showView(name) {
     services: "Servicios",
     payments: "Pagos",
     operations: "Operación diaria",
+    assets: "Inventario",
     plans: "Planes",
     incidents: "Incidencias",
   };
@@ -4486,6 +4864,27 @@ $("#preview-daily-operations-button").addEventListener("click", () => {
 $("#run-daily-operations-button").addEventListener("click", () => {
   void runDailyOperations(false);
 });
+$("#asset-search").addEventListener("input", renderAssets);
+$("#asset-status-filter").addEventListener("change", renderAssets);
+$("#new-asset-button").addEventListener("click", openAssetDialog);
+$("#asset-form").addEventListener("submit", saveAsset);
+$("#close-asset-dialog").addEventListener("click", closeAssetDialog);
+$("#cancel-asset-dialog").addEventListener("click", closeAssetDialog);
+$("#assets-body").addEventListener("click", (event) => {
+  const button = event.target.closest(".view-asset");
+  if (!button) return;
+  const asset = state.assets?.find((item) => item.id === button.dataset.assetId);
+  if (asset) void openAssetDetailDialog(asset);
+});
+$("#asset-detail-workspace").addEventListener("submit", (event) => {
+  if (event.target.id === "asset-assign-form") {
+    assignSelectedAsset(event);
+  } else if (event.target.id === "asset-return-form") {
+    returnSelectedAsset(event);
+  }
+});
+$("#close-asset-detail-dialog").addEventListener("click", closeAssetDetailDialog);
+$("#dismiss-asset-detail-dialog").addEventListener("click", closeAssetDetailDialog);
 $("#payments-body").addEventListener("click", (event) => {
   const reviewButton = event.target.closest(".payment-review-action");
   const applyButton = event.target.closest(".payment-apply-action");

@@ -24,6 +24,7 @@ Aether. Incluye:
 - alta y edición de clientes para cuentas con `customers.write`;
 - tablas de servicios y pagos recientes;
 - operación diaria con historial, simulación y ejecución manual según permisos;
+- inventario con alta de activos, filtros y trazabilidad básica de asignación;
 - alta de servicios pendientes mediante selección de titular y plan vigente;
 - recepción de pagos pendientes para cuentas con `billing.write`;
 - catálogo de planes y tarifas según `plans.read` y `plans.write`;
@@ -55,6 +56,12 @@ resultado reciente; `operations.run` habilita el disparo manual del proceso.
 La UI no reproduce reglas de facturación ni vencimiento: sólo muestra el
 resultado devuelto por la API y conserva la diferencia entre simulación y
 ejecución persistida.
+
+El módulo de inventario expone el catálogo físico con búsqueda y filtro por
+estado. Las cuentas con `assets.write` pueden registrar nuevos activos, abrir
+su historial de asignaciones y ejecutar desde allí la asignación a un servicio
+activo o su devolución. La pantalla se limita a capturar datos operativos y
+deja la validación de disponibilidad, propiedad y estado al backend.
 
 Las cuentas con `billing.approve` reciben acciones adicionales según el estado.
 Un pago pendiente puede verificarse, rechazarse o cancelarse; una diferencia

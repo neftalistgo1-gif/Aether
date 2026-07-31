@@ -40,6 +40,7 @@ class FrontendShellTestCase(unittest.TestCase):
             "/api/v1/postal-codes",
             "/api/v1/payments",
             "/api/v1/operations/daily",
+            "/api/v1/assets",
             "/api/v1/plans",
             "/api/v1/incidents",
         ):
@@ -69,6 +70,11 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn('hasCapability("operations.run")', script)
         self.assertIn("runDailyOperations", script)
         self.assertIn("renderDailyOperations", script)
+        self.assertIn('hasCapability("assets.read")', script)
+        self.assertIn('hasCapability("assets.write")', script)
+        self.assertIn("openAssetDialog", script)
+        self.assertIn("assignSelectedAsset", script)
+        self.assertIn("returnSelectedAsset", script)
         self.assertIn('decideSelectedPayment("reject")', script)
         self.assertIn('decideSelectedPayment("cancel")', script)
         self.assertIn(
@@ -166,6 +172,9 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("service-colonia", page)
         self.assertIn("operations-run-date", page)
         self.assertIn("Operación diaria", page)
+        self.assertIn("Inventario y activos", page)
+        self.assertIn("asset-dialog", page)
+        self.assertIn("asset-detail-dialog", page)
         self.assertIn("network-execution-form", page)
         self.assertIn("Ejecutar cambio real", page)
         self.assertIn("preflight_command_id:", script)

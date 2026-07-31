@@ -88,11 +88,14 @@
           <button class="nav-item" data-view="operations">
             <span>05</span> Operación diaria
           </button>
+          <button class="nav-item" data-view="assets">
+            <span>06</span> Inventario
+          </button>
           <button class="nav-item" data-view="plans">
-            <span>06</span> Planes
+            <span>07</span> Planes
           </button>
           <button class="nav-item" data-view="incidents">
-            <span>07</span> Incidencias
+            <span>08</span> Incidencias
           </button>
         </nav>
         <div class="sidebar-foot">
@@ -316,6 +319,65 @@
           </div>
         </section>
 
+        <section id="assets-panel" class="view-panel" hidden>
+          <div class="panel">
+            <div class="panel-heading table-heading">
+              <div>
+                <p class="eyebrow">CONTROL FÍSICO</p>
+                <h2>Inventario y activos</h2>
+              </div>
+              <div class="table-actions assets-toolbar">
+                <label class="search-field">
+                  <span>Buscar</span>
+                  <input
+                    id="asset-search"
+                    type="search"
+                    placeholder="Código, serie o MAC"
+                  >
+                </label>
+                <label>
+                  Estado
+                  <select id="asset-status-filter">
+                    <option value="">Todos</option>
+                    <option value="available">Disponible</option>
+                    <option value="ready_for_reuse">Listo para reutilizar</option>
+                    <option value="assigned">Asignado</option>
+                    <option value="quarantine">Cuarentena</option>
+                    <option value="needs_repair">Requiere reparación</option>
+                    <option value="defective">Defectuoso</option>
+                    <option value="discarded">Descartado</option>
+                    <option value="not_recovered">No recuperado</option>
+                    <option value="sold_to_customer">Vendido al cliente</option>
+                  </select>
+                </label>
+                <button
+                  id="new-asset-button"
+                  class="secondary-button"
+                  type="button"
+                  hidden
+                >Nuevo activo</button>
+              </div>
+            </div>
+            <p id="assets-write-note" class="inline-note" hidden></p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Tipo</th>
+                    <th>Identidad</th>
+                    <th>Propiedad</th>
+                    <th>Estado</th>
+                    <th class="asset-action-column" hidden>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="assets-body"></tbody>
+              </table>
+            </div>
+            <p id="assets-empty" class="empty-state" hidden></p>
+          </div>
+        </section>
+
         <section id="plans-panel" class="view-panel" hidden>
           <div class="panel">
             <div class="panel-heading">
@@ -438,6 +500,100 @@
           <button class="primary-button" type="submit">Guardar incidencia</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="asset-dialog" aria-labelledby="asset-dialog-title">
+      <form id="asset-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">ALTA DE INVENTARIO</p>
+            <h2 id="asset-dialog-title">Nuevo activo</h2>
+          </div>
+          <button
+            id="close-asset-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Tipo
+            <select id="asset-type" required>
+              <option value="antenna">Antena</option>
+              <option value="router_modem">Router o módem</option>
+              <option value="poe">PoE</option>
+              <option value="power_supply">Fuente de poder</option>
+              <option value="mast">Mástil</option>
+              <option value="ethernet_cable">Cable Ethernet</option>
+              <option value="other">Otro</option>
+            </select>
+          </label>
+          <label>
+            Propiedad
+            <select id="asset-owner" required>
+              <option value="amr">AMR</option>
+              <option value="customer">Cliente</option>
+            </select>
+          </label>
+          <label class="full-row">
+            Descripción
+            <input id="asset-description" minlength="2" maxlength="150" required>
+          </label>
+          <label>
+            Marca
+            <input id="asset-brand" maxlength="100">
+          </label>
+          <label>
+            Modelo
+            <input id="asset-model" maxlength="150">
+          </label>
+          <label>
+            Número de serie
+            <input id="asset-serial-number" maxlength="100">
+          </label>
+          <label>
+            MAC
+            <input id="asset-mac-address" maxlength="17" placeholder="AA:BB:CC:DD:EE:FF">
+          </label>
+          <label>
+            Adquirido el
+            <input id="asset-acquired-on" type="date">
+          </label>
+          <label class="full-row">
+            Notas
+            <textarea id="asset-notes" rows="3" maxlength="1000"></textarea>
+          </label>
+        </div>
+        <p id="asset-form-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="cancel-asset-dialog" class="text-button" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar activo</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="asset-detail-dialog" aria-labelledby="asset-detail-title">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">TRAZABILIDAD DE ACTIVO</p>
+            <h2 id="asset-detail-title">Activo</h2>
+          </div>
+          <button
+            id="close-asset-detail-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div id="asset-detail-summary" class="decision-summary"></div>
+        <div id="asset-detail-workspace" class="cancellation-workspace"></div>
+        <p id="asset-detail-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="dismiss-asset-detail-dialog" class="text-button" type="button">Cerrar</button>
+        </div>
+      </div>
     </dialog>
 
     <dialog id="incident-detail-dialog" aria-labelledby="incident-detail-title">
