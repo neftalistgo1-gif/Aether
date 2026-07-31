@@ -17,3 +17,4 @@ Cambios recientes (2026-07-30):
 Cambios recientes (2026-07-31):
 - Mejorado el alta de servicios con búsqueda de cliente titular, captura estructurada del domicilio y autocompletado por código postal desde un catálogo local no versionado.
 - Agregado el endpoint protegido `/api/v1/postal-codes` y la documentación para integrar el catálogo postal mediante `AETHER_POSTAL_CODES_PATH` sin subir datos privados al repositorio.
+- Añadida la primera vista de operación diaria en la UI para consultar historial, simular ejecuciones y lanzar el proceso real desde una fecha seleccionada.

@@ -23,6 +23,7 @@ Aether. Incluye:
 - directorio consultable de clientes;
 - alta y edición de clientes para cuentas con `customers.write`;
 - tablas de servicios y pagos recientes;
+- operación diaria con historial, simulación y ejecución manual según permisos;
 - alta de servicios pendientes mediante selección de titular y plan vigente;
 - recepción de pagos pendientes para cuentas con `billing.write`;
 - catálogo de planes y tarifas según `plans.read` y `plans.write`;
@@ -47,6 +48,13 @@ pero el registro siempre inicia pendiente. La interfaz advierte que esta acción
 no reduce deuda y no ofrece verificar ni aplicar el pago en el mismo formulario.
 La ubicación del comprobante se envía como dato privado y nunca regresa en los
 listados; éstos sólo indican si existe evidencia.
+
+La operación diaria ofrece una fecha explícita, simulación y ejecución real en
+dos acciones separadas. Las cuentas con `operations.read` consultan historial y
+resultado reciente; `operations.run` habilita el disparo manual del proceso.
+La UI no reproduce reglas de facturación ni vencimiento: sólo muestra el
+resultado devuelto por la API y conserva la diferencia entre simulación y
+ejecución persistida.
 
 Las cuentas con `billing.approve` reciben acciones adicionales según el estado.
 Un pago pendiente puede verificarse, rechazarse o cancelarse; una diferencia

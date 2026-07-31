@@ -21,7 +21,7 @@
           alt="Aether"
         >
         <p class="eyebrow">Servicios AMR · Reynosa</p>
-        <h1 id="login-title">Tu operación, en un solo lugar.</h1>
+        <h1 id="login-title">Todo tu WISP Un solo lugar.</h1>
         <p class="login-copy">
           Accede con la cuenta asignada por tu administrador.
         </p>
@@ -85,11 +85,14 @@
           <button class="nav-item" data-view="payments">
             <span>04</span> Pagos
           </button>
+          <button class="nav-item" data-view="operations">
+            <span>05</span> Operación diaria
+          </button>
           <button class="nav-item" data-view="plans">
-            <span>05</span> Planes
+            <span>06</span> Planes
           </button>
           <button class="nav-item" data-view="incidents">
-            <span>06</span> Incidencias
+            <span>07</span> Incidencias
           </button>
         </nav>
         <div class="sidebar-foot">
@@ -263,6 +266,53 @@
               </table>
             </div>
             <p id="payments-empty" class="empty-state" hidden></p>
+          </div>
+        </section>
+
+        <section id="operations-panel" class="view-panel" hidden>
+          <div class="panel">
+            <div class="panel-heading table-heading">
+              <div>
+                <p class="eyebrow">AUTOMATIZACIÓN CONTROLADA</p>
+                <h2>Operación diaria</h2>
+              </div>
+              <div class="table-actions operations-toolbar">
+                <label class="operations-date-field">
+                  <span>Fecha</span>
+                  <input id="operations-run-date" type="date">
+                </label>
+                <button
+                  id="preview-daily-operations-button"
+                  class="secondary-button"
+                  type="button"
+                  hidden
+                >Simular día</button>
+                <button
+                  id="run-daily-operations-button"
+                  class="primary-button"
+                  type="button"
+                  hidden
+                >Ejecutar día</button>
+              </div>
+            </div>
+            <p id="operations-run-note" class="inline-note" hidden></p>
+            <div id="operations-summary" class="decision-summary"></div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Mensualidades</th>
+                    <th>Prórrogas vencidas</th>
+                    <th>Ejecutó</th>
+                    <th>Cierre</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="operations-body"></tbody>
+              </table>
+            </div>
+            <p id="operations-empty" class="empty-state" hidden></p>
           </div>
         </section>
 

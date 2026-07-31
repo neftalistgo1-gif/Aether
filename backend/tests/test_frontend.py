@@ -39,6 +39,7 @@ class FrontendShellTestCase(unittest.TestCase):
             "/api/v1/services",
             "/api/v1/postal-codes",
             "/api/v1/payments",
+            "/api/v1/operations/daily",
             "/api/v1/plans",
             "/api/v1/incidents",
         ):
@@ -64,6 +65,10 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn('hasCapability("billing.approve")', script)
         self.assertIn("/verify", script)
         self.assertIn("/apply", script)
+        self.assertIn('hasCapability("operations.read")', script)
+        self.assertIn('hasCapability("operations.run")', script)
+        self.assertIn("runDailyOperations", script)
+        self.assertIn("renderDailyOperations", script)
         self.assertIn('decideSelectedPayment("reject")', script)
         self.assertIn('decideSelectedPayment("cancel")', script)
         self.assertIn(
@@ -159,6 +164,8 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("service-customer-search", page)
         self.assertIn("service-postal-code", page)
         self.assertIn("service-colonia", page)
+        self.assertIn("operations-run-date", page)
+        self.assertIn("Operación diaria", page)
         self.assertIn("network-execution-form", page)
         self.assertIn("Ejecutar cambio real", page)
         self.assertIn("preflight_command_id:", script)

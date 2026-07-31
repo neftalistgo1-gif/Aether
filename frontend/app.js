@@ -4,8 +4,10 @@ const state = {
   customers: [],
   services: [],
   payments: [],
+  dailyOperations: [],
   plans: [],
   incidents: [],
+  latestDailyOperationResult: null,
   editingCustomerId: null,
   selectedPaymentId: null,
   selectedPlanId: null,
@@ -86,6 +88,14 @@ function formatDate(value) {
   );
 }
 
+function formatDateTime(value) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 function formatMoney(value) {
   return new Intl.NumberFormat("es-MX", {
     style: "currency",
@@ -115,16 +125,19 @@ async function loadResource(path) {
 
 async function loadWorkspace() {
   state.user = await api("/api/v1/auth/me");
-  const [customers, services, payments, plans, incidents] = await Promise.all([
+  const [customers, services, payments, dailyOperations, plans, incidents] = await Promise.all([
     loadResource("/api/v1/customers"),
     loadResource("/api/v1/services"),
     loadResource("/api/v1/payments"),
+    loadResource("/api/v1/operations/daily"),
     loadResource("/api/v1/plans"),
     loadResource("/api/v1/incidents"),
   ]);
   state.customers = customers;
   state.services = services;
   state.payments = payments;
+  state.dailyOperations = dailyOperations;
+  state.latestDailyOperationResult = dailyOperations?.[0] || null;
   state.plans = plans;
   state.incidents = incidents;
   renderUser();
@@ -132,6 +145,7 @@ async function loadWorkspace() {
   renderCustomers();
   renderServices();
   renderPayments();
+  renderDailyOperations();
   renderPlans();
   renderIncidents();
 }
@@ -182,6 +196,16 @@ function renderUser() {
   document.querySelectorAll(".payment-action-column").forEach((column) => {
     column.hidden = !hasCapability("billing.approve");
   });
+  const canReadOperations = hasCapability("operations.read");
+  const canRunOperations = hasCapability("operations.run");
+  document.querySelector('[data-view="operations"]').hidden = !canReadOperations;
+  $("#preview-daily-operations-button").hidden = !canRunOperations;
+  $("#run-daily-operations-button").hidden = !canRunOperations;
+  const operationsRunNote = $("#operations-run-note");
+  operationsRunNote.hidden = canRunOperations;
+  operationsRunNote.textContent = canRunOperations
+    ? ""
+    : "Esta cuenta puede consultar ejecuciones previas, pero no iniciar la operación diaria.";
   const canReadPlans = hasCapability("plans.read");
   const canWritePlans = hasCapability("plans.write");
   document.querySelector('[data-view="plans"]').hidden = !canReadPlans;
@@ -278,6 +302,133 @@ function renderOverview() {
   $("#overview-message").textContent = visibleAreas
     ? `Aether muestra ${visibleAreas} áreas según los permisos de tu cuenta.`
     : "Tu cuenta está activa, pero todavía no tiene acceso a áreas operativas.";
+}
+
+function upsertDailyOperation(saved) {
+  if (!state.dailyOperations) state.dailyOperations = [];
+  const index = state.dailyOperations.findIndex(
+    (item) => item.run_date === saved.run_date
+  );
+  if (index >= 0) state.dailyOperations[index] = saved;
+  else state.dailyOperations.unshift(saved);
+  state.dailyOperations.sort(
+    (a, b) => new Date(b.completed_at) - new Date(a.completed_at)
+  );
+}
+
+function renderDailyOperations() {
+  const summary = $("#operations-summary");
+  const body = $("#operations-body");
+  const empty = $("#operations-empty");
+  const runDate = $("#operations-run-date");
+  if (!runDate.value) {
+    runDate.value = localDateValue();
+  }
+  if (!state.dailyOperations) {
+    summary.innerHTML = "";
+    body.innerHTML = "";
+    empty.textContent = "Tu cuenta no puede consultar la operación diaria.";
+    empty.hidden = false;
+    return;
+  }
+  const latest = state.latestDailyOperationResult || state.dailyOperations[0];
+  summary.innerHTML = latest
+    ? `
+      <div>
+        <span>Fecha evaluada</span>
+        <strong>${formatDate(latest.run_date)}</strong>
+      </div>
+      <div>
+        <span>Mensualidades</span>
+        <strong>${latest.monthly_charges_created}</strong>
+      </div>
+      <div>
+        <span>Prórrogas vencidas</span>
+        <strong>${latest.extensions_expired}</strong>
+      </div>
+      <div>
+        <span>Modo</span>
+        <strong>${latest.dry_run ? "Simulación" : "Ejecución real"}</strong>
+      </div>
+      <div>
+        <span>Responsable</span>
+        <strong>${escapeText(latest.executed_by)}</strong>
+      </div>
+      <div>
+        <span>Cierre</span>
+        <strong>${formatDateTime(latest.completed_at)}</strong>
+      </div>
+    `
+    : `
+      <div>
+        <span>Estado</span>
+        <strong>Sin ejecuciones previas</strong>
+      </div>
+      <div>
+        <span>Qué hará</span>
+        <strong>Mensualidades y vencimientos</strong>
+      </div>
+      <div>
+        <span>Seguridad</span>
+        <strong>Primero puedes simular</strong>
+      </div>
+    `;
+  body.innerHTML = state.dailyOperations
+    .map((run) => `
+      <tr>
+        <td><strong>${formatDate(run.run_date)}</strong></td>
+        <td>${run.monthly_charges_created}</td>
+        <td>${run.extensions_expired}</td>
+        <td>${escapeText(run.executed_by)}</td>
+        <td>${formatDateTime(run.completed_at)}</td>
+        <td><span class="badge ${run.status}">${escapeText(run.status)}</span></td>
+      </tr>
+    `)
+    .join("");
+  empty.textContent = "Aún no hay ejecuciones registradas.";
+  empty.hidden = state.dailyOperations.length > 0;
+}
+
+function setDailyOperationsBusy(busy) {
+  [
+    $("#preview-daily-operations-button"),
+    $("#run-daily-operations-button"),
+    $("#operations-run-date"),
+  ].forEach((element) => {
+    if (element) element.disabled = busy;
+  });
+}
+
+async function runDailyOperations(dryRun) {
+  const runDate = $("#operations-run-date").value;
+  if (!runDate) {
+    setNotice("Selecciona una fecha válida para la operación diaria.");
+    return;
+  }
+  setDailyOperationsBusy(true);
+  try {
+    const result = await api("/api/v1/operations/daily", {
+      method: "POST",
+      body: JSON.stringify({
+        run_date: runDate,
+        dry_run: dryRun,
+      }),
+    });
+    state.latestDailyOperationResult = result;
+    if (!dryRun) {
+      upsertDailyOperation(result);
+    }
+    renderDailyOperations();
+    setNotice(
+      dryRun
+        ? `Simulación lista: ${result.monthly_charges_created} mensualidades y ${result.extensions_expired} prórrogas vencidas.`
+        : `Operación diaria ejecutada: ${result.monthly_charges_created} mensualidades y ${result.extensions_expired} prórrogas vencidas.`
+    );
+  } catch (error) {
+    setNotice(error.message);
+  } finally {
+    setDailyOperationsBusy(false);
+  }
 }
 
 function renderCustomers(query = "") {
@@ -3962,6 +4113,7 @@ function showView(name) {
     customers: "Clientes",
     services: "Servicios",
     payments: "Pagos",
+    operations: "Operación diaria",
     plans: "Planes",
     incidents: "Incidencias",
   };
@@ -4328,6 +4480,12 @@ $("#payment-customer").addEventListener("change", updatePaymentServices);
 $("#payment-form").addEventListener("submit", savePayment);
 $("#close-payment-dialog").addEventListener("click", closePaymentDialog);
 $("#cancel-payment-dialog").addEventListener("click", closePaymentDialog);
+$("#preview-daily-operations-button").addEventListener("click", () => {
+  void runDailyOperations(true);
+});
+$("#run-daily-operations-button").addEventListener("click", () => {
+  void runDailyOperations(false);
+});
 $("#payments-body").addEventListener("click", (event) => {
   const reviewButton = event.target.closest(".payment-review-action");
   const applyButton = event.target.closest(".payment-apply-action");

@@ -291,6 +291,9 @@ dialog form.embedded-form { padding: 0; }
 .plan-summary { align-self: end; display: grid; gap: 6px; min-height: 68px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: rgba(35,136,239,.06); }
 .plan-summary span { color: var(--muted); font-size: .72rem; }
 .plan-summary strong { color: var(--cyan); font-size: 1.05rem; }
+.operations-toolbar { align-items: end; }
+.operations-date-field { min-width: 190px; }
+.operations-date-field span { color: var(--muted); font-size: .72rem; }
 
 @media (max-width: 980px) {
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
