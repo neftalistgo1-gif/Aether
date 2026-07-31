@@ -562,7 +562,7 @@ function updateSelectedPlanPrice() {
 }
 
 function renderServiceCustomerOptions(query = "") {
-  const customerSelect = $("service-customer");
+  const customerSelect = $("#service-customer");
   const customers = state.customers || [];
   const normalized = query.trim().toLowerCase();
   const filtered = customers.filter((customer) =>
@@ -585,11 +585,11 @@ function renderServiceCustomerOptions(query = "") {
 }
 
 async function updatePostalCodeFields() {
-  const postalCode = $("service-postal-code").value.trim();
-  const cityField = $("service-city");
-  const municipalityField = $("service-municipality");
-  const stateField = $("service-state");
-  const colonySelect = $("service-colonia");
+  const postalCode = $("#service-postal-code").value.trim();
+  const cityField = $("#service-city");
+  const municipalityField = $("#service-municipality");
+  const stateField = $("#service-state");
+  const colonySelect = $("#service-colonia");
 
   cityField.value = "";
   municipalityField.value = "";
@@ -628,12 +628,12 @@ async function updatePostalCodeFields() {
 }
 
 function composeServiceAddress() {
-  const street = $("service-street").value.trim();
-  const postalCode = $("service-postal-code").value.trim();
-  const settlement = $("service-colonia").value;
-  const city = $("service-city").value.trim();
-  const municipality = $("service-municipality").value.trim();
-  const state = $("service-state").value.trim();
+  const street = $("#service-street").value.trim();
+  const postalCode = $("#service-postal-code").value.trim();
+  const settlement = $("#service-colonia").value;
+  const city = $("#service-city").value.trim();
+  const municipality = $("#service-municipality").value.trim();
+  const state = $("#service-state").value.trim();
 
   if (
     !street ||
@@ -655,7 +655,7 @@ function openServiceDialog() {
   const plans = (state.plans || []).filter(
     (plan) => plan.status === "active" && plan.current_price !== null
   );
-  $("service-customer-search").value = "";
+  $("#service-customer-search").value = "";
   renderServiceCustomerOptions();
   $("#service-plan").innerHTML = plans
     .map(
@@ -664,14 +664,14 @@ function openServiceDialog() {
     )
     .join("");
   $("#service-amr").value = "";
-  $("service-postal-code").value = "";
-  $("service-colonia").innerHTML =
+  $("#service-postal-code").value = "";
+  $("#service-colonia").innerHTML =
     '<option value="" disabled selected>Ingresa código postal</option>';
-  $("service-colonia").disabled = true;
-  $("service-street").value = "";
-  $("service-city").value = "";
-  $("service-municipality").value = "";
-  $("service-state").value = "";
+  $("#service-colonia").disabled = true;
+  $("#service-street").value = "";
+  $("#service-city").value = "";
+  $("#service-municipality").value = "";
+  $("#service-state").value = "";
   $("#service-payment-day").value = "5";
   $("#service-grace-days").value = "5";
   $("#service-reason").value = "Alta solicitada por el cliente";
@@ -4086,11 +4086,11 @@ $("#cancel-customer-dialog").addEventListener(
   closeCustomerDialog
 );
 $("#new-service-button").addEventListener("click", openServiceDialog);
-$("service-customer-search").addEventListener("input", (event) => {
+$("#service-customer-search").addEventListener("input", (event) => {
   renderServiceCustomerOptions(event.target.value);
 });
 $("#service-plan").addEventListener("change", updateSelectedPlanPrice);
-$("service-postal-code").addEventListener("input", () => {
+$("#service-postal-code").addEventListener("input", () => {
   void updatePostalCodeFields();
 });
 $("#service-form").addEventListener("submit", saveService);

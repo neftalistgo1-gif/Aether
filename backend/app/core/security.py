@@ -36,7 +36,10 @@ def set_authenticated_actor(actor: AuthenticatedActor) -> Token:
 
 
 def reset_authenticated_actor(token: Token) -> None:
-    _authenticated_actor.reset(token)
+    try:
+        _authenticated_actor.reset(token)
+    except ValueError:
+        _authenticated_actor.set(None)
 
 
 def hash_password(password: str) -> str:

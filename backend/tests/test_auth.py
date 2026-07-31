@@ -1,6 +1,8 @@
 import unittest
 from datetime import UTC, date, datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
+from uuid import uuid4
 
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
@@ -25,6 +27,8 @@ from app.api.v1.endpoints.auth import (
 )
 from app.api.v1.endpoints.plans import create_plan
 from app.core.security import hash_password, verify_password
+from app.core.security import current_authenticated_actor, reset_authenticated_actor
+from app.core.security import set_authenticated_actor, AuthenticatedActor
 from app.db.base import Base
 from app.main import app
 from app.models.audit import AuditEvent
@@ -294,6 +298,22 @@ class AuthenticationTestCase(unittest.TestCase):
             for method, operation in operations.items():
                 with self.subTest(path=path, method=method):
                     self.assertTrue(operation.get("security"))
+
+    def test_reset_authenticated_actor_tolerates_different_context(self) -> None:
+        token = set_authenticated_actor(
+            AuthenticatedActor(
+                user_id=uuid4(),
+                display_name="Administrador",
+            )
+        )
+
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                executor.submit(reset_authenticated_actor, token).result()
+        finally:
+            reset_authenticated_actor(token)
+
+        self.assertIsNone(current_authenticated_actor())
 
     def test_permissions_are_explicit_and_fail_closed(self) -> None:
         admin_credentials = self.bootstrap()
