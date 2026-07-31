@@ -22,3 +22,4 @@ build/
 # Documentos privados y datos personales: nunca se versionan.
 /private_storage/
 /backend/private_storage/
+/docs/journal/codigos_postales.json

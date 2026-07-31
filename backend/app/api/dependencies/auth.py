@@ -207,6 +207,8 @@ def capability_for_operation(
             if is_read
             else Capability.customers_write
         )
+    if route_path.startswith("/api/v1/postal-codes"):
+        return Capability.services_read if is_read else None
     if route_path.startswith("/api/v1/services"):
         return (
             Capability.services_read

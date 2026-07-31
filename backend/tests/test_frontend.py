@@ -37,6 +37,7 @@ class FrontendShellTestCase(unittest.TestCase):
             "/api/v1/auth/logout",
             "/api/v1/customers",
             "/api/v1/services",
+            "/api/v1/postal-codes",
             "/api/v1/payments",
             "/api/v1/plans",
             "/api/v1/incidents",
@@ -50,6 +51,9 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn('reason: $("#customer-reason").value.trim()', script)
         self.assertIn('hasCapability("services.write")', script)
         self.assertIn("plan_id: plan.id", script)
+        self.assertIn("composeServiceAddress()", script)
+        self.assertIn("renderServiceCustomerOptions", script)
+        self.assertIn("updatePostalCodeFields", script)
         self.assertIn('setNotice("El servicio quedó registrado como pendiente.")', script)
         self.assertIn('hasCapability("billing.write")', script)
         self.assertIn("proof_reference: optionalText", script)
@@ -152,6 +156,9 @@ class FrontendShellTestCase(unittest.TestCase):
             "o un convenio vigente del titular actual",
             page,
         )
+        self.assertIn("service-customer-search", page)
+        self.assertIn("service-postal-code", page)
+        self.assertIn("service-colonia", page)
         self.assertIn("network-execution-form", page)
         self.assertIn("Ejecutar cambio real", page)
         self.assertIn("preflight_command_id:", script)

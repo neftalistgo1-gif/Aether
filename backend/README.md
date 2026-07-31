@@ -28,7 +28,10 @@ Desde la carpeta `backend`:
 
 6. Antes del primer inicio, establecer un valor largo y aleatorio para
    `AETHER_BOOTSTRAP_SECRET` dentro de `.env`.
-7. Iniciar la API:
+7. Si vas a usar el autocompletado de direcciones en alta de servicios,
+   coloca tu catálogo postal local fuera del repositorio o en la ruta que
+   prefieras y define `AETHER_POSTAL_CODES_PATH` en `.env`.
+8. Iniciar la API:
 
    ```powershell
    python -m uvicorn app.main:app --reload
@@ -49,7 +52,48 @@ Las cuentas con `services.write`, junto con lectura de clientes y planes,
 pueden registrar servicios pendientes. La interfaz sólo usa planes activos con
 precio vigente y el backend verifica que `plan_id`, nombre y precio coincidan
 con el catálogo. El alta queda auditada y nunca activa automáticamente la
-conexión.
+conexión. Si existe un catálogo postal, la UI permite buscar al cliente
+titular por nombre o teléfono, capturar código postal, autollenar estado,
+municipio y ciudad, y elegir la colonia antes de construir el domicilio final.
+
+### Catálogo de códigos postales
+
+El archivo de códigos postales no se versiona. Cada instalación debe aportar
+su propio catálogo local y apuntarlo con `AETHER_POSTAL_CODES_PATH`.
+
+1. Crea un archivo JSON local, por ejemplo:
+
+   ```text
+   C:\datos_privados\aether\codigos_postales.json
+   ```
+
+2. Usa un arreglo JSON con objetos que tengan exactamente estas llaves:
+
+   ```json
+   [
+     {
+       "postal_code": 88500,
+       "state": "Tamaulipas",
+       "municipality": "Reynosa",
+       "city": "Reynosa",
+       "settlement_type": "Colonia",
+       "settlement_name": "Reynosa Centro"
+     }
+   ]
+   ```
+
+3. Declara la ruta en `backend/.env`:
+
+   ```env
+   AETHER_POSTAL_CODES_PATH=C:\datos_privados\aether\codigos_postales.json
+   ```
+
+4. Reinicia la API. La UI consultará `GET /api/v1/postal-codes?q=88520` para
+   poblar las colonias del formulario de servicios.
+
+Si el archivo no existe o la variable no apunta a una ruta válida, la API
+responderá `503` en `/api/v1/postal-codes` y el alta de servicios no podrá
+autocompletar colonia, municipio, ciudad y estado.
 
 Las cuentas con `plans.read` consultan el catálogo completo. Con `plans.write`
 pueden crear ofertas, publicar una nueva tarifa y desactivar planes. Cada

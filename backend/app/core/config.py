@@ -10,6 +10,10 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+psycopg://aether:aether@localhost:5432/aether",
 )
+AETHER_POSTAL_CODES_PATH = os.getenv(
+    "AETHER_POSTAL_CODES_PATH",
+    str(BACKEND_DIR.parent / "docs" / "journal" / "codigos_postales.json"),
+)
 
 def bounded_integer_setting(
     name: str,

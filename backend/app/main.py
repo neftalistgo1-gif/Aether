@@ -40,6 +40,7 @@ from app.api.v1.endpoints.payment_allocations import (
 from app.api.v1.endpoints.payment_agreements import (
     router as payment_agreements_router,
 )
+from app.api.v1.endpoints.postal_codes import router as postal_codes_router
 from app.api.v1.endpoints.service_operations import (
     router as service_operations_router,
 )
@@ -73,6 +74,7 @@ app.include_router(payments_router, dependencies=protected)
 app.include_router(plans_router, dependencies=protected)
 app.include_router(payment_allocations_router, dependencies=protected)
 app.include_router(payment_agreements_router, dependencies=protected)
+app.include_router(postal_codes_router, dependencies=protected)
 app.include_router(extensions_router, dependencies=protected)
 app.include_router(network_assignments_router, dependencies=protected)
 app.include_router(service_operations_router, dependencies=protected)

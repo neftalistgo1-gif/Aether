@@ -508,8 +508,13 @@
           >×</button>
         </div>
         <div class="form-grid">
-          <label>
+          <label class="full-row">
             Cliente titular
+            <input
+              id="service-customer-search"
+              type="search"
+              placeholder="Buscar cliente por nombre o teléfono"
+            >
             <select id="service-customer" required></select>
           </label>
           <label>
@@ -537,14 +542,45 @@
               required
             >
           </label>
-          <label class="full-row">
-            Domicilio de instalación
+          <label>
+            Código postal
             <input
-              id="service-address"
+              id="service-postal-code"
+              placeholder="88500"
+              inputmode="numeric"
+              pattern="[0-9]{5}"
+              maxlength="5"
+              minlength="5"
+              required
+            >
+          </label>
+          <label>
+            Colonia / asentamiento
+            <select id="service-colonia" required disabled>
+              <option value="" disabled selected>Ingresa código postal</option>
+            </select>
+          </label>
+          <label class="full-row">
+            Calle y número
+            <input
+              id="service-street"
+              placeholder="Calle, número, edificio"
               minlength="5"
               maxlength="250"
               required
             >
+          </label>
+          <label>
+            Ciudad
+            <input id="service-city" readonly>
+          </label>
+          <label>
+            Municipio
+            <input id="service-municipality" readonly>
+          </label>
+          <label>
+            Estado
+            <input id="service-state" readonly>
           </label>
           <label>
             Días de tolerancia

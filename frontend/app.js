@@ -561,17 +561,102 @@ function updateSelectedPlanPrice() {
     : "—";
 }
 
-function openServiceDialog() {
+function renderServiceCustomerOptions(query = "") {
+  const customerSelect = $("service-customer");
   const customers = state.customers || [];
+  const normalized = query.trim().toLowerCase();
+  const filtered = customers.filter((customer) =>
+    [customer.full_name, ...(customer.phones || [])]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalized)
+  );
+  customerSelect.innerHTML = filtered.length
+    ? filtered
+        .map(
+          (customer) =>
+            `<option value="${customer.id}">${escapeText(
+              customer.full_name
+            )}</option>`
+        )
+        .join("")
+    : '<option value="" disabled selected>No hay clientes coincidentes</option>';
+  customerSelect.disabled = filtered.length === 0;
+}
+
+async function updatePostalCodeFields() {
+  const postalCode = $("service-postal-code").value.trim();
+  const cityField = $("service-city");
+  const municipalityField = $("service-municipality");
+  const stateField = $("service-state");
+  const colonySelect = $("service-colonia");
+
+  cityField.value = "";
+  municipalityField.value = "";
+  stateField.value = "";
+  colonySelect.innerHTML =
+    '<option value="" disabled selected>Ingresa código postal</option>';
+  colonySelect.disabled = true;
+
+  if (!/^\d{5}$/.test(postalCode)) {
+    return;
+  }
+
+  const matches = await api(
+    `/api/v1/postal-codes?q=${encodeURIComponent(postalCode)}`
+  );
+  if (!matches.length) {
+    colonySelect.innerHTML =
+      '<option value="" disabled selected>No hay colonias para ese código postal</option>';
+    return;
+  }
+
+  const first = matches[0];
+  cityField.value = first.city || "";
+  municipalityField.value = first.municipality || "";
+  stateField.value = first.state || "";
+  colonySelect.disabled = false;
+  colonySelect.innerHTML = [
+    '<option value="" disabled selected>Selecciona colonia</option>',
+    ...matches.map(
+      (item) =>
+        `<option value="${escapeText(item.settlement_name)}">${escapeText(
+          item.settlement_name
+        )} (${escapeText(item.settlement_type || "Colonia")})</option>`
+    ),
+  ].join("");
+}
+
+function composeServiceAddress() {
+  const street = $("service-street").value.trim();
+  const postalCode = $("service-postal-code").value.trim();
+  const settlement = $("service-colonia").value;
+  const city = $("service-city").value.trim();
+  const municipality = $("service-municipality").value.trim();
+  const state = $("service-state").value.trim();
+
+  if (
+    !street ||
+    !postalCode ||
+    !settlement ||
+    !city ||
+    !municipality ||
+    !state
+  ) {
+    throw new Error(
+      "Completa el domicilio de instalación con código postal válido, colonia y calle."
+    );
+  }
+
+  return `${street}, ${settlement}, ${city}, ${municipality}, ${state} ${postalCode}`;
+}
+
+function openServiceDialog() {
   const plans = (state.plans || []).filter(
     (plan) => plan.status === "active" && plan.current_price !== null
   );
-  $("#service-customer").innerHTML = customers
-    .map(
-      (customer) =>
-        `<option value="${customer.id}">${escapeText(customer.full_name)}</option>`
-    )
-    .join("");
+  $("service-customer-search").value = "";
+  renderServiceCustomerOptions();
   $("#service-plan").innerHTML = plans
     .map(
       (plan) =>
@@ -579,7 +664,14 @@ function openServiceDialog() {
     )
     .join("");
   $("#service-amr").value = "";
-  $("#service-address").value = "";
+  $("service-postal-code").value = "";
+  $("service-colonia").innerHTML =
+    '<option value="" disabled selected>Ingresa código postal</option>';
+  $("service-colonia").disabled = true;
+  $("service-street").value = "";
+  $("service-city").value = "";
+  $("service-municipality").value = "";
+  $("service-state").value = "";
   $("#service-payment-day").value = "5";
   $("#service-grace-days").value = "5";
   $("#service-reason").value = "Alta solicitada por el cliente";
@@ -614,7 +706,7 @@ async function saveService(event) {
         customer_id: $("#service-customer").value,
         plan_id: plan.id,
         amr_code: $("#service-amr").value.trim().toUpperCase(),
-        address: $("#service-address").value.trim(),
+        address: composeServiceAddress(),
         plan_name: plan.name,
         monthly_price: plan.current_price,
         payment_day: Number($("#service-payment-day").value),
@@ -3994,7 +4086,13 @@ $("#cancel-customer-dialog").addEventListener(
   closeCustomerDialog
 );
 $("#new-service-button").addEventListener("click", openServiceDialog);
+$("service-customer-search").addEventListener("input", (event) => {
+  renderServiceCustomerOptions(event.target.value);
+});
 $("#service-plan").addEventListener("change", updateSelectedPlanPrice);
+$("service-postal-code").addEventListener("input", () => {
+  void updatePostalCodeFields();
+});
 $("#service-form").addEventListener("submit", saveService);
 $("#close-service-dialog").addEventListener("click", closeServiceDialog);
 $("#cancel-service-dialog").addEventListener("click", closeServiceDialog);
