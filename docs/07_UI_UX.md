@@ -163,6 +163,13 @@ folio, fecha efectiva, saldos calculados y avance operativo, pero no reproduce
 las reglas financieras ni técnicas. `services.cancel` controla solicitud,
 ejecución y liberación; `assets.write` permite programar y completar el retiro.
 
+En la etapa de recuperación, el técnico puede adjuntar imágenes como evidencia
+privada desde el navegador. Este adjunto es opcional: si no hay fotografías,
+la tarea aún puede cerrarse siempre que la clasificación de equipos y notas
+obligatorias sean válidas. Antes de cerrar, la UI muestra miniaturas de
+previsualización para validar rápidamente que se eligieron los archivos
+correctos.
+
 Las dos acciones de MikroTik conservan la secuencia
 simulación-confirmación-ejecución y exigen escribir el código AMR antes del
 cambio real. La recuperación obliga a clasificar cada equipo esperado como

@@ -277,6 +277,11 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("cancellation-request-form", script)
         self.assertIn("/cancellation/coordinated", script)
         self.assertIn("/equipment-recovery/complete", script)
+        self.assertIn("buildRecoveryEvidenceReferences", script)
+        self.assertIn("recovery-evidence-images", script)
+        self.assertIn("recovery-evidence-preview", script)
+        self.assertIn("renderRecoveryEvidencePreview", script)
+        self.assertIn('accept="image/*"', script)
         self.assertIn(
             "/cancellation/network-release/coordinated",
             script,
@@ -286,6 +291,10 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn('type: "cancellation"', script)
         self.assertIn('type: "network_release"', script)
         self.assertIn("preflightCommandId: result.command.id", script)
+        self.assertIn(
+            "Puedes cerrar la visita sin imágenes",
+            script,
+        )
         self.assertIn("cancellation-dialog", page)
         self.assertIn("BAJA SEGURA · FLUJO POR ETAPAS", page)
 

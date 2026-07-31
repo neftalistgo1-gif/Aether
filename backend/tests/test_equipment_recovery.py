@@ -103,13 +103,18 @@ class EquipmentRecoveryTestCase(unittest.TestCase):
         self,
         recovered: list[str],
         missing: list[str],
+        evidence_references: list[str] | None = None,
     ) -> EquipmentRecoveryComplete:
         return EquipmentRecoveryComplete(
             performed_by="Técnico instalador",
             recovered_equipment=recovered,
             missing_equipment=missing,
             condition_notes="Equipos recibidos para inspección",
-            evidence_references=["evidencia/recovery-001.jpg"],
+            evidence_references=(
+                evidence_references
+                if evidence_references is not None
+                else ["evidencia/recovery-001.jpg"]
+            ),
             receipt_reference="REC-001",
         )
 
@@ -144,6 +149,7 @@ class EquipmentRecoveryTestCase(unittest.TestCase):
             self.completion(
                 ["Antena", "Módem", "PoE", "Tubo"],
                 [],
+                evidence_references=[],
             ),
             self.db,
         )
@@ -169,6 +175,23 @@ class EquipmentRecoveryTestCase(unittest.TestCase):
         )
 
         self.assertEqual(recovery.status, EquipmentRecoveryStatus.partial)
+
+    def test_complete_recovery_without_evidence_is_allowed(self) -> None:
+        self.cancel_service(date.today())
+        self.schedule_recovery()
+
+        recovery = complete_equipment_recovery(
+            self.service.id,
+            self.completion(
+                ["Antena", "Módem", "PoE", "Tubo"],
+                [],
+                evidence_references=[],
+            ),
+            self.db,
+        )
+
+        self.assertEqual(recovery.status, EquipmentRecoveryStatus.complete)
+        self.assertEqual(recovery.evidence_references, [])
 
     def test_complete_unrecoverable_visit(self) -> None:
         self.cancel_service(date.today())

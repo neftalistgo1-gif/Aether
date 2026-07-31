@@ -29,9 +29,13 @@ const state = {
   selectedRecovery: null,
   selectedIncidentId: null,
   pendingNetworkOperation: null,
+  recoveryEvidencePreviewUrls: [],
 };
 
 const NETWORK_PREFLIGHT_VALIDITY_MS = 15 * 60 * 1000;
+const MAX_RECOVERY_EVIDENCE_IMAGES = 6;
+const MAX_RECOVERY_EVIDENCE_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_RECOVERY_EVIDENCE_REFERENCES = 20;
 
 const $ = (selector) => document.querySelector(selector);
 const loginView = $("#login-view");
@@ -1428,6 +1432,93 @@ function evidenceLines(selector) {
     .filter(Boolean);
 }
 
+function clearRecoveryEvidencePreview() {
+  for (const url of state.recoveryEvidencePreviewUrls) {
+    URL.revokeObjectURL(url);
+  }
+  state.recoveryEvidencePreviewUrls = [];
+  const preview = $("#recovery-evidence-preview");
+  if (preview) {
+    preview.hidden = true;
+    preview.innerHTML = "";
+  }
+}
+
+function renderRecoveryEvidencePreview() {
+  const fileInput = $("#recovery-evidence-images");
+  const preview = $("#recovery-evidence-preview");
+  if (!fileInput || !preview) return;
+
+  clearRecoveryEvidencePreview();
+
+  const files = Array.from(fileInput.files || []);
+  if (!files.length) {
+    return;
+  }
+
+  const urls = [];
+  const cards = files.map((file) => {
+    const objectUrl = URL.createObjectURL(file);
+    urls.push(objectUrl);
+    const safeName = escapeText(file.name);
+    const safeType = escapeText(file.type || "imagen");
+    const sizeKb = Math.max(1, Math.round(file.size / 1024));
+    return `
+      <article class="evidence-image-card">
+        <img src="${objectUrl}" alt="Vista previa de ${safeName}">
+        <div>
+          <strong>${safeName}</strong>
+          <small>${safeType} · ${sizeKb} KB</small>
+        </div>
+      </article>
+    `;
+  });
+
+  state.recoveryEvidencePreviewUrls = urls;
+  preview.innerHTML = cards.join("");
+  preview.hidden = false;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("No fue posible leer una imagen adjunta."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function buildRecoveryEvidenceReferences() {
+  const manualReferences = textLines($("#recovery-evidence").value);
+  const imageFiles = Array.from(
+    $("#recovery-evidence-images")?.files || []
+  );
+  if (imageFiles.length > MAX_RECOVERY_EVIDENCE_IMAGES) {
+    throw new Error("Adjunta hasta seis imágenes de evidencia por visita.");
+  }
+
+  const imageReferences = [];
+  for (const file of imageFiles) {
+    if (!file.type.startsWith("image/")) {
+      throw new Error("Solo se permiten archivos de imagen como evidencia.");
+    }
+    if (file.size > MAX_RECOVERY_EVIDENCE_IMAGE_BYTES) {
+      throw new Error("Cada imagen debe pesar como máximo 2 MB.");
+    }
+    const dataUrl = await readFileAsDataUrl(file);
+    const safeName = file.name.trim().replaceAll("|", "-") || "evidencia";
+    imageReferences.push(
+      `image:${safeName}|${file.type}|${file.size}|${dataUrl}`
+    );
+  }
+
+  const references = [...manualReferences, ...imageReferences];
+  if (references.length > MAX_RECOVERY_EVIDENCE_REFERENCES) {
+    throw new Error("La visita acepta hasta 20 evidencias en total.");
+  }
+  return references;
+}
+
 function openInstallationCompleteDialog() {
   const service = state.services?.find(
     (item) => item.id === state.selectedServiceId
@@ -1882,6 +1973,7 @@ async function openCancellationDialog(service) {
 }
 
 function closeCancellationDialog() {
+  clearRecoveryEvidencePreview();
   $("#cancellation-dialog").close();
   state.selectedServiceId = null;
   state.selectedCancellation = null;
@@ -2079,6 +2171,16 @@ function recoveryCompletionMarkup(recovery, cancellation) {
           Referencias privadas de evidencia, una por línea
           <textarea id="recovery-evidence" rows="3"></textarea>
         </label>
+        <label class="full-row">
+          Imágenes de evidencia (opcional)
+          <input
+            id="recovery-evidence-images"
+            type="file"
+            accept="image/*"
+            multiple
+          >
+        </label>
+        <div class="full-row evidence-image-preview" id="recovery-evidence-preview" hidden></div>
         <label>
           Constancia de recepción
           <input id="recovery-receipt" maxlength="500">
@@ -2088,6 +2190,10 @@ function recoveryCompletionMarkup(recovery, cancellation) {
           <textarea id="recovery-completion-notes" rows="2" maxlength="1000"></textarea>
         </label>
       </div>
+      <p class="form-help">
+        Puedes cerrar la visita sin imágenes; si adjuntas fotos, Aether las
+        conserva como evidencia privada.
+      </p>
       <div class="dialog-actions">
         <button class="primary-button" type="submit">Cerrar visita</button>
       </div>
@@ -2152,6 +2258,7 @@ function networkReleaseMarkup(cancellation, recovery) {
 }
 
 function renderCancellationWorkspace() {
+  clearRecoveryEvidencePreview();
   const service = state.services?.find(
     (item) => item.id === state.selectedServiceId
   );
@@ -2434,6 +2541,7 @@ async function completeEquipmentRecovery(event) {
   submitButton.disabled = true;
   $("#cancellation-error").textContent = "";
   try {
+    const evidenceReferences = await buildRecoveryEvidenceReferences();
     state.selectedRecovery = await api(
       `/api/v1/services/${state.selectedServiceId}/equipment-recovery/complete`,
       {
@@ -2443,7 +2551,7 @@ async function completeEquipmentRecovery(event) {
           recovered_equipment: recovered,
           missing_equipment: missing,
           condition_notes: $("#recovery-condition-notes").value.trim(),
-          evidence_references: textLines($("#recovery-evidence").value),
+          evidence_references: evidenceReferences,
           receipt_reference: $("#recovery-receipt").value.trim() || null,
           notes: $("#recovery-completion-notes").value.trim() || null,
         }),
@@ -4822,6 +4930,11 @@ $("#cancellation-workspace").addEventListener("click", (event) => {
     simulateCancellationShutdown(simulationButton);
   } else if (pendingButton) {
     executePendingCancellation(pendingButton);
+  }
+});
+$("#cancellation-workspace").addEventListener("change", (event) => {
+  if (event.target.id === "recovery-evidence-images") {
+    renderRecoveryEvidencePreview();
   }
 });
 $("#extension-create-form").addEventListener("submit", saveExtension);

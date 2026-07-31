@@ -117,6 +117,7 @@ class MaintenanceInspectionTestCase(unittest.TestCase):
         result: InspectionResult = InspectionResult.ready_for_reuse,
         cleaning_performed: bool = True,
         tests_passed: bool = True,
+        evidence_references: list[str] | None = None,
     ) -> MaintenanceInspectionCreate:
         return MaintenanceInspectionCreate(
             equipment_name=equipment_name,
@@ -134,7 +135,11 @@ class MaintenanceInspectionTestCase(unittest.TestCase):
                 )
             ],
             repairs_performed=[],
-            evidence_references=["evidencia/inspection-401.jpg"],
+            evidence_references=(
+                evidence_references
+                if evidence_references is not None
+                else ["evidencia/inspection-401.jpg"]
+            ),
             result=result,
             decision_reason="Resultado confirmado por el tecnico",
         )
@@ -193,6 +198,19 @@ class MaintenanceInspectionTestCase(unittest.TestCase):
                 self.db,
             )
         self.assertEqual(context.exception.status_code, 409)
+
+    def test_maintenance_inspection_allows_empty_evidence(self) -> None:
+        inspection = create_maintenance_inspection(
+            self.service.id,
+            self.inspection_data(
+                result=InspectionResult.needs_repair,
+                tests_passed=False,
+                evidence_references=[],
+            ),
+            self.db,
+        )
+
+        self.assertEqual(inspection.evidence_references, [])
 
     def test_repair_result_allows_reinspection_and_preserves_history(self) -> None:
         create_maintenance_inspection(

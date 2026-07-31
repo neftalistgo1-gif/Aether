@@ -262,6 +262,36 @@ dialog form.embedded-form { padding: 0; }
   padding: 9px 11px;
   background: rgba(6,19,37,.45);
 }
+.evidence-image-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+.evidence-image-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px;
+  background: rgba(6,19,37,.45);
+}
+.evidence-image-card img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(141, 185, 233, 0.2);
+}
+.evidence-image-card strong {
+  display: block;
+  font-size: .74rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.evidence-image-card small {
+  color: var(--muted);
+  font-size: .68rem;
+}
 .extension-section {
   display: grid;
   gap: 12px;
