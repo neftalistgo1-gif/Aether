@@ -59,7 +59,7 @@ def create_service(
     service: ServiceCreate,
     db: Session = Depends(get_db),
 ) -> Service:
-    if db.get(Customer, service.customer_id) is None:
+    if service.customer_id is not None and db.get(Customer, service.customer_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Customer not found",
@@ -92,7 +92,10 @@ def create_service(
         exclude={"customer_id", "registered_by", "reason"}
     )
     new_service = Service(**service_data)
-    new_service.holders.append(ServiceHolder(customer_id=service.customer_id))
+    if service.customer_id is not None:
+        new_service.holders.append(
+            ServiceHolder(customer_id=service.customer_id)
+        )
     new_service.events.append(
         ServiceEvent(
             event_type=ServiceEventType.registered,

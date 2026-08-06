@@ -1,6 +1,8 @@
 import unittest
 from datetime import UTC, datetime
 from decimal import Decimal
+from uuid import uuid4
+from unittest.mock import Mock, patch
 
 from fastapi import HTTPException
 from sqlalchemy import create_engine, select
@@ -20,6 +22,7 @@ from app.db.base import Base
 from app.models.customer import Customer
 from app.models.audit import AuditEvent
 from app.models.payment import PaymentMethod, PaymentStatus
+from app.models.service import ServiceStatus
 from app.schemas.payment import (
     PaymentCreate,
     PaymentDecision,
@@ -134,6 +137,62 @@ class PaymentTestCase(unittest.TestCase):
         self.assertEqual(
             actions,
             {"payment.received", "payment.verified"},
+        )
+
+    def test_verified_payment_can_reactivate_a_suspended_service(self) -> None:
+        payment = create_payment(self.payment_data(), self.db)
+        self.service.status = ServiceStatus.suspended
+        self.db.commit()
+
+        preflight = Mock(id=uuid4())
+        live = Mock(id=uuid4())
+
+        with patch(
+            "app.api.v1.endpoints.payments.control_service_network",
+            side_effect=[preflight, live],
+        ) as control:
+            verified = verify_payment(
+                payment.id,
+                PaymentVerify(
+                    confirmed_amount=Decimal("500.00"),
+                    verified_by="Administrador",
+                ),
+                self.db,
+            )
+
+        self.assertEqual(verified.status, PaymentStatus.verified)
+        self.assertEqual(control.call_count, 2)
+        self.assertEqual(
+            control.call_args_list[0].args[1].value,
+            "reactivate",
+        )
+
+    def test_rejected_payment_can_suspend_an_active_service(self) -> None:
+        payment = create_payment(self.payment_data(), self.db)
+        self.service.status = ServiceStatus.active
+        self.db.commit()
+
+        preflight = Mock(id=uuid4())
+        live = Mock(id=uuid4())
+
+        with patch(
+            "app.api.v1.endpoints.payments.control_service_network",
+            side_effect=[preflight, live],
+        ) as control:
+            rejected = reject_payment(
+                payment.id,
+                PaymentDecision(
+                    performed_by="Administrador",
+                    reason="Comprobante no válido",
+                ),
+                self.db,
+            )
+
+        self.assertEqual(rejected.status, PaymentStatus.rejected)
+        self.assertEqual(control.call_count, 2)
+        self.assertEqual(
+            control.call_args_list[0].args[1].value,
+            "suspend",
         )
 
     def test_amount_difference_requires_verification_notes(self) -> None:

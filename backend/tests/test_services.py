@@ -91,6 +91,16 @@ class ServiceEndpointsTestCase(unittest.TestCase):
         persisted = get_service(service_id, self.db)
         self.assertEqual(persisted.current_customer_id, self.customer.id)
 
+    def test_create_service_without_initial_holder_is_allowed(self) -> None:
+        payload = self.service_payload("AMR304")
+        payload.customer_id = None
+
+        created = create_service(payload, self.db)
+
+        self.assertIsNone(created.current_customer_id)
+        self.assertEqual(self.db.query(ServiceHolder).count(), 0)
+        self.assertEqual(self.db.query(Service).count(), 1)
+
     def test_catalog_plan_is_validated_and_linked(self) -> None:
         plan = create_plan(
             PlanCreate(

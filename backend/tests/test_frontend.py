@@ -39,6 +39,7 @@ class FrontendShellTestCase(unittest.TestCase):
             "/api/v1/services",
             "/api/v1/postal-codes",
             "/api/v1/payments",
+            "/api/v1/payments/receipts",
             "/api/v1/operations/daily",
             "/api/v1/assets",
             "/api/v1/plans",
@@ -58,7 +59,7 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("updatePostalCodeFields", script)
         self.assertIn('setNotice("El servicio quedó registrado como pendiente.")', script)
         self.assertIn('hasCapability("billing.write")', script)
-        self.assertIn("proof_reference: optionalText", script)
+        self.assertIn('"proof_reference"', script)
         self.assertIn(
             "El pago quedó pendiente de verificación",
             script,
@@ -235,6 +236,16 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("/restore", script)
         self.assertIn("/resolve", script)
         self.assertIn("/compensation", script)
+        self.assertIn("payment-queue-summary", page)
+        self.assertIn("payment-queue-tabs", page)
+        self.assertIn("Bandeja de comprobantes", page)
+        self.assertIn("payment-customer-search", page)
+        self.assertIn("payment-proof-file", page)
+        self.assertIn("payment-proof-preview", page)
+        self.assertIn('state.paymentFilter', script)
+        self.assertIn("apiBlob(", script)
+        self.assertIn("syncPaymentCustomerSelection", script)
+        self.assertIn("receipts", script)
         self.assertIn("Incidencias", page)
         self.assertIn("SEGUIMIENTO DE INCIDENCIA", page)
 

@@ -41,3 +41,17 @@ Nunca sacrificaremos la estabilidad por agregar funciones.
 
 Construiremos software para personas,
 no para impresionar programadores.
+
+## Estado Actual
+
+Aether ya no se piensa como un simple sistema para capturar clientes.
+Se está construyendo como una plataforma operativa para un WISP con énfasis en:
+
+- servicios registrables aun cuando el titular esté incompleto al inicio;
+- validación posterior de datos faltantes sin romper el flujo operativo;
+- cortes y reactivaciones coordinadas con MikroTik;
+- comunicación auditable con clientes;
+- crecimiento por módulos, no por reescrituras.
+
+La prioridad inmediata es sostener la operación diaria sin obligar a que toda
+la ficha del cliente exista desde el primer registro del servicio.

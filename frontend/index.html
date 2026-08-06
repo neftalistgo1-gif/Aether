@@ -252,6 +252,14 @@
                 hidden
               >Registrar pago</button>
             </div>
+            <div class="payment-queue-summary" id="payment-queue-summary"></div>
+            <div class="payment-queue-tabs" role="tablist" aria-label="Bandeja de comprobantes">
+              <button class="tab-button active" type="button" data-payment-filter="all">Todos</button>
+              <button class="tab-button" type="button" data-payment-filter="pending">Pendientes</button>
+              <button class="tab-button" type="button" data-payment-filter="verified">Verificados</button>
+              <button class="tab-button" type="button" data-payment-filter="rejected">Rechazados</button>
+              <button class="tab-button" type="button" data-payment-filter="cancelled">Cancelados</button>
+            </div>
             <p id="payment-write-note" class="inline-note" hidden></p>
             <div class="table-wrap">
               <table>
@@ -715,13 +723,13 @@
         </div>
         <div class="form-grid">
           <label class="full-row">
-            Cliente titular
+            Cliente titular opcional
             <input
               id="service-customer-search"
               type="search"
               placeholder="Buscar cliente por nombre o teléfono"
             >
-            <select id="service-customer" required></select>
+            <select id="service-customer"></select>
           </label>
           <label>
             Plan
@@ -845,7 +853,15 @@
         <div class="form-grid">
           <label>
             Cliente
-            <select id="payment-customer" required></select>
+            <input
+              id="payment-customer-search"
+              list="payment-customer-options"
+              placeholder="AMR###, nombre o teléfono"
+              autocomplete="off"
+              required
+            >
+            <datalist id="payment-customer-options"></datalist>
+            <select id="payment-customer" required hidden></select>
           </label>
           <label>
             Servicio relacionado
@@ -890,6 +906,14 @@
               id="payment-proof-reference"
               maxlength="500"
               placeholder="Ej. comprobantes/folio-123"
+            >
+          </label>
+          <label>
+            Archivo del comprobante
+            <input
+              id="payment-proof-file"
+              type="file"
+              accept="image/*,.pdf"
             >
           </label>
           <label class="full-row">
@@ -937,6 +961,12 @@
           >×</button>
         </div>
         <div id="payment-review-summary" class="decision-summary"></div>
+        <div class="proof-preview-shell">
+          <div class="proof-preview-header">
+            <strong>Comprobante adjunto</strong>
+          </div>
+          <div id="payment-proof-preview" class="proof-preview">Sin archivo adjunto.</div>
+        </div>
         <div class="form-grid">
           <label>
             Monto confirmado

@@ -13,6 +13,7 @@ const state = {
   selectedAssetAssignments: [],
   editingCustomerId: null,
   selectedPaymentId: null,
+  paymentFilter: "all",
   selectedPlanId: null,
   selectedServiceId: null,
   selectedInstallation: null,
@@ -61,7 +62,9 @@ function bootstrapLoginFromUrl() {
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
-  if (options.body) headers["Content-Type"] = "application/json";
+  if (options.body && !(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
   const response = await fetch(path, { ...options, headers });
   if (response.status === 204) return null;
   const payload = await response.json().catch(() => ({}));
@@ -83,6 +86,24 @@ async function api(path, options = {}) {
     throw error;
   }
   return payload;
+}
+
+async function apiBlob(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  const response = await fetch(path, { ...options, headers });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const detail = payload.detail;
+    const error = new Error(
+      typeof detail === "string"
+        ? detail
+        : "No fue posible cargar el archivo solicitado."
+    );
+    error.status = response.status;
+    throw error;
+  }
+  return response.blob();
 }
 
 function formatDate(value) {
@@ -1007,7 +1028,12 @@ function renderServices() {
       <tr>
         <td><strong>${escapeText(service.amr_code)}</strong></td>
         <td>${escapeText(service.plan_name)}</td>
-        <td>${escapeText(service.address)}</td>
+        <td>
+          ${escapeText(service.address)}
+          <small class="table-subtitle">
+            ${service.current_customer_id ? "Titular enlazado" : "Pendiente de titular"}
+          </small>
+        </td>
         <td>Día ${service.payment_day} · ${formatMoney(service.monthly_price)}</td>
         <td><span class="badge ${service.status}">${escapeText(service.status)}</span></td>
         ${canShowActions ? `
@@ -1103,17 +1129,18 @@ function renderServiceCustomerOptions(query = "") {
       .toLowerCase()
       .includes(normalized)
   );
-  customerSelect.innerHTML = filtered.length
-    ? filtered
-        .map(
+  customerSelect.innerHTML = [
+    '<option value="">Sin titular por ahora</option>',
+    ...(filtered.length
+      ? filtered.map(
           (customer) =>
             `<option value="${customer.id}">${escapeText(
               customer.full_name
             )}</option>`
         )
-        .join("")
-    : '<option value="" disabled selected>No hay clientes coincidentes</option>';
-  customerSelect.disabled = filtered.length === 0;
+      : ['<option value="" disabled>No hay clientes coincidentes</option>']),
+  ].join("");
+  customerSelect.disabled = false;
 }
 
 async function updatePostalCodeFields() {
@@ -1235,7 +1262,7 @@ async function saveService(event) {
     const saved = await api("/api/v1/services", {
       method: "POST",
       body: JSON.stringify({
-        customer_id: $("#service-customer").value,
+        customer_id: $("#service-customer").value || null,
         plan_id: plan.id,
         amr_code: $("#service-amr").value.trim().toUpperCase(),
         address: composeServiceAddress(),
@@ -3574,7 +3601,31 @@ function renderPayments() {
     rejected: "Rechazado",
     cancelled: "Cancelado",
   };
-  body.innerHTML = state.payments
+  const filteredPayments = state.payments.filter(
+    (payment) =>
+      state.paymentFilter === "all" ||
+      payment.status === state.paymentFilter
+  );
+  const counts = state.payments.reduce(
+    (acc, payment) => {
+      acc[payment.status] = (acc[payment.status] || 0) + 1;
+      return acc;
+    },
+    { all: state.payments.length }
+  );
+  $("#payment-queue-summary").innerHTML = `
+    <article class="metric"><span>Total</span><strong>${counts.all || 0}</strong></article>
+    <article class="metric"><span>Pendientes</span><strong>${counts.pending || 0}</strong></article>
+    <article class="metric"><span>Verificados</span><strong>${counts.verified || 0}</strong></article>
+    <article class="metric"><span>Rechazados</span><strong>${counts.rejected || 0}</strong></article>
+  `;
+  document.querySelectorAll(".payment-queue-tabs .tab-button").forEach((button) => {
+    button.classList.toggle(
+      "active",
+      button.dataset.paymentFilter === state.paymentFilter
+    );
+  });
+  body.innerHTML = filteredPayments
     .slice()
     .sort((a, b) => new Date(b.received_at) - new Date(a.received_at))
     .slice(0, 100)
@@ -3611,8 +3662,11 @@ function renderPayments() {
       </tr>
     `)
     .join("");
-  empty.textContent = "Aún no hay pagos registrados.";
-  empty.hidden = state.payments.length > 0;
+  empty.textContent =
+    state.paymentFilter === "all"
+      ? "Aún no hay pagos registrados."
+      : "No hay pagos en este estado.";
+  empty.hidden = filteredPayments.length > 0;
 }
 
 function updatePaymentServices() {
@@ -3629,6 +3683,39 @@ function updatePaymentServices() {
   ].join("");
 }
 
+function customerDisplayLabel(customer) {
+  const primaryPhone = customer.phones?.[0] || "";
+  return [customer.full_name, customer.amr_code, primaryPhone]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function customerSearchTokens(customer) {
+  return [
+    customer.full_name,
+    customer.amr_code,
+    ...(customer.phones || []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function syncPaymentCustomerSelection() {
+  const search = $("#payment-customer-search").value.trim().toLowerCase();
+  const matched = (state.customers || []).find((customer) =>
+    customerSearchTokens(customer).includes(search)
+  );
+  $("#payment-customer").value = matched?.id || "";
+  updatePaymentServices();
+  const services = (state.services || []).filter(
+    (service) => service.current_customer_id === $("#payment-customer").value
+  );
+  if (services.length === 1) {
+    $("#payment-service").value = services[0].id;
+  }
+}
+
 function localDateTimeValue(date = new Date()) {
   const localTime = new Date(
     date.getTime() - date.getTimezoneOffset() * 60000
@@ -3643,17 +3730,25 @@ function openPaymentDialog() {
         `<option value="${customer.id}">${escapeText(customer.full_name)}</option>`
     )
     .join("");
+  $("#payment-customer-search").value = "";
+  $("#payment-customer-options").innerHTML = (state.customers || [])
+    .map(
+      (customer) =>
+        `<option value="${escapeText(customerDisplayLabel(customer))}"></option>`
+    )
+    .join("");
   $("#payment-amount").value = "";
   $("#payment-method").value = "cash";
   $("#payment-declared-at").value = localDateTimeValue();
   $("#payment-reference").value = "";
   $("#payment-origin-holder").value = "";
   $("#payment-proof-reference").value = "";
+  $("#payment-proof-file").value = "";
   $("#payment-notes").value = "";
   $("#payment-form-error").textContent = "";
   updatePaymentServices();
   $("#payment-dialog").showModal();
-  $("#payment-amount").focus();
+  $("#payment-customer-search").focus();
 }
 
 function closePaymentDialog() {
@@ -3673,21 +3768,44 @@ async function savePayment(event) {
     if (Number.isNaN(declaredAt.getTime())) {
       throw new Error("Indica una fecha válida para el pago.");
     }
+    if (!$("#payment-customer").value) {
+      throw new Error("Selecciona un cliente válido de la lista.");
+    }
     const optionalText = (selector) => $(selector).value.trim() || null;
-    const saved = await api("/api/v1/payments", {
+    const payload = new FormData();
+    payload.append("customer_id", $("#payment-customer").value);
+    if ($("#payment-service").value) {
+      payload.append("service_id", $("#payment-service").value);
+    }
+    payload.append("declared_amount", $("#payment-amount").value);
+    payload.append("declared_at", declaredAt.toISOString());
+    payload.append("method", $("#payment-method").value);
+    if (optionalText("#payment-reference")) {
+      payload.append("reference", optionalText("#payment-reference"));
+    }
+    if (optionalText("#payment-origin-holder")) {
+      payload.append(
+        "origin_account_holder",
+        optionalText("#payment-origin-holder")
+      );
+    }
+    if (optionalText("#payment-proof-reference")) {
+      payload.append(
+        "proof_reference",
+        optionalText("#payment-proof-reference")
+      );
+    }
+    if (optionalText("#payment-notes")) {
+      payload.append("notes", optionalText("#payment-notes"));
+    }
+    payload.append("received_by", state.user.display_name);
+    const proofFile = $("#payment-proof-file").files?.[0];
+    if (proofFile) {
+      payload.append("proof_file", proofFile);
+    }
+    const saved = await api("/api/v1/payments/receipts", {
       method: "POST",
-      body: JSON.stringify({
-        customer_id: $("#payment-customer").value,
-        service_id: $("#payment-service").value || null,
-        declared_amount: $("#payment-amount").value,
-        declared_at: declaredAt.toISOString(),
-        method: $("#payment-method").value,
-        reference: optionalText("#payment-reference"),
-        proof_reference: optionalText("#payment-proof-reference"),
-        origin_account_holder: optionalText("#payment-origin-holder"),
-        received_by: state.user.display_name,
-        notes: optionalText("#payment-notes"),
-      }),
+      body: payload,
     });
     if (state.payments) {
       state.payments.push(saved);
@@ -3703,6 +3821,11 @@ async function savePayment(event) {
   } finally {
     submitButton.disabled = false;
   }
+}
+
+async function loadPaymentProof(payment) {
+  const blob = await apiBlob(`/api/v1/payments/${payment.id}/proof`);
+  return URL.createObjectURL(blob);
 }
 
 function paymentCustomerName(payment) {
@@ -3756,11 +3879,32 @@ function openPaymentReviewDialog(payment) {
   $("#payment-review-error").textContent = "";
   $("#payment-review-dialog").showModal();
   $("#payment-confirmed-amount").focus();
+  const previewBox = $("#payment-proof-preview");
+  previewBox.textContent = payment.has_proof
+    ? "Cargando comprobante..."
+    : "Sin archivo adjunto.";
+  if (payment.has_proof) {
+    void (async () => {
+      try {
+        const proofUrl = await loadPaymentProof(payment);
+        const fileExt = (payment.proof_reference || "")
+          .split(".")
+          .pop()
+          ?.toLowerCase();
+        previewBox.innerHTML = fileExt === "pdf"
+          ? `<iframe class="proof-preview-frame" src="${proofUrl}" title="Comprobante de pago"></iframe>`
+          : `<img class="proof-preview-image" src="${proofUrl}" alt="Comprobante de pago">`;
+      } catch (error) {
+        previewBox.textContent = error.message;
+      }
+    })();
+  }
 }
 
 function closePaymentReviewDialog() {
   $("#payment-review-dialog").close();
   state.selectedPaymentId = null;
+  $("#payment-proof-preview").textContent = "Sin archivo adjunto.";
 }
 
 function setPaymentReviewBusy(busy) {
@@ -4967,6 +5111,10 @@ $("#dismiss-agreement-dialog").addEventListener(
   closePaymentAgreementDialog
 );
 $("#new-payment-button").addEventListener("click", openPaymentDialog);
+$("#payment-customer-search").addEventListener(
+  "input",
+  syncPaymentCustomerSelection
+);
 $("#payment-customer").addEventListener("change", updatePaymentServices);
 $("#payment-form").addEventListener("submit", savePayment);
 $("#close-payment-dialog").addEventListener("click", closePaymentDialog);
@@ -5014,6 +5162,12 @@ $("#payment-review-form").addEventListener(
   "submit",
   verifySelectedPayment
 );
+document.querySelectorAll(".payment-queue-tabs .tab-button").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.paymentFilter = button.dataset.paymentFilter;
+    renderPayments();
+  });
+});
 $("#reject-payment-button").addEventListener("click", () => {
   decideSelectedPayment("reject");
 });

@@ -52,9 +52,12 @@ Las cuentas con `services.write`, junto con lectura de clientes y planes,
 pueden registrar servicios pendientes. La interfaz sólo usa planes activos con
 precio vigente y el backend verifica que `plan_id`, nombre y precio coincidan
 con el catálogo. El alta queda auditada y nunca activa automáticamente la
-conexión. Si existe un catálogo postal, la UI permite buscar al cliente
-titular por nombre o teléfono, capturar código postal, autollenar estado,
-municipio y ciudad, y elegir la colonia antes de construir el domicilio final.
+conexión. De forma provisional, el titular puede dejarse vacío y completarse
+después, mientras el servicio ya queda listo para operar.
+
+Si existe un catálogo postal, la UI permite buscar al cliente titular por
+nombre o teléfono, capturar código postal, autollenar estado, municipio y
+ciudad, y elegir la colonia antes de construir el domicilio final.
 
 ### Catálogo de códigos postales
 

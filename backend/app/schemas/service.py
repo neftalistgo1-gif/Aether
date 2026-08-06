@@ -16,7 +16,7 @@ from app.models.service import ServiceEventType, ServiceStatus
 
 
 class ServiceCreate(BaseModel):
-    customer_id: UUID
+    customer_id: UUID | None = None
     plan_id: UUID | None = None
     amr_code: str = Field(pattern=r"^AMR\d{3,6}$")
     address: str = Field(min_length=5, max_length=250)
@@ -66,7 +66,7 @@ class ServiceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    current_customer_id: UUID
+    current_customer_id: UUID | None
     plan_id: UUID | None
     amr_code: str
     address: str

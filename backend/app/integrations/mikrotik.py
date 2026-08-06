@@ -75,7 +75,7 @@ class RouterOSRestClient:
         changed = False
         if desired_blocked and not existing:
             self._request(
-                "POST",
+                "PUT",
                 "/rest/ip/firewall/address-list",
                 {
                     "list": self.router.suspended_address_list,
