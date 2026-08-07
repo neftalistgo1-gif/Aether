@@ -1103,10 +1103,12 @@ async function runDailyOperations(dryRun) {
 function renderCustomers(query = "") {
   const body = $("#customers-body");
   const empty = $("#customers-empty");
+  const summary = $("#customer-summary");
   if (!state.customers) {
     body.innerHTML = "";
     empty.textContent = "Tu cuenta no puede consultar clientes.";
     empty.hidden = false;
+    if (summary) summary.innerHTML = "";
     return;
   }
   const normalized = query.trim().toLowerCase();
@@ -1119,6 +1121,18 @@ function renderCustomers(query = "") {
   const canWrite = hasCapability("customers.write");
   const canReadBilling = hasCapability("billing.read");
   const canShowActions = canWrite || canReadBilling;
+  const totalCustomers = state.customers.length;
+  const filteredCount = rows.length;
+  const withPhones = state.customers.filter((customer) => (customer.phones || []).length > 0).length;
+  const withEmail = state.customers.filter((customer) => Boolean(customer.email)).length;
+  if (summary) {
+    summary.innerHTML = `
+      <span class="summary-chip">Total: <strong>${totalCustomers}</strong></span>
+      <span class="summary-chip">Con teléfono: <strong>${withPhones}</strong></span>
+      <span class="summary-chip">Con correo: <strong>${withEmail}</strong></span>
+      ${normalized ? `<span class="summary-chip">Resultados: <strong>${filteredCount}</strong></span>` : ""}
+    `;
+  }
   body.innerHTML = rows
     .map((customer) => `
       <tr>

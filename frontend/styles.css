@@ -350,6 +350,26 @@ dialog form.embedded-form { padding: 0; }
 .split-actions { justify-content: space-between; }
 .split-actions > div { display: flex; gap: 8px; }
 .dialog-actions .primary-button { padding: 11px 16px; }
+.summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(46,134,255,.14);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(35,136,239,.05);
+  color: var(--muted);
+  font-size: .78rem;
+}
+.summary-chip strong {
+  color: var(--text);
+}
 .decision-summary {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
