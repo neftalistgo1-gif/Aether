@@ -249,6 +249,103 @@ dialog form.embedded-form { padding: 0; }
 .icon-button { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: transparent; font-size: 1.4rem; cursor: pointer; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; padding-top: 22px; }
 .full-row { grid-column: 1 / -1; }
+.panel-subheading {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.panel-subheading span {
+  font-size: .86rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+.panel-subheading small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.preset-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  border: 1px solid rgba(46,134,255,.18);
+  border-radius: 999px;
+  padding: 9px 13px;
+  background: rgba(35,136,239,.05);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
+}
+.preset-chip small {
+  color: var(--muted);
+  font-size: .68rem;
+}
+.preset-chip:hover {
+  border-color: rgba(46,134,255,.42);
+  transform: translateY(-1px);
+}
+.preset-chip.active {
+  border-color: rgba(46,134,255,.7);
+  background: rgba(46,134,255,.16);
+}
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.permission-group {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(6,19,37,.45);
+}
+.permission-group-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.permission-group-header h3 {
+  margin: 0;
+  font-size: .92rem;
+}
+.permission-group-header span {
+  color: var(--muted);
+  font-size: .72rem;
+}
+.permission-group-options {
+  display: grid;
+  gap: 8px;
+}
+.permission-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid rgba(46,134,255,.14);
+  border-radius: 10px;
+  padding: 10px 11px;
+  background: rgba(35,136,239,.04);
+}
+.permission-option input {
+  margin-top: 2px;
+}
+.permission-option span {
+  display: grid;
+  gap: 1px;
+}
+.permission-option strong {
+  font-size: .78rem;
+}
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 6px; }
 .split-actions { justify-content: space-between; }
 .split-actions > div { display: flex; gap: 8px; }

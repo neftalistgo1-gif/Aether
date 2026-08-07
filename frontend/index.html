@@ -51,6 +51,9 @@
             Entrar a Aether
           </button>
         </form>
+        <button id="open-bootstrap-dialog" class="text-button" type="button" hidden>
+          Crear primer administrador
+        </button>
       </section>
       <aside class="login-art" aria-hidden="true">
         <div class="signal signal-one"></div>
@@ -62,6 +65,41 @@
         </div>
       </aside>
     </div>
+
+    <dialog id="bootstrap-dialog" aria-labelledby="bootstrap-dialog-title">
+      <form id="bootstrap-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">PRIMER ACCESO</p>
+            <h2 id="bootstrap-dialog-title">Crear administrador inicial</h2>
+          </div>
+          <button id="close-bootstrap-dialog" class="icon-button" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Secreto de instalación
+            <input id="bootstrap-secret" type="password" minlength="12" required>
+          </label>
+          <label>
+            Usuario
+            <input id="bootstrap-username" minlength="3" maxlength="50" required>
+          </label>
+          <label>
+            Nombre visible
+            <input id="bootstrap-display-name" minlength="2" maxlength="150" required>
+          </label>
+          <label>
+            Contraseña
+            <input id="bootstrap-password" type="password" minlength="12" maxlength="200" required>
+          </label>
+        </div>
+        <p id="bootstrap-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="cancel-bootstrap-dialog" class="text-button" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Crear administrador</button>
+        </div>
+      </form>
+    </dialog>
 
     <div id="app-view" class="app-shell" hidden>
       <aside class="sidebar">
@@ -96,6 +134,12 @@
           </button>
           <button class="nav-item" data-view="incidents">
             <span>08</span> Incidencias
+          </button>
+          <button class="nav-item" data-view="support">
+            <span>09</span> Soporte
+          </button>
+          <button class="nav-item" data-view="users">
+            <span>10</span> Usuarios
           </button>
         </nav>
         <div class="sidebar-foot">
@@ -451,6 +495,68 @@
             <p id="incidents-empty" class="empty-state" hidden></p>
           </div>
         </section>
+
+        <section id="support-panel" class="view-panel" hidden>
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">ATENCIÓN AL CLIENTE</p>
+                <h2>Tickets de soporte</h2>
+              </div>
+              <button
+                id="new-support-ticket-button"
+                class="secondary-button"
+                type="button"
+                hidden
+              >Nuevo ticket</button>
+            </div>
+            <p id="support-write-note" class="inline-note" hidden></p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ticket</th>
+                    <th>Cliente</th>
+                    <th>Categoría</th>
+                    <th>Prioridad</th>
+                    <th>Estado</th>
+                    <th class="support-action-column" hidden>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="support-tickets-body"></tbody>
+              </table>
+            </div>
+            <p id="support-tickets-empty" class="empty-state" hidden></p>
+          </div>
+        </section>
+
+        <section id="users-panel" class="view-panel" hidden>
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">ADMINISTRACIÓN</p>
+                <h2>Usuarios del sistema</h2>
+              </div>
+              <button id="new-user-button" class="secondary-button" type="button" hidden>Nuevo usuario</button>
+            </div>
+            <p id="users-note" class="inline-note" hidden></p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Usuario</th>
+                    <th>Rol</th>
+                    <th>Estado</th>
+                    <th>Permisos</th>
+                    <th class="user-action-column" hidden>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="users-body"></tbody>
+              </table>
+            </div>
+            <p id="users-empty" class="empty-state" hidden></p>
+          </div>
+        </section>
       </main>
     </div>
 
@@ -506,6 +612,139 @@
             type="button"
           >Cancelar</button>
           <button class="primary-button" type="submit">Guardar incidencia</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="support-ticket-dialog" aria-labelledby="support-ticket-dialog-title">
+      <form id="support-ticket-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">TICKET DE SOPORTE</p>
+            <h2 id="support-ticket-dialog-title">Nuevo ticket</h2>
+          </div>
+          <button
+            id="close-support-ticket-dialog"
+            class="icon-button"
+            type="button"
+            aria-label="Cerrar"
+          >×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Cliente
+            <select id="support-ticket-customer" required></select>
+          </label>
+          <label>
+            Servicio
+            <select id="support-ticket-service"></select>
+          </label>
+          <label>
+            Categoría
+            <select id="support-ticket-category" required>
+              <option value="service_issue">Falla de servicio</option>
+              <option value="payment_issue">Problema con pago</option>
+              <option value="billing_question">Consulta de cobro</option>
+              <option value="account_data">Dato mal capturado</option>
+              <option value="installation_request">Instalación o visita</option>
+              <option value="other">Otro</option>
+            </select>
+          </label>
+          <label>
+            Prioridad
+            <select id="support-ticket-priority" required>
+              <option value="low">Baja</option>
+              <option value="normal" selected>Normal</option>
+              <option value="high">Alta</option>
+              <option value="urgent">Urgente</option>
+            </select>
+          </label>
+          <label class="full-row">
+            Título
+            <input id="support-ticket-title" minlength="3" maxlength="200" required>
+          </label>
+          <label class="full-row">
+            Descripción
+            <textarea id="support-ticket-description" rows="4" minlength="10" maxlength="4000" required></textarea>
+          </label>
+          <label>
+            Evidencia privada
+            <input id="support-ticket-evidence" maxlength="500" placeholder="Ruta privada o referencia interna">
+          </label>
+          <label>
+            Reportado por
+            <input id="support-ticket-reported-by" minlength="2" maxlength="150" required>
+          </label>
+        </div>
+        <p id="support-ticket-form-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="cancel-support-ticket-dialog" class="text-button" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar ticket</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="support-ticket-detail-dialog" aria-labelledby="support-ticket-detail-title">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">SEGUIMIENTO DE SOPORTE</p>
+            <h2 id="support-ticket-detail-title">Ticket</h2>
+          </div>
+          <button id="close-support-ticket-detail-dialog" class="icon-button" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <div id="support-ticket-detail-summary" class="decision-summary"></div>
+        <div id="support-ticket-workspace" class="cancellation-workspace"></div>
+        <p id="support-ticket-detail-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="dismiss-support-ticket-detail-dialog" class="text-button" type="button">Cerrar</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="user-dialog" aria-labelledby="user-dialog-title">
+      <form id="user-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">ALTA DE USUARIO</p>
+            <h2 id="user-dialog-title">Nuevo usuario</h2>
+          </div>
+          <button id="close-user-dialog" class="icon-button" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Usuario
+            <input id="user-username" minlength="3" maxlength="50" required>
+          </label>
+          <label>
+            Nombre visible
+            <input id="user-display-name" minlength="2" maxlength="150" required>
+          </label>
+          <label>
+            Rol
+            <select id="user-role" required>
+              <option value="customer_service">Atención a clientes</option>
+              <option value="network_technician">Técnico de red</option>
+              <option value="installer">Instalador</option>
+              <option value="read_only">Solo lectura</option>
+            </select>
+          </label>
+          <label>
+            Contraseña inicial
+            <input id="user-password" type="password" minlength="12" maxlength="200" required>
+          </label>
+          <div class="full-row">
+            <div class="panel-subheading">
+              <span>Permisos por módulo</span>
+              <small>Marca solo lo que este usuario verá o podrá editar.</small>
+            </div>
+            <div id="user-permissions-grid" class="permission-grid"></div>
+          </div>
+        </div>
+        <p id="user-form-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="cancel-user-dialog" class="text-button" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar usuario</button>
         </div>
       </form>
     </dialog>

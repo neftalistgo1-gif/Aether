@@ -8,6 +8,13 @@ const state = {
   assets: [],
   plans: [],
   incidents: [],
+  supportTickets: [],
+  operatorUsers: [],
+  bootstrapStatus: {
+    configured: false,
+    completed: false,
+    can_bootstrap: false,
+  },
   latestDailyOperationResult: null,
   selectedAssetId: null,
   selectedAssetAssignments: [],
@@ -29,6 +36,8 @@ const state = {
   selectedCancellation: null,
   selectedRecovery: null,
   selectedIncidentId: null,
+  selectedSupportTicketId: null,
+  selectedOperatorUserId: null,
   pendingNetworkOperation: null,
   recoveryEvidencePreviewUrls: [],
 };
@@ -37,6 +46,150 @@ const NETWORK_PREFLIGHT_VALIDITY_MS = 15 * 60 * 1000;
 const MAX_RECOVERY_EVIDENCE_IMAGES = 6;
 const MAX_RECOVERY_EVIDENCE_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_RECOVERY_EVIDENCE_REFERENCES = 20;
+
+const USER_PERMISSION_GROUPS = [
+  {
+    label: "Clientes",
+    permissions: [
+      ["customers.read", "Consultar clientes"],
+      ["customers.write", "Crear y editar clientes"],
+    ],
+  },
+  {
+    label: "Servicios",
+    permissions: [
+      ["services.read", "Consultar servicios"],
+      ["services.write", "Crear y editar servicios"],
+      ["services.cancel", "Suspender o cancelar servicios"],
+    ],
+  },
+  {
+    label: "Cobranza",
+    permissions: [
+      ["billing.read", "Consultar cobros"],
+      ["billing.write", "Registrar cobros y movimientos"],
+      ["billing.approve", "Aprobar o rechazar pagos"],
+    ],
+  },
+  {
+    label: "Contratos",
+    permissions: [
+      ["contracts.read", "Consultar contratos"],
+      ["contracts.write", "Crear y editar contratos"],
+    ],
+  },
+  {
+    label: "Instalaciones",
+    permissions: [
+      ["installations.read", "Consultar instalaciones"],
+      ["installations.write", "Programar o editar instalaciones"],
+    ],
+  },
+  {
+    label: "Inventario",
+    permissions: [
+      ["assets.read", "Consultar inventario"],
+      ["assets.write", "Registrar o mover inventario"],
+    ],
+  },
+  {
+    label: "Incidencias",
+    permissions: [
+      ["incidents.read", "Consultar incidencias"],
+      ["incidents.write", "Registrar o editar incidencias"],
+      ["incidents.compensate", "Aplicar compensaciones"],
+    ],
+  },
+  {
+    label: "Red",
+    permissions: [
+      ["network.read", "Consultar red"],
+      ["network.control", "Aplicar cortes o reactivaciones"],
+    ],
+  },
+  {
+    label: "Planes",
+    permissions: [
+      ["plans.read", "Consultar planes"],
+      ["plans.write", "Crear y editar planes"],
+    ],
+  },
+  {
+    label: "Operación",
+    permissions: [
+      ["operations.read", "Consultar operaciones"],
+      ["operations.run", "Ejecutar procesos diarios"],
+    ],
+  },
+  {
+    label: "Soporte",
+    permissions: [
+      ["support.read", "Consultar tickets de soporte"],
+      ["support.write", "Registrar y clasificar tickets"],
+    ],
+  },
+  {
+    label: "Notificaciones",
+    permissions: [
+      ["notifications.read", "Consultar notificaciones"],
+      ["notifications.write", "Enviar notificaciones"],
+    ],
+  },
+  {
+    label: "Auditoría",
+    permissions: [["audit.read", "Consultar auditoría"]],
+  },
+];
+
+const USER_ROLE_PRESETS = {
+  customer_service: [
+    "customers.read",
+    "services.read",
+    "billing.read",
+    "support.read",
+    "support.write",
+    "notifications.read",
+  ],
+  network_technician: [
+    "services.read",
+    "services.write",
+    "services.cancel",
+    "network.read",
+    "network.control",
+    "incidents.read",
+    "incidents.write",
+    "operations.read",
+  ],
+  installer: [
+    "customers.read",
+    "services.read",
+    "installations.read",
+    "installations.write",
+    "assets.read",
+    "notifications.read",
+  ],
+  read_only: [
+    "customers.read",
+    "services.read",
+    "billing.read",
+    "contracts.read",
+    "installations.read",
+    "assets.read",
+    "incidents.read",
+    "network.read",
+    "plans.read",
+    "operations.read",
+    "support.read",
+    "notifications.read",
+    "audit.read",
+  ],
+};
+
+const USER_PERMISSION_LABELS = Object.fromEntries(
+  USER_PERMISSION_GROUPS.flatMap((group) =>
+    group.permissions.map(([permission, label]) => [permission, label])
+  )
+);
 
 const $ = (selector) => document.querySelector(selector);
 const loginView = $("#login-view");
@@ -86,6 +239,65 @@ async function api(path, options = {}) {
     throw error;
   }
   return payload;
+}
+
+function openBootstrapDialog() {
+  $("#bootstrap-secret").value = "";
+  $("#bootstrap-username").value = "";
+  $("#bootstrap-display-name").value = "";
+  $("#bootstrap-password").value = "";
+  $("#bootstrap-error").textContent = "";
+  $("#bootstrap-dialog").showModal();
+  $("#bootstrap-secret").focus();
+}
+
+function closeBootstrapDialog() {
+  $("#bootstrap-dialog").close();
+}
+
+async function saveBootstrapAdministrator(event) {
+  event.preventDefault();
+  const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+  const errorBox = $("#bootstrap-error");
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const response = await fetch("/api/v1/auth/bootstrap", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Aether-Bootstrap": $("#bootstrap-secret").value,
+      },
+      body: JSON.stringify({
+        username: $("#bootstrap-username").value.trim(),
+        display_name: $("#bootstrap-display-name").value.trim(),
+        password: $("#bootstrap-password").value,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        typeof payload.detail === "string"
+          ? payload.detail
+          : "No fue posible crear el administrador."
+      );
+    }
+    state.token = payload.access_token;
+    sessionStorage.setItem("aether_token", state.token);
+    state.bootstrapStatus = {
+      configured: true,
+      completed: true,
+      can_bootstrap: false,
+    };
+    $("#open-bootstrap-dialog").hidden = true;
+    closeBootstrapDialog();
+    await enterApp();
+    setNotice("El administrador inicial quedó creado.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
 }
 
 async function apiBlob(path, options = {}) {
@@ -151,9 +363,39 @@ async function loadResource(path) {
   }
 }
 
+async function loadOptionalList(path) {
+  try {
+    return await api(path);
+  } catch (error) {
+    console.warn(`Optional resource unavailable: ${path}`, error);
+    return [];
+  }
+}
+
+async function loadBootstrapStatus() {
+  try {
+    const response = await fetch("/api/v1/auth/bootstrap/status");
+    if (!response.ok) {
+      return {
+        configured: false,
+        completed: false,
+        can_bootstrap: false,
+      };
+    }
+    return await response.json();
+  } catch (error) {
+    console.warn("Bootstrap status unavailable", error);
+    return {
+      configured: false,
+      completed: false,
+      can_bootstrap: false,
+    };
+  }
+}
+
 async function loadWorkspace() {
   state.user = await api("/api/v1/auth/me");
-  const [customers, services, payments, dailyOperations, assets, plans, incidents] = await Promise.all([
+  const [customers, services, payments, dailyOperations, assets, plans, incidents, supportTickets, operatorUsers] = await Promise.all([
     loadResource("/api/v1/customers"),
     loadResource("/api/v1/services"),
     loadResource("/api/v1/payments"),
@@ -161,6 +403,8 @@ async function loadWorkspace() {
     loadResource("/api/v1/assets"),
     loadResource("/api/v1/plans"),
     loadResource("/api/v1/incidents"),
+    loadOptionalList("/api/v1/support-tickets"),
+    loadOptionalList("/api/v1/auth/users"),
   ]);
   state.customers = customers;
   state.services = services;
@@ -170,6 +414,8 @@ async function loadWorkspace() {
   state.assets = assets;
   state.plans = plans;
   state.incidents = incidents;
+  state.supportTickets = supportTickets;
+  state.operatorUsers = operatorUsers;
   renderUser();
   renderOverview();
   renderCustomers();
@@ -179,6 +425,8 @@ async function loadWorkspace() {
   renderAssets();
   renderPlans();
   renderIncidents();
+  renderSupportTickets();
+  renderOperatorUsers();
 }
 
 function renderUser() {
@@ -268,6 +516,25 @@ function renderUser() {
   document.querySelectorAll(".incident-action-column").forEach((column) => {
     column.hidden = !canReadIncidents;
   });
+  const canReadSupport = hasCapability("support.read");
+  const canWriteSupport = hasCapability("support.write");
+  document.querySelector('[data-view="support"]').hidden = !canReadSupport;
+  $("#new-support-ticket-button").hidden = !canWriteSupport;
+  $("#support-write-note").hidden = canWriteSupport;
+  $("#support-write-note").textContent = canWriteSupport
+    ? ""
+    : "Esta cuenta puede consultar tickets, pero no registrar nuevos casos.";
+  document.querySelectorAll(".support-action-column").forEach((column) => {
+    column.hidden = !canReadSupport;
+  });
+  const canManageUsers = state.user?.role === "administrator";
+  document.querySelector('[data-view="users"]').hidden = !canManageUsers;
+  $("#new-user-button").hidden = !canManageUsers;
+  const usersNote = $("#users-note");
+  usersNote.hidden = !canManageUsers;
+  usersNote.textContent = canManageUsers
+    ? "Solo el administrador puede crear, editar o desactivar cuentas de operadores."
+    : "";
   document.querySelectorAll(".service-action-column").forEach(
     (column) => {
       column.hidden = !(
@@ -4386,6 +4653,472 @@ function renderIncidentWorkspace(incident) {
   `;
 }
 
+function supportCustomerLabel(customer) {
+  const amr = state.services?.find((service) => service.current_customer_id === customer.id)?.amr_code;
+  return `${customer.full_name}${amr ? ` · ${amr}` : ""}`;
+}
+
+function supportServiceOptions(customerId) {
+  return (state.services || [])
+    .filter((service) => service.current_customer_id === customerId)
+    .map(
+      (service) =>
+        `<option value="${service.id}">${escapeText(service.amr_code)} · ${escapeText(service.address)}</option>`
+    )
+    .join("");
+}
+
+function selectedSupportTicket() {
+  return state.supportTickets?.find(
+    (item) => item.id === state.selectedSupportTicketId
+  );
+}
+
+function upsertSupportTicket(saved) {
+  if (!state.supportTickets) state.supportTickets = [];
+  const index = state.supportTickets.findIndex((item) => item.id === saved.id);
+  if (index >= 0) state.supportTickets[index] = saved;
+  else state.supportTickets.push(saved);
+  state.supportTickets.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  renderSupportTickets();
+}
+
+function renderSupportTickets() {
+  const body = $("#support-tickets-body");
+  const empty = $("#support-tickets-empty");
+  if (!state.supportTickets) {
+    body.innerHTML = "";
+    empty.textContent = "Tu cuenta no puede consultar tickets de soporte.";
+    empty.hidden = false;
+    return;
+  }
+  const canRead = hasCapability("support.read");
+  body.innerHTML = state.supportTickets.map((ticket) => `
+    <tr>
+      <td><strong>${escapeText(ticket.title)}</strong><small class="table-subtitle">${escapeText(ticket.description.slice(0, 70))}${ticket.description.length > 70 ? "…" : ""}</small></td>
+      <td>${escapeText(supportCustomerLabel(state.customers?.find((customer) => customer.id === ticket.customer_id) || { full_name: ticket.customer_id }))}</td>
+      <td>${escapeText(ticket.category)}</td>
+      <td>${escapeText(ticket.priority)}</td>
+      <td><span class="badge ${ticket.status}">${escapeText(ticket.status)}</span></td>
+      ${canRead ? `<td><button class="row-action view-support-ticket" type="button" data-support-ticket-id="${ticket.id}">Seguimiento</button></td>` : ""}
+    </tr>
+  `).join("");
+  empty.textContent = "Aún no hay tickets de soporte.";
+  empty.hidden = state.supportTickets.length > 0;
+}
+
+function roleLabel(role) {
+  const labels = {
+    administrator: "Administrador",
+    customer_service: "Atención a clientes",
+    network_technician: "Técnico de red",
+    installer: "Instalador",
+    read_only: "Solo lectura",
+  };
+  return labels[role] || role;
+}
+
+function permissionsText(user) {
+  return user.permissions?.length
+    ? user.permissions
+        .map((permission) => USER_PERMISSION_LABELS[permission] || permission)
+        .join(", ")
+    : "Sin permisos explícitos";
+}
+
+function renderUserPermissionsGrid(selectedPermissions = [], selectedRole = null) {
+  const container = $("#user-permissions-grid");
+  if (!container) return;
+  const selected = new Set(selectedPermissions);
+  container.innerHTML = `
+    <div class="permission-presets">
+      ${Object.entries(USER_ROLE_PRESETS)
+        .map(
+          ([role, permissions]) => `
+            <button
+              type="button"
+              class="preset-chip ${role === selectedRole ? "active" : ""}"
+              data-role-preset="${role}"
+            >
+              ${escapeText(roleLabel(role))}
+              <small>${permissions.length} permisos base</small>
+            </button>
+          `
+        )
+        .join("")}
+    </div>
+    ${USER_PERMISSION_GROUPS.map(
+      (group) => `
+        <section class="permission-group">
+          <header class="permission-group-header">
+            <h3>${escapeText(group.label)}</h3>
+            <span>${group.permissions.length} opciones</span>
+          </header>
+          <div class="permission-group-options">
+            ${group.permissions
+              .map(
+                ([permission, label]) => `
+                  <label class="permission-option">
+                    <input
+                      type="checkbox"
+                      name="user-permission"
+                      value="${permission}"
+                      ${selected.has(permission) ? "checked" : ""}
+                    >
+                    <span>
+                      <strong>${escapeText(label)}</strong>
+                    </span>
+                  </label>
+                `
+              )
+              .join("")}
+          </div>
+        </section>
+      `
+    ).join("")}
+  `;
+}
+
+function applyUserRolePreset(role) {
+  $("#user-role").value = role;
+  renderUserPermissionsGrid(USER_ROLE_PRESETS[role] || [], role);
+}
+
+function renderOperatorUsers() {
+  const body = $("#users-body");
+  const empty = $("#users-empty");
+  const actionHeader = document.querySelector(".user-action-column");
+  if (!state.operatorUsers) {
+    body.innerHTML = "";
+    empty.textContent = "Tu cuenta no puede consultar usuarios.";
+    empty.hidden = false;
+    if (actionHeader) actionHeader.hidden = true;
+    return;
+  }
+  const isAdmin = state.user?.role === "administrator";
+  if (actionHeader) actionHeader.hidden = !isAdmin;
+  body.innerHTML = state.operatorUsers
+    .map((user) => `
+      <tr>
+        <td>
+          <strong>${escapeText(user.display_name)}</strong>
+          <small class="table-subtitle">${escapeText(user.username)}</small>
+        </td>
+        <td>${escapeText(roleLabel(user.role))}</td>
+        <td><span class="badge ${user.is_active ? "active" : "cancelled"}">${user.is_active ? "Activo" : "Inactivo"}</span></td>
+        <td>${escapeText(permissionsText(user))}</td>
+        ${isAdmin ? `
+          <td>
+            <button class="row-action edit-user" type="button" data-user-id="${user.id}">Editar</button>
+            <button class="row-action reset-user-password" type="button" data-user-id="${user.id}">Contraseña</button>
+            ${user.is_active ? `<button class="row-action deactivate-user" type="button" data-user-id="${user.id}">Desactivar</button>` : ""}
+          </td>
+        ` : ""}
+      </tr>
+    `)
+    .join("");
+  empty.textContent = "Aún no hay usuarios registrados.";
+  empty.hidden = state.operatorUsers.length > 0;
+}
+
+function openUserDialog(user = null) {
+  state.selectedOperatorUserId = user?.id || null;
+  $("#user-dialog-title").textContent = user ? "Editar usuario" : "Nuevo usuario";
+  $("#user-username").value = user?.username || "";
+  $("#user-display-name").value = user?.display_name || "";
+  $("#user-role").value = user?.role || "customer_service";
+  $("#user-password").value = "";
+  $("#user-password").required = !user;
+  $("#user-password").placeholder = user
+    ? "Dejar vacío para conservar la contraseña actual"
+    : "";
+  renderUserPermissionsGrid(user?.permissions || [], $("#user-role").value);
+  $("#user-form-error").textContent = "";
+  $("#user-dialog").showModal();
+  $("#user-username").focus();
+}
+
+function closeUserDialog() {
+  $("#user-dialog").close();
+  state.selectedOperatorUserId = null;
+}
+
+async function saveUser(event) {
+  event.preventDefault();
+  const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+  const errorBox = $("#user-form-error");
+  const isEditing = Boolean(state.selectedOperatorUserId);
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const permissions = Array.from(
+      document.querySelectorAll('input[name="user-permission"]:checked')
+    ).map((input) => input.value);
+    const payload = {
+      username: $("#user-username").value.trim(),
+      display_name: $("#user-display-name").value.trim(),
+      role: $("#user-role").value,
+    };
+    let saved;
+    if (state.selectedOperatorUserId) {
+      saved = await api(`/api/v1/auth/users/${state.selectedOperatorUserId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      saved = await api(`/api/v1/auth/users/${state.selectedOperatorUserId}/permissions`, {
+        method: "PUT",
+        body: JSON.stringify({
+          permissions,
+          reason: "Actualización desde la UI administrativa",
+        }),
+      });
+    } else {
+      saved = await api("/api/v1/auth/users", {
+        method: "POST",
+        body: JSON.stringify({
+          ...payload,
+          password: $("#user-password").value,
+          permissions,
+        }),
+      });
+    }
+    if (state.operatorUsers) {
+      const index = state.operatorUsers.findIndex((item) => item.id === saved.id);
+      if (index >= 0) state.operatorUsers[index] = saved;
+      else state.operatorUsers.push(saved);
+      state.operatorUsers.sort((a, b) => a.display_name.localeCompare(b.display_name));
+      renderOperatorUsers();
+    }
+    closeUserDialog();
+    setNotice(isEditing ? "El usuario quedó actualizado." : "El usuario quedó registrado.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function editSelectedUser(user) {
+  openUserDialog(user);
+}
+
+async function resetSelectedUserPassword(user) {
+  const newPassword = window.prompt(`Nueva contraseña para ${user.display_name}`);
+  if (!newPassword) return;
+  await api(`/api/v1/auth/users/${user.id}/password`, {
+    method: "POST",
+    body: JSON.stringify({
+      new_password: newPassword,
+      reason: "Restablecimiento solicitado desde UI",
+    }),
+  });
+  setNotice("La contraseña quedó restablecida.");
+}
+
+async function deactivateSelectedUser(user) {
+  await api(`/api/v1/auth/users/${user.id}/deactivate`, {
+    method: "POST",
+    body: JSON.stringify({
+      reason: "Desactivado desde UI",
+    }),
+  });
+  const index = state.operatorUsers?.findIndex((item) => item.id === user.id);
+  if (index >= 0) state.operatorUsers[index].is_active = false;
+  renderOperatorUsers();
+  setNotice("El usuario quedó desactivado.");
+}
+
+function openSupportTicketDialog() {
+  $("#support-ticket-customer").innerHTML = (state.customers || [])
+    .map((customer) => `<option value="${customer.id}">${escapeText(supportCustomerLabel(customer))}</option>`)
+    .join("");
+  const customerId = $("#support-ticket-customer").value;
+  $("#support-ticket-service").innerHTML = `<option value="">Sin servicio específico</option>${supportServiceOptions(customerId)}`;
+  $("#support-ticket-title").value = "";
+  $("#support-ticket-description").value = "";
+  $("#support-ticket-evidence").value = "";
+  $("#support-ticket-reported-by").value = state.user.display_name;
+  $("#support-ticket-form-error").textContent = "";
+  $("#support-ticket-dialog").showModal();
+}
+
+function closeSupportTicketDialog() {
+  $("#support-ticket-dialog").close();
+}
+
+async function saveSupportTicket(event) {
+  event.preventDefault();
+  const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+  const errorBox = $("#support-ticket-form-error");
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const saved = await api("/api/v1/support-tickets", {
+      method: "POST",
+      body: JSON.stringify({
+        customer_id: $("#support-ticket-customer").value,
+        service_id: $("#support-ticket-service").value || null,
+        category: $("#support-ticket-category").value,
+        priority: $("#support-ticket-priority").value,
+        title: $("#support-ticket-title").value.trim(),
+        description: $("#support-ticket-description").value.trim(),
+        evidence_reference: $("#support-ticket-evidence").value.trim() || null,
+        reported_by: $("#support-ticket-reported-by").value.trim(),
+        created_by: state.user.display_name,
+      }),
+    });
+    upsertSupportTicket(saved);
+    closeSupportTicketDialog();
+    setNotice("El ticket quedó registrado para atención y clasificación.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+function renderSupportTicketWorkspace(ticket) {
+  $("#support-ticket-detail-title").textContent = ticket.title;
+  $("#support-ticket-detail-summary").innerHTML = `
+    <div><span>Estado</span><strong>${escapeText(ticket.status)}</strong></div>
+    <div><span>Categoría</span><strong>${escapeText(ticket.category)}</strong></div>
+    <div><span>Prioridad</span><strong>${escapeText(ticket.priority)}</strong></div>
+  `;
+  const canWrite = hasCapability("support.write");
+  const canResolve = hasCapability("support.write");
+  $("#support-ticket-workspace").innerHTML = `
+    <section class="cancellation-stage-card">
+      <div class="stage-status">
+        <h3>Descripción</h3>
+        <span class="badge ${ticket.status}">${escapeText(ticket.status)}</span>
+      </div>
+      <div class="extension-history">
+        <article class="history-item">
+          <strong>${escapeText(ticket.description)}</strong>
+          <span>Reportado por ${escapeText(ticket.reported_by)} · ${formatDateTime(ticket.created_at)}</span>
+          <span>Evidencia: ${escapeText(ticket.evidence_reference || "Sin referencia")}</span>
+        </article>
+      </div>
+    </section>
+    ${canWrite && ticket.status !== "resolved" && ticket.status !== "closed" ? `
+      <form id="support-ticket-classify-form" class="cancellation-stage-card">
+        <h3>Clasificar</h3>
+        <div class="form-grid">
+          <label>
+            Asignar a
+            <select id="support-ticket-assignee" required>
+              <option value="customer_service">Atención a clientes</option>
+              <option value="network_technician">Técnico de red</option>
+              <option value="installer">Instalación</option>
+            </select>
+          </label>
+          <label>
+            Clasificado por
+            <input id="support-ticket-classified-by" value="${escapeText(state.user.display_name)}" required>
+          </label>
+          <label class="full-row">
+            Notas
+            <textarea id="support-ticket-classification-notes" rows="2" maxlength="2000"></textarea>
+          </label>
+          <div class="dialog-actions full-row">
+            <button class="primary-button" type="submit">Guardar clasificación</button>
+          </div>
+        </div>
+      </form>
+      <form id="support-ticket-resolve-form" class="cancellation-stage-card">
+        <h3>Resolver</h3>
+        <div class="form-grid">
+          <label>
+            Resuelto por
+            <input id="support-ticket-resolved-by" value="${escapeText(state.user.display_name)}" required>
+          </label>
+          <label class="full-row">
+            Resolución
+            <textarea id="support-ticket-resolution-notes" rows="3" minlength="3" maxlength="4000" required></textarea>
+          </label>
+          <div class="dialog-actions full-row">
+            <button class="primary-button" type="submit">Cerrar ticket</button>
+          </div>
+        </div>
+      </form>
+    ` : ""}
+  `;
+}
+
+function openSupportTicketDetailDialog(ticket) {
+  state.selectedSupportTicketId = ticket.id;
+  $("#support-ticket-detail-error").textContent = "";
+  renderSupportTicketWorkspace(ticket);
+  $("#support-ticket-detail-dialog").showModal();
+}
+
+function closeSupportTicketDetailDialog() {
+  $("#support-ticket-detail-dialog").close();
+  state.selectedSupportTicketId = null;
+}
+
+async function refreshSelectedSupportTicket() {
+  const ticket = selectedSupportTicket();
+  if (!ticket) return null;
+  const saved = await api(`/api/v1/support-tickets/${ticket.id}`);
+  upsertSupportTicket(saved);
+  renderSupportTicketWorkspace(saved);
+  return saved;
+}
+
+async function classifySelectedSupportTicket(event) {
+  event.preventDefault();
+  const ticket = selectedSupportTicket();
+  const errorBox = $("#support-ticket-detail-error");
+  if (!ticket) return;
+  const submitButton = event.target.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    await api(`/api/v1/support-tickets/${ticket.id}/classify`, {
+      method: "POST",
+      body: JSON.stringify({
+        assigned_to: $("#support-ticket-assignee").value,
+        classified_by: $("#support-ticket-classified-by").value.trim(),
+        classification_notes:
+          $("#support-ticket-classification-notes").value.trim() || null,
+      }),
+    });
+    await refreshSelectedSupportTicket();
+    setNotice("El ticket quedó clasificado.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function resolveSelectedSupportTicket(event) {
+  event.preventDefault();
+  const ticket = selectedSupportTicket();
+  const errorBox = $("#support-ticket-detail-error");
+  if (!ticket) return;
+  const submitButton = event.target.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const saved = await api(`/api/v1/support-tickets/${ticket.id}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({
+        resolved_by: $("#support-ticket-resolved-by").value.trim(),
+        resolution_notes: $("#support-ticket-resolution-notes").value.trim(),
+      }),
+    });
+    upsertSupportTicket(saved);
+    renderSupportTicketWorkspace(saved);
+    setNotice("El ticket quedó resuelto y cerrado.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 function openIncidentDetailDialog(incident) {
   state.selectedIncidentId = incident.id;
   $("#incident-detail-error").textContent = "";
@@ -4746,6 +5479,8 @@ function showView(name) {
     assets: "Inventario",
     plans: "Planes",
     incidents: "Incidencias",
+    support: "Soporte",
+    users: "Usuarios",
   };
   $("#page-title").textContent = titles[name];
   $(".sidebar").classList.remove("open");
@@ -4829,13 +5564,28 @@ $("#login-form button").addEventListener("click", (event) => {
     handleLogin(event);
   }
 });
+$("#open-bootstrap-dialog").addEventListener("click", openBootstrapDialog);
+$("#bootstrap-form").addEventListener("submit", saveBootstrapAdministrator);
+$("#close-bootstrap-dialog").addEventListener("click", closeBootstrapDialog);
+$("#cancel-bootstrap-dialog").addEventListener("click", closeBootstrapDialog);
 
 window.addEventListener("load", () => {
+  const bootstrappedFromUrl = bootstrapLoginFromUrl();
+  void (async () => {
+    state.bootstrapStatus = await loadBootstrapStatus();
+    $("#open-bootstrap-dialog").hidden = !state.bootstrapStatus.can_bootstrap;
+    if (
+      state.bootstrapStatus.can_bootstrap &&
+      !state.token &&
+      !bootstrappedFromUrl
+    ) {
+      openBootstrapDialog();
+    }
+  })();
   if (state.token) {
     void enterApp();
     return;
   }
-  bootstrapLoginFromUrl();
 });
 
 document.querySelectorAll(".nav-item").forEach((item) => {
@@ -5241,6 +5991,59 @@ $("#dismiss-incident-detail-dialog").addEventListener(
   "click",
   closeIncidentDetailDialog
 );
+$("#new-support-ticket-button").addEventListener("click", openSupportTicketDialog);
+$("#support-ticket-form").addEventListener("submit", saveSupportTicket);
+$("#close-support-ticket-dialog").addEventListener("click", closeSupportTicketDialog);
+$("#cancel-support-ticket-dialog").addEventListener("click", closeSupportTicketDialog);
+$("#support-tickets-body").addEventListener("click", (event) => {
+  const button = event.target.closest(".view-support-ticket");
+  if (!button) return;
+  const ticket = state.supportTickets?.find(
+    (item) => item.id === button.dataset.supportTicketId
+  );
+  if (ticket) openSupportTicketDetailDialog(ticket);
+});
+$("#support-ticket-workspace").addEventListener("submit", (event) => {
+  if (event.target.id === "support-ticket-classify-form") {
+    classifySelectedSupportTicket(event);
+  } else if (event.target.id === "support-ticket-resolve-form") {
+    resolveSelectedSupportTicket(event);
+  }
+});
+$("#close-support-ticket-detail-dialog").addEventListener(
+  "click",
+  closeSupportTicketDetailDialog
+);
+$("#dismiss-support-ticket-detail-dialog").addEventListener(
+  "click",
+  closeSupportTicketDetailDialog
+);
+$("#new-user-button").addEventListener("click", () => openUserDialog());
+$("#user-role").addEventListener("change", (event) => {
+  applyUserRolePreset(event.target.value);
+});
+$("#user-permissions-grid").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-role-preset]");
+  if (!button) return;
+  applyUserRolePreset(button.dataset.rolePreset);
+});
+$("#users-body").addEventListener("click", (event) => {
+  const editButton = event.target.closest(".edit-user");
+  const resetButton = event.target.closest(".reset-user-password");
+  const deactivateButton = event.target.closest(".deactivate-user");
+  const button = editButton || resetButton || deactivateButton;
+  if (!button) return;
+  const user = state.operatorUsers?.find(
+    (item) => item.id === button.dataset.userId
+  );
+  if (!user) return;
+  if (editButton) openUserDialog(user);
+  else if (resetButton) void resetSelectedUserPassword(user);
+  else void deactivateSelectedUser(user);
+});
+$("#user-form").addEventListener("submit", saveUser);
+$("#close-user-dialog").addEventListener("click", closeUserDialog);
+$("#cancel-user-dialog").addEventListener("click", closeUserDialog);
 $("#plan-price-form").addEventListener("submit", savePlanPrice);
 $("#close-plan-price-dialog").addEventListener(
   "click",
