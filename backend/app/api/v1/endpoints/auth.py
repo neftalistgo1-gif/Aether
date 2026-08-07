@@ -33,12 +33,24 @@ from app.schemas.auth import (
     UserDeactivate,
     UserPasswordReset,
     UserPermissionReplace,
+    UserUpdate,
 )
 from app.services.audit import record_audit_event
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
 DUMMY_PASSWORD_HASH = hash_password("aether-dummy-password-never-used")
+
+
+@router.get("/bootstrap/status")
+def bootstrap_status(db: Session = Depends(get_db)) -> dict[str, bool]:
+    total_users = db.scalar(select(func.count()).select_from(OperatorUser)) or 0
+    configured = AETHER_BOOTSTRAP_SECRET is not None
+    return {
+        "configured": configured,
+        "completed": total_users > 0,
+        "can_bootstrap": configured and total_users == 0,
+    }
 
 
 def create_session(
@@ -264,6 +276,57 @@ def create_operator_user(
                 ],
                 "is_active": user.is_active,
             },
+        )
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Username already exists",
+        ) from exc
+    return user
+
+
+@router.put(
+    "/users/{user_id}",
+    response_model=OperatorUserRead,
+)
+def update_operator_user(
+    user_id: UUID,
+    data: UserUpdate,
+    administrator: OperatorUser = Depends(require_administrator),
+    db: Session = Depends(get_db),
+) -> OperatorUser:
+    user = db.get(OperatorUser, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Operator user not found")
+    before_data = {
+        "username": user.username,
+        "display_name": user.display_name,
+        "role": user.role.value if hasattr(user.role, "value") else user.role,
+    }
+    if data.username is not None:
+        user.username = data.username
+    if data.display_name is not None:
+        user.display_name = data.display_name
+    if data.role is not None:
+        user.role = data.role
+    try:
+        db.flush()
+        after_data = {
+            "username": user.username,
+            "display_name": user.display_name,
+            "role": user.role.value if hasattr(user.role, "value") else user.role,
+        }
+        record_audit_event(
+            db,
+            actor=administrator.display_name,
+            action="auth.user_updated",
+            entity_type="OperatorUser",
+            entity_id=user.id,
+            reason="Operator account updated from UI",
+            before_data=before_data,
+            after_data=after_data,
         )
         db.commit()
     except IntegrityError as exc:

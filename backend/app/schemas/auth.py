@@ -55,6 +55,24 @@ class UserCreate(BootstrapAdminCreate):
         return value
 
 
+class UserUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str | None = Field(default=None, min_length=3, max_length=50)
+    display_name: str | None = Field(default=None, min_length=2, max_length=150)
+    role: UserRole | None = None
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def normalize_username(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
+
+    @field_validator("display_name", mode="before")
+    @classmethod
+    def strip_display_name(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
 class UserDeactivate(BaseModel):
     reason: str = Field(min_length=3, max_length=1000)
 

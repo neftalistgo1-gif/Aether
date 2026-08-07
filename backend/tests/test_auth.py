@@ -19,11 +19,13 @@ from app.api.dependencies.auth import (
 )
 from app.api.v1.endpoints.auth import (
     bootstrap_administrator,
+    bootstrap_status,
     create_operator_user,
     deactivate_operator_user,
     login,
     logout,
     replace_operator_permissions,
+    update_operator_user,
 )
 from app.api.v1.endpoints.plans import create_plan
 from app.core.security import hash_password, verify_password
@@ -39,6 +41,7 @@ from app.schemas.auth import (
     UserCreate,
     UserDeactivate,
     UserPermissionReplace,
+    UserUpdate,
 )
 from app.schemas.plan import PlanCreate
 
@@ -124,7 +127,15 @@ class AuthenticationTestCase(unittest.TestCase):
         self.assertFalse(verify_password("clave-incorrecta", first))
 
     def test_bootstrap_is_single_use_and_credentials_are_not_stored(self) -> None:
+        status = bootstrap_status(self.db)
+        self.assertTrue(status["configured"])
+        self.assertFalse(status["completed"])
+        self.assertTrue(status["can_bootstrap"])
         credentials = self.bootstrap()
+        status_after = bootstrap_status(self.db)
+        self.assertTrue(status_after["configured"])
+        self.assertTrue(status_after["completed"])
+        self.assertFalse(status_after["can_bootstrap"])
         user = self.db.scalar(select(OperatorUser))
         session = self.db.scalar(select(AuthSession))
         self.assertNotEqual(user.password_hash, "Clave-Segura-Para-Pruebas-123")
@@ -292,6 +303,7 @@ class AuthenticationTestCase(unittest.TestCase):
             if path in {
                 "/api/v1/health",
                 "/api/v1/auth/bootstrap",
+                "/api/v1/auth/bootstrap/status",
                 "/api/v1/auth/login",
             }:
                 continue
@@ -365,6 +377,20 @@ class AuthenticationTestCase(unittest.TestCase):
         )
         self.assertEqual(replacement.permissions, [Capability.services_read])
 
+        updated = update_operator_user(
+            user.id,
+            UserUpdate(
+                username="consulta-operaciones",
+                display_name="Consulta de operaciones",
+                role=UserRole.customer_service,
+            ),
+            administrator,
+            self.db,
+        )
+        self.assertEqual(updated.username, "consulta-operaciones")
+        self.assertEqual(updated.display_name, "Consulta de operaciones")
+        self.assertEqual(updated.role, UserRole.customer_service)
+
     def test_administrator_bypasses_capability_policy(self) -> None:
         credentials = self.bootstrap()
         dependency, _request, administrator = self.authenticate(
@@ -385,6 +411,8 @@ class AuthenticationTestCase(unittest.TestCase):
             if not route_path.startswith("/api/v1/"):
                 continue
             if route_path.startswith("/api/v1/auth"):
+                if route_path == "/api/v1/auth/bootstrap/status":
+                    continue
                 continue
             methods = getattr(route, "methods", set())
             for method in methods:
