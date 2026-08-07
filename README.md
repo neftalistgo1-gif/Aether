@@ -55,3 +55,23 @@ Se está construyendo como una plataforma operativa para un WISP con énfasis en
 
 La prioridad inmediata es sostener la operación diaria sin obligar a que toda
 la ficha del cliente exista desde el primer registro del servicio.
+
+## Puesta en marcha desde GitHub
+
+Cuando quieras instalar Aether en otra PC o servidor:
+
+1. Clona el repositorio desde GitHub.
+2. Instala Docker Desktop en la máquina destino.
+3. En la raíz del proyecto, copia `backend/.env.example` como `backend/.env`
+   y ajusta la cadena de conexión si corresponde.
+4. Ejecuta:
+
+   ```powershell
+   docker compose -f docker/compose.yml up -d --build
+   ```
+
+5. Abre `http://127.0.0.1:8000/app/` o publícalo mediante tu método de acceso
+   remoto preferido.
+
+La primera vez también debes definir `AETHER_BOOTSTRAP_SECRET` para crear el
+primer administrador y luego retirarlo del `.env`.

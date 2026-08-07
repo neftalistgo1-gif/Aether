@@ -9,12 +9,29 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - aether_postgres_data:/var/lib/postgresql
+      - aether_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U aether -d aether"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ../backend/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://aether:aether@postgres:5432/aether
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend/private_storage:/app/backend/private_storage
 
 volumes:
   aether_postgres_data:

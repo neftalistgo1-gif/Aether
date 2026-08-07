@@ -44,6 +44,21 @@ La interfaz operativa estará disponible en `http://127.0.0.1:8000/app/`.
 Usa las mismas cuentas y permisos de la API; no requiere iniciar otro proceso
 ni instalar herramientas de frontend.
 
+## Ejecución en contenedor
+
+Si quieres montarlo en la PC del centro de datos o en un servidor con Docker,
+desde la raíz del proyecto:
+
+```powershell
+docker compose -f docker/compose.yml up -d --build
+```
+
+La API quedará en `http://127.0.0.1:8000` y la interfaz en
+`http://127.0.0.1:8000/app/`.
+
+Si más adelante publicas el servicio con Cloudflare Tunnel, apunta el túnel al
+puerto 8000 del anfitrión y conserva el acceso por VPN como respaldo.
+
 Las cuentas con `customers.write` pueden registrar y editar clientes desde la
 interfaz. Toda edición exige un motivo y genera una auditoría con los valores
 anteriores y posteriores; las cuentas de consulta no ven estas acciones.
