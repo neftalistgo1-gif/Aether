@@ -1,5 +1,5 @@
 const state = {
-  token: sessionStorage.getItem("aether_token"),
+  token: sessionStorage.getItem("aether_token") || localStorage.getItem("aether_token"),
   user: null,
   customers: [],
   services: [],
@@ -276,10 +276,18 @@ async function saveBootstrapAdministrator(event) {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
+      const validationDetail = Array.isArray(payload.detail)
+        ? payload.detail
+            .map((issue) => {
+              const field = issue.loc?.at(-1);
+              return field ? `${field}: ${issue.msg}` : issue.msg;
+            })
+            .join(". ")
+        : null;
       throw new Error(
         typeof payload.detail === "string"
           ? payload.detail
-          : "No fue posible crear el administrador."
+          : validationDetail || "No fue posible crear el administrador."
       );
     }
     state.token = payload.access_token;
@@ -4005,6 +4013,14 @@ function localDateTimeValue(date = new Date()) {
 }
 
 function openPaymentDialog() {
+  if (!Array.isArray(state.customers)) {
+    setNotice("Tu cuenta no tiene permiso para consultar clientes y registrar pagos.");
+    return false;
+  }
+  if (state.customers.length === 0) {
+    setNotice("Aun no hay clientes registrados. Primero importa o registra clientes antes de recibir comprobantes de pago.");
+    return false;
+  }
   $("#payment-customer").innerHTML = (state.customers || [])
     .map(
       (customer) =>
@@ -4030,6 +4046,7 @@ function openPaymentDialog() {
   updatePaymentServices();
   $("#payment-dialog").showModal();
   $("#payment-customer-search").focus();
+  return true;
 }
 
 function closePaymentDialog() {
@@ -4825,6 +4842,7 @@ function renderOperatorUsers() {
           <td>
             <button class="row-action edit-user" type="button" data-user-id="${user.id}">Editar</button>
             <button class="row-action reset-user-password" type="button" data-user-id="${user.id}">Contraseña</button>
+            <button class="row-action revoke-user-sessions" type="button" data-user-id="${user.id}">Cerrar dispositivos</button>
             ${user.is_active ? `<button class="row-action deactivate-user" type="button" data-user-id="${user.id}">Desactivar</button>` : ""}
           </td>
         ` : ""}
@@ -4940,6 +4958,20 @@ async function deactivateSelectedUser(user) {
   if (index >= 0) state.operatorUsers[index].is_active = false;
   renderOperatorUsers();
   setNotice("El usuario quedó desactivado.");
+}
+
+async function revokeOtherUserSessions(user) {
+  const label = user.id === state.user?.id
+    ? "Se cerraran las sesiones de tus otros dispositivos. Esta sesion continuara abierta."
+    : `Se cerraran todas las sesiones activas de ${user.display_name}. Tendra que iniciar sesion nuevamente.`;
+  if (!window.confirm(label)) return;
+  const result = await api(`/api/v1/auth/users/${user.id}/sessions/revoke-others`, {
+    method: "POST",
+  });
+  const count = result.revoked_sessions || 0;
+  setNotice(count
+    ? `Se cerraron ${count} sesion(es) en otros dispositivos.`
+    : "No habia otras sesiones activas para cerrar.");
 }
 
 function openSupportTicketDialog() {
@@ -5507,12 +5539,82 @@ async function enterApp() {
   setNotice();
   try {
     await loadWorkspace();
+    await openSharedReceiptIfPresent();
   } catch (error) {
     if (error.status === 401) {
       logout(false);
       return;
     }
     setNotice(error.message);
+  }
+}
+
+const SHARE_DATABASE = "aether-share-target";
+const SHARE_STORE = "receipts";
+
+function openShareDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(SHARE_DATABASE, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(SHARE_STORE, { keyPath: "id" });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function takeSharedReceipt(id) {
+  const database = await openShareDatabase();
+  const entry = await new Promise((resolve, reject) => {
+    const transaction = database.transaction(SHARE_STORE, "readwrite");
+    const store = transaction.objectStore(SHARE_STORE);
+    const request = store.get(id);
+    request.onsuccess = () => {
+      const value = request.result || null;
+      if (value) store.delete(id);
+      resolve(value);
+    };
+    request.onerror = () => reject(request.error);
+  });
+  database.close();
+  return entry;
+}
+
+async function openSharedReceiptIfPresent() {
+  const url = new URL(window.location.href);
+  const receiptId = url.searchParams.get("shared_receipt");
+  const sharedError = url.searchParams.get("shared_error");
+  if (!receiptId && !sharedError) return;
+  history.replaceState({}, "", "/app/");
+  if (sharedError) {
+    setNotice("No fue posible recibir el comprobante compartido.");
+    return;
+  }
+  if (!hasCapability("billing.write")) {
+    setNotice("Esta cuenta no tiene permiso para registrar comprobantes.");
+    return;
+  }
+  if (!Array.isArray(state.customers) || state.customers.length === 0) {
+    setNotice("El comprobante fue recibido, pero aun no hay clientes registrados para asociarlo. Importa los clientes primero y compartelo de nuevo.");
+    return;
+  }
+  try {
+    const shared = await takeSharedReceipt(receiptId);
+    if (!shared?.file) {
+      setNotice("El comprobante compartido ya no esta disponible. Compartelo de nuevo.");
+      return;
+    }
+    if (!openPaymentDialog()) return;
+    const files = new DataTransfer();
+    files.items.add(shared.file);
+    $("#payment-proof-file").files = files.files;
+    $("#payment-method").value = "bank_transfer";
+    const detail = [shared.title, shared.text, shared.url].filter(Boolean).join(" - ");
+    $("#payment-notes").value = detail
+      ? `Comprobante compartido desde WhatsApp. ${detail}`.slice(0, 1000)
+      : "Comprobante compartido desde WhatsApp.";
+    setNotice("Comprobante recibido. Selecciona al cliente y registra el pago para enviarlo a revision.");
+  } catch (error) {
+    console.error("Shared receipt import failed", error);
+    setNotice("No fue posible abrir el comprobante compartido.");
   }
 }
 
@@ -5523,12 +5625,26 @@ async function logout(callApi = true) {
   state.token = null;
   state.user = null;
   sessionStorage.removeItem("aether_token");
+  localStorage.removeItem("aether_token");
   appView.hidden = true;
   loginView.hidden = false;
   $("#password").value = "";
 }
 
 let loginInFlight = false;
+
+function isInstalledAether() {
+  return window.matchMedia("(display-mode: standalone)").matches
+    || window.navigator.standalone === true;
+}
+
+function shouldRememberDeviceSession() {
+  return $("#remember-device").checked || isInstalledAether();
+}
+
+if (isInstalledAether()) {
+  $("#remember-device").checked = true;
+}
 
 async function handleLogin(event) {
   if (event) {
@@ -5560,6 +5676,11 @@ async function handleLogin(event) {
     });
     state.token = response.access_token;
     sessionStorage.setItem("aether_token", state.token);
+    if (shouldRememberDeviceSession()) {
+      localStorage.setItem("aether_token", state.token);
+    } else {
+      localStorage.removeItem("aether_token");
+    }
     await enterApp();
   } catch (error) {
     errorBox.textContent =
@@ -6044,8 +6165,9 @@ $("#user-permissions-grid").addEventListener("click", (event) => {
 $("#users-body").addEventListener("click", (event) => {
   const editButton = event.target.closest(".edit-user");
   const resetButton = event.target.closest(".reset-user-password");
+  const revokeSessionsButton = event.target.closest(".revoke-user-sessions");
   const deactivateButton = event.target.closest(".deactivate-user");
-  const button = editButton || resetButton || deactivateButton;
+  const button = editButton || resetButton || revokeSessionsButton || deactivateButton;
   if (!button) return;
   const user = state.operatorUsers?.find(
     (item) => item.id === button.dataset.userId
@@ -6053,6 +6175,7 @@ $("#users-body").addEventListener("click", (event) => {
   if (!user) return;
   if (editButton) openUserDialog(user);
   else if (resetButton) void resetSelectedUserPassword(user);
+  else if (revokeSessionsButton) void revokeOtherUserSessions(user);
   else void deactivateSelectedUser(user);
 });
 $("#user-form").addEventListener("submit", saveUser);
@@ -6085,5 +6208,13 @@ $("#menu-button").addEventListener("click", () => {
   const open = sidebar.classList.toggle("open");
   $("#menu-button").setAttribute("aria-expanded", String(open));
 });
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/app/service-worker.js").catch((error) => {
+      console.warn("No fue posible preparar Aether para uso instalable.", error);
+    });
+  });
+}
 
 if (state.token) enterApp();

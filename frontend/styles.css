@@ -32,7 +32,7 @@ button { color: inherit; }
     var(--ink);
 }
 .login-panel { width: min(460px, calc(100% - 48px)); margin: auto; padding: 40px 0; }
-.login-logo { width: 220px; max-width: 70%; margin-bottom: 52px; }
+.login-logo { width: 360px; max-width: 86%; margin-bottom: 44px; }
 .eyebrow { margin: 0 0 10px; color: var(--cyan); font-size: 0.69rem; font-weight: 750; letter-spacing: 0.19em; }
 .login-panel h1 { max-width: 520px; margin: 0; font-size: clamp(2.4rem, 5vw, 4.7rem); line-height: 0.98; letter-spacing: -0.055em; }
 .login-copy { margin: 24px 0 34px; color: var(--muted); font-size: 1rem; }
@@ -40,6 +40,9 @@ form { display: grid; gap: 18px; }
 label { display: grid; gap: 8px; color: #c7d5e5; font-size: 0.82rem; font-weight: 650; }
 .checkbox-field { grid-template-columns: auto 1fr; align-items: center; }
 .checkbox-field input { width: 18px; height: 18px; }
+#login-form .remember-device { display: flex; align-items: center; gap: 10px; font-weight: 550; }
+#login-form .remember-device input { width: 18px; height: 18px; min-height: 18px; margin: 0; padding: 0; flex: 0 0 auto; }
+#login-form .remember-device span { line-height: 1.35; }
 input, textarea, select {
   width: 100%;
   border: 1px solid var(--line);

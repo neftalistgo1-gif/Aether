@@ -1,0 +1,33 @@
+{
+  "name": "Aether - Recepcion de pagos",
+  "short_name": "Aether",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#071326",
+  "theme_color": "#071326",
+  "share_target": {
+    "action": "/app/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "proof_file",
+          "accept": ["image/*", "application/pdf"]
+        }
+      ]
+    }
+  },
+  "icons": [
+    {
+      "src": "/app/assets/aether-mark.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

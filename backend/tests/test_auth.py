@@ -24,6 +24,7 @@ from app.api.v1.endpoints.auth import (
     deactivate_operator_user,
     login,
     logout,
+    revoke_other_user_sessions,
     replace_operator_permissions,
     update_operator_user,
 )
@@ -233,6 +234,47 @@ class AuthenticationTestCase(unittest.TestCase):
             )
             next(expired_dependency)
         self.assertEqual(expired.exception.status_code, 401)
+
+    def test_administrator_can_close_other_device_sessions(self) -> None:
+        admin_credentials = self.bootstrap()
+        dependency, request, administrator = self.authenticate(
+            admin_credentials.access_token
+        )
+        try:
+            user = create_operator_user(
+                UserCreate(
+                    username="cobranza",
+                    display_name="Cobranza movil",
+                    password="Clave-Segura-Cobranza-456",
+                    role="customer_service",
+                ),
+                administrator,
+                self.db,
+            )
+            login(
+                LoginRequest(
+                    username="cobranza",
+                    password="Clave-Segura-Cobranza-456",
+                ),
+                build_request(),
+                self.db,
+            )
+            result = revoke_other_user_sessions(
+                user.id,
+                request,
+                administrator,
+                self.db,
+            )
+        finally:
+            dependency.close()
+        self.assertEqual(result.revoked_sessions, 1)
+        active_sessions = self.db.scalars(
+            select(AuthSession).where(
+                AuthSession.user_id == user.id,
+                AuthSession.revoked_at.is_(None),
+            )
+        ).all()
+        self.assertEqual(active_sessions, [])
 
     def test_only_administrator_manages_users_and_deactivation_revokes(self) -> None:
         admin_credentials = self.bootstrap()

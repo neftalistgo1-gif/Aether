@@ -82,6 +82,10 @@ class UserPasswordReset(BaseModel):
     reason: str = Field(min_length=3, max_length=1000)
 
 
+class SessionRevokeResult(BaseModel):
+    revoked_sessions: int
+
+
 class UserPermissionReplace(BaseModel):
     permissions: list[Capability] = Field(default_factory=list)
     reason: str = Field(min_length=3, max_length=1000)

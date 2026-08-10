@@ -4,13 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#071326">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Aether · Operación WISP</title>
     <meta
       name="description"
       content="Interfaz operativa de Aether para Servicios AMR."
     >
     <link rel="icon" href="/app/assets/aether-mark.png">
-    <link rel="stylesheet" href="/app/styles.css?v=20260730-1">
+    <link rel="manifest" href="/app/manifest.webmanifest">
+    <link rel="stylesheet" href="/app/styles.css?v=20260810-3">
   </head>
   <body>
     <div id="login-view" class="login-shell">
@@ -21,7 +25,7 @@
           alt="Aether"
         >
         <p class="eyebrow">Servicios AMR · Reynosa</p>
-        <h1 id="login-title">Todo tu WISP Un solo lugar.</h1>
+        <h1 id="login-title">Toda tu operaci&#243;n. Un solo lugar.</h1>
         <p class="login-copy">
           Accede con la cuenta asignada por tu administrador.
         </p>
@@ -45,6 +49,10 @@
               autocomplete="current-password"
               required
             >
+          </label>
+          <label class="remember-device">
+            <input id="remember-device" type="checkbox">
+            <span>Mantener sesi&#243;n en este tel&#233;fono por 7 d&#237;as</span>
           </label>
           <p id="login-error" class="form-error" role="alert"></p>
           <button class="primary-button" type="submit">
@@ -1154,6 +1162,7 @@
               id="payment-proof-file"
               type="file"
               accept="image/*,.pdf"
+              capture="environment"
             >
           </label>
           <label class="full-row">
@@ -2383,6 +2392,6 @@
         </div>
       </form>
     </dialog>
-    <script src="/app/app.js?v=20260731-2"></script>
+    <script src="/app/app.js?v=20260810-3"></script>
   </body>
 </html>

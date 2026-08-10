@@ -28,6 +28,7 @@ from app.schemas.auth import (
     BootstrapAdminCreate,
     LoginRequest,
     OperatorUserRead,
+    SessionRevokeResult,
     TokenResponse,
     UserCreate,
     UserDeactivate,
@@ -460,3 +461,39 @@ def reset_operator_password(
     )
     db.commit()
     return user
+
+
+@router.post(
+    "/users/{user_id}/sessions/revoke-others",
+    response_model=SessionRevokeResult,
+)
+def revoke_other_user_sessions(
+    user_id: UUID,
+    request: Request,
+    administrator: OperatorUser = Depends(require_administrator),
+    db: Session = Depends(get_db),
+) -> SessionRevokeResult:
+    """Close active sessions while preserving the administrator's current one."""
+    user = db.get(OperatorUser, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Operator user not found")
+    result = db.execute(
+        update(AuthSession)
+        .where(
+            AuthSession.user_id == user.id,
+            AuthSession.revoked_at.is_(None),
+            AuthSession.id != request.state.auth_session_id,
+        )
+        .values(revoked_at=datetime.now(UTC))
+    )
+    record_audit_event(
+        db,
+        actor=administrator.display_name,
+        action="auth.other_sessions_revoked",
+        entity_type="OperatorUser",
+        entity_id=user.id,
+        reason="Other device sessions closed from administrator UI",
+        after_data={"revoked_sessions": result.rowcount or 0},
+    )
+    db.commit()
+    return SessionRevokeResult(revoked_sessions=result.rowcount or 0)
