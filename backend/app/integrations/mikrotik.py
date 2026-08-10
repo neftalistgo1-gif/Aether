@@ -47,7 +47,14 @@ class RouterOSRestClient:
                 context=self.ssl_context,
             ) as response:
                 body = response.read()
-                return json.loads(body) if body else None
+                if not body:
+                    return None
+                try:
+                    return json.loads(body.decode("utf-8"))
+                except UnicodeDecodeError:
+                    # RouterOS installations may contain legacy comments with
+                    # Latin-1 characters in otherwise JSON responses.
+                    return json.loads(body.decode("latin-1"))
         except (error.URLError, TimeoutError, ValueError) as exc:
             raise RuntimeError(
                 f"MikroTik request failed: {type(exc).__name__}"
