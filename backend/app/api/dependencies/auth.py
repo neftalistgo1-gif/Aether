@@ -133,6 +133,8 @@ def capability_for_operation(
             if is_read
             else Capability.network_control
         )
+    if route_path.startswith("/api/v1/mikrotik"):
+        return Capability.network_read if is_read else Capability.network_control
     if (
         "/network-assignments" in route_path
         or "/network-assignment" in route_path

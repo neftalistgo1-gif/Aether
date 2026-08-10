@@ -20,6 +20,8 @@ from app.models.mikrotik import (
     NetworkInspectionStatus,
     NetworkStateInspection,
 )
+from app.models.access_point import NetworkAccessPoint
+from app.schemas.access_point import AccessPointHealthRead
 from app.models.service import ServiceStatus
 from app.schemas.mikrotik import (
     MikrotikRouterCreate,
@@ -38,6 +40,83 @@ router = APIRouter(prefix="/api/v1", tags=["mikrotik"])
 
 PREFLIGHT_MAX_AGE = timedelta(minutes=15)
 INSPECTION_MAX_AGE = timedelta(minutes=5)
+
+
+def normalized_mac(value: str | None) -> str:
+    return (value or "").replace("-", ":").upper()
+
+
+@router.get(
+    "/mikrotik/access-points/health",
+    response_model=list[AccessPointHealthRead],
+)
+def list_access_point_health(
+    db: Session = Depends(get_db),
+) -> list[AccessPointHealthRead]:
+    access_points = list(
+        db.scalars(
+            select(NetworkAccessPoint).order_by(
+                NetworkAccessPoint.name,
+                NetworkAccessPoint.ip_address,
+            )
+        )
+    )
+    routers = {
+        item.id: item
+        for item in db.scalars(select(MikrotikRouter)).all()
+    }
+    neighbors_by_router: dict[UUID, dict[str, dict]] = {}
+    unavailable_routers: set[UUID] = set()
+    for router_id in {item.router_id for item in access_points}:
+        router_config = routers.get(router_id)
+        if router_config is None:
+            unavailable_routers.add(router_id)
+            continue
+        try:
+            neighbors = RouterOSRestClient(router_config).list_neighbors()
+            neighbors_by_router[router_id] = {
+                str(item.get("address4") or item.get("address")): item
+                for item in neighbors
+                if item.get("address4") or item.get("address")
+            }
+        except RuntimeError:
+            unavailable_routers.add(router_id)
+
+    checked_at = datetime.now(UTC)
+    result: list[AccessPointHealthRead] = []
+    for access_point in access_points:
+        neighbor = neighbors_by_router.get(access_point.router_id, {}).get(
+            access_point.ip_address
+        )
+        if access_point.router_id in unavailable_routers:
+            health_status = "unknown"
+        elif neighbor is None:
+            health_status = "offline"
+        elif (
+            access_point.mac_address
+            and normalized_mac(neighbor.get("mac-address"))
+            != normalized_mac(access_point.mac_address)
+        ):
+            health_status = "attention"
+        else:
+            health_status = "online"
+        result.append(
+            AccessPointHealthRead(
+                id=access_point.id,
+                router_id=access_point.router_id,
+                name=access_point.name,
+                ip_address=access_point.ip_address,
+                mac_address=access_point.mac_address,
+                interface_name=access_point.interface_name,
+                platform=access_point.platform,
+                source_note=access_point.source_note,
+                status=health_status,
+                observed_identity=neighbor.get("identity") if neighbor else None,
+                observed_age=neighbor.get("age") if neighbor else None,
+                checked_at=checked_at,
+            )
+        )
+    return result
 
 
 def as_utc(value: datetime) -> datetime:

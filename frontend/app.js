@@ -10,6 +10,7 @@ const state = {
   incidents: [],
   supportTickets: [],
   operatorUsers: [],
+  accessPointHealth: [],
   bootstrapStatus: {
     configured: false,
     completed: false,
@@ -403,7 +404,7 @@ async function loadBootstrapStatus() {
 
 async function loadWorkspace() {
   state.user = await api("/api/v1/auth/me");
-  const [customers, services, payments, dailyOperations, assets, plans, incidents, supportTickets, operatorUsers] = await Promise.all([
+  const [customers, services, payments, dailyOperations, assets, plans, incidents, supportTickets, operatorUsers, accessPointHealth] = await Promise.all([
     loadResource("/api/v1/customers"),
     loadResource("/api/v1/services"),
     loadResource("/api/v1/payments"),
@@ -413,6 +414,7 @@ async function loadWorkspace() {
     loadResource("/api/v1/incidents"),
     loadOptionalList("/api/v1/support-tickets"),
     loadOptionalList("/api/v1/auth/users"),
+    loadOptionalList("/api/v1/mikrotik/access-points/health"),
   ]);
   state.customers = customers;
   state.services = services;
@@ -424,6 +426,7 @@ async function loadWorkspace() {
   state.incidents = incidents;
   state.supportTickets = supportTickets;
   state.operatorUsers = operatorUsers;
+  state.accessPointHealth = accessPointHealth;
   renderUser();
   renderOverview();
   renderCustomers();
@@ -572,11 +575,13 @@ function renderOverview() {
   const active = services?.filter((item) => item.status === "active").length;
   const suspended = services?.filter((item) => item.status === "suspended").length;
   const pendingPayments = payments?.filter((item) => item.status === "pending").length;
+  const offlineAccessPoints = state.accessPointHealth?.filter((item) => item.status !== "online").length;
   const metrics = [
     ["Clientes", customers?.length],
     ["Servicios activos", active],
     ["Servicios suspendidos", suspended],
     ["Pagos por verificar", pendingPayments],
+    ["AP con atención", offlineAccessPoints],
   ];
   $("#metric-grid").innerHTML = metrics
     .map(([label, value]) => `
@@ -615,6 +620,17 @@ function renderOverview() {
       })
       .join("");
   }
+  const apHealth = state.accessPointHealth || [];
+  const problems = apHealth.filter((item) => item.status !== "online");
+  $("#access-point-health").innerHTML = !apHealth.length
+    ? '<p class="empty-state">No hay APs registrados para monitorear.</p>'
+    : problems.length
+      ? problems.map((item) => `
+        <div class="ap-health-row ${escapeText(item.status)}">
+          <div><strong>${escapeText(item.name)}</strong><span>${escapeText(item.ip_address)}</span></div>
+          <b>${item.status === "offline" ? "Sin conexión" : item.status === "attention" ? "Verificar" : "Sin lectura"}</b>
+        </div>`).join("")
+      : '<p class="empty-state success-state">Todas las APs registradas están en línea.</p>';
   const visibleAreas = [customers, services, payments].filter(Boolean).length;
   $("#overview-message").textContent = visibleAreas
     ? `Aether muestra ${visibleAreas} áreas según los permisos de tu cuenta.`

@@ -117,3 +117,6 @@ class RouterOSRestClient:
             changed=False,
             entry_count=len(entries),
         )
+
+    def list_neighbors(self) -> list[dict]:
+        return self._request("GET", "/rest/ip/neighbor") or []
