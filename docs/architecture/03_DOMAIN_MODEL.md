@@ -318,7 +318,20 @@ Representa la configuración técnica actual de un servicio.
 
 ---
 
-# 9.1. NetworkControlCommand
+# 9.1. NetworkDevice y DeviceStatusEvent
+
+Representan una radio conocida por UISP y las transiciones operativas de su
+conectividad. `NetworkDevice` puede vincularse a un Service y a un AP sin
+reemplazar el historial de `NetworkAssignment`. UISP proporciona la lectura;
+Aether conserva el estado actual, el ultimo avistamiento, el inicio de la
+desconexion y los eventos necesarios para operar.
+
+Los futuros comandos sobre radios pertenecen a una integracion separada y no
+forman parte de esta telemetria de solo lectura.
+
+---
+
+# 9.2. NetworkControlCommand
 
 Representa una intención auditada de reflejar el estado comercial de un
 servicio en MikroTik.

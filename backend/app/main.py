@@ -31,6 +31,7 @@ from app.api.v1.endpoints.mikrotik import router as mikrotik_router
 from app.api.v1.endpoints.network_assignments import (
     router as network_assignments_router,
 )
+from app.api.v1.endpoints.network_devices import router as network_devices_router
 from app.api.v1.endpoints.notifications import router as notifications_router
 from app.api.v1.endpoints.payments import router as payments_router
 from app.api.v1.endpoints.plans import router as plans_router
@@ -80,6 +81,7 @@ app.include_router(payment_agreements_router, dependencies=protected)
 app.include_router(postal_codes_router, dependencies=protected)
 app.include_router(extensions_router, dependencies=protected)
 app.include_router(network_assignments_router, dependencies=protected)
+app.include_router(network_devices_router, dependencies=protected)
 app.include_router(service_operations_router, dependencies=protected)
 app.include_router(service_plan_changes_router, dependencies=protected)
 app.include_router(support_tickets_router, dependencies=protected)

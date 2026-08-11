@@ -25,6 +25,7 @@ from app.models.mikrotik import (
     NetworkStateInspection,
 )
 from app.models.network_assignment import NetworkAssignment
+from app.models.network_device import DeviceStatusEvent, NetworkDevice
 from app.models.notification import CustomerNotification
 from app.models.payment import Payment, PaymentStatusEvent
 from app.models.payment_agreement import PaymentAgreement
