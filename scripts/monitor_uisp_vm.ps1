@@ -72,37 +72,45 @@ else {
     $state.consecutive_failures++
     Write-MonitorLog "UISP connection failed ($($state.consecutive_failures)/$FailureThreshold)."
     if ($state.consecutive_failures -ge $FailureThreshold) {
-        $lastRecovery = $null
-        if ($state.last_recovery_at) {
-            [DateTimeOffset]::TryParse(
-                $state.last_recovery_at,
-                [ref]$lastRecovery
-            ) | Out-Null
-        }
-        if (
-            $lastRecovery -and
-            (Get-Date) -lt $lastRecovery.LocalDateTime.AddMinutes($RecoveryCooldownMinutes)
-        ) {
-            Write-MonitorLog "UISP remains unavailable; recovery is paused for the $RecoveryCooldownMinutes-minute cooldown."
-        }
-        else {
         if (-not (Test-Path $vboxManage)) {
             throw "VBoxManage was not found at $vboxManage"
         }
         $vmInfo = & $vboxManage showvminfo $VmName --machinereadable
         $isRunning = $vmInfo -match '^VMState="running"$'
-        if ($isRunning) {
-            & $vboxManage controlvm $VmName reset
-            Write-MonitorLog "UISP VM reset after $FailureThreshold consecutive failed checks."
-            Write-RecoveryEvent "reset" $FailureThreshold
-        }
-        else {
+        if (-not $isRunning) {
             & $vboxManage startvm $VmName --type headless
+            if ($LASTEXITCODE -ne 0) {
+                throw "VirtualBox could not start the UISP VM"
+            }
             Write-MonitorLog "UISP VM started after $FailureThreshold consecutive failed checks."
             Write-RecoveryEvent "start" $FailureThreshold
+            $state.consecutive_failures = 0
+            $state.last_recovery_at = (Get-Date).ToString("o")
         }
-        $state.consecutive_failures = 0
-        $state.last_recovery_at = (Get-Date).ToString("o")
+        else {
+            $lastRecovery = $null
+            if ($state.last_recovery_at) {
+                [DateTimeOffset]::TryParse(
+                    $state.last_recovery_at,
+                    [ref]$lastRecovery
+                ) | Out-Null
+            }
+            if (
+                $lastRecovery -and
+                (Get-Date) -lt $lastRecovery.LocalDateTime.AddMinutes($RecoveryCooldownMinutes)
+            ) {
+                Write-MonitorLog "UISP remains unavailable; reset is paused for the $RecoveryCooldownMinutes-minute cooldown."
+            }
+            else {
+            & $vboxManage controlvm $VmName reset
+            if ($LASTEXITCODE -ne 0) {
+                throw "VirtualBox could not reset the UISP VM"
+            }
+            Write-MonitorLog "UISP VM reset after $FailureThreshold consecutive failed checks."
+            Write-RecoveryEvent "reset" $FailureThreshold
+            $state.consecutive_failures = 0
+            $state.last_recovery_at = (Get-Date).ToString("o")
+            }
         }
     }
 }
