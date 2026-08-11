@@ -65,6 +65,11 @@ class RouterOSRestClient:
                     # RouterOS installations may contain legacy comments with
                     # Latin-1 characters in otherwise JSON responses.
                     return json.loads(body.decode("latin-1"))
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:200]
+            raise RuntimeError(
+                f"MikroTik request failed: HTTP {exc.code} {detail}"
+            ) from exc
         except (error.URLError, TimeoutError, ValueError) as exc:
             raise RuntimeError(
                 f"MikroTik request failed: {type(exc).__name__}"
@@ -132,7 +137,11 @@ class RouterOSRestClient:
         return self._request("GET", "/rest/ip/neighbor") or []
 
     def get_interface_stats(self, interface_name: str) -> dict:
-        interfaces = self._request("GET", "/rest/interface") or []
+        interfaces = self._request(
+            "POST",
+            "/rest/interface/print",
+            {".proplist": "name,rx-byte,tx-byte"},
+        ) or []
         item = next(
             (entry for entry in interfaces if entry.get("name") == interface_name),
             None,
