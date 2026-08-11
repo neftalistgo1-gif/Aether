@@ -16,6 +16,7 @@ from app.models.network_device import (
     NetworkDeviceStatus,
     NetworkDeviceType,
 )
+from app.models.access_point import NetworkAccessPoint
 from sqlalchemy import select
 
 
