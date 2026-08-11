@@ -1,4 +1,5 @@
 import json
+import re
 import ssl
 from datetime import UTC, datetime
 from dataclasses import dataclass
@@ -17,8 +18,11 @@ from app.models.network_device import (
     NetworkDeviceType,
 )
 from app.models.access_point import NetworkAccessPoint
-from app.models.service import Service
+from app.models.asset import Asset, AssetOwner, AssetStatus, AssetType
+from app.models.service import Service, ServiceEvent, ServiceEventType, ServiceStatus
+from app.models.plan import Plan
 from sqlalchemy import select
+from uuid import uuid4
 
 
 @dataclass(frozen=True)
@@ -86,8 +90,68 @@ def parse_uisp_datetime(value) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
 
 
+AMR_CODE_PATTERN = re.compile(r"\b(AMR\d{3,6})\b", re.IGNORECASE)
+
+
+def normalize_mac_address(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    compact = re.sub(r"[^0-9a-fA-F]", "", value)
+    if len(compact) != 12:
+        return None
+    return ":".join(compact[index:index + 2].upper() for index in range(0, 12, 2))
+
+
+def device_amr_code(display_name: str) -> str | None:
+    match = AMR_CODE_PATTERN.search(display_name)
+    return match.group(1).upper() if match else None
+
+
+def inventory_asset_type(device_type: NetworkDeviceType) -> AssetType:
+    return AssetType.access_point if device_type == NetworkDeviceType.access_point else AssetType.cpe
+
+
+def sync_inventory_asset(db, *, item: NetworkDevice, identity: dict, device_type: NetworkDeviceType) -> bool:
+    mac_address = normalize_mac_address(identity.get("mac"))
+    asset = db.scalar(select(Asset).where(Asset.mac_address == mac_address)) if mac_address else None
+    created = asset is None
+    if asset is None:
+        asset = Asset(
+            internal_code=f"AST-{uuid4().hex[:12].upper()}",
+            asset_type=inventory_asset_type(device_type),
+            description=item.display_name,
+            owner=AssetOwner.amr,
+            status=AssetStatus.installed,
+        )
+        db.add(asset)
+    asset.asset_type = inventory_asset_type(device_type)
+    asset.description = item.display_name
+    asset.brand = "Ubiquiti"
+    asset.model = identity.get("model") or asset.model
+    asset.mac_address = mac_address
+    asset.status = AssetStatus.installed
+    asset.notes = f"Sincronizado desde UISP: {item.uisp_device_id}"
+    db.flush()
+    item.asset_id = asset.id
+    return created
+
+
+def link_matching_service(db, item: NetworkDevice) -> bool:
+    if item.device_type != NetworkDeviceType.station:
+        return False
+    amr_code = device_amr_code(item.display_name)
+    if not amr_code:
+        return False
+    service = db.scalar(select(Service).where(Service.amr_code == amr_code, Service.status != ServiceStatus.cancelled))
+    if service is None:
+        return False
+    changed = item.service_id != service.id
+    item.service_id = service.id
+    return changed
+
+
 def sync_devices(db, devices: list[dict]) -> dict[str, int]:
-    created = updated = status_events = 0
+    created = updated = status_events = inventory_created = services_linked = 0
     now = datetime.now(UTC)
     for source in devices:
         identity = source.get("identification") or {}
@@ -109,7 +173,9 @@ def sync_devices(db, devices: list[dict]) -> dict[str, int]:
             updated += 1
             if item.current_status != next_status:
                 db.add(DeviceStatusEvent(device_id=item.id, previous_status=item.current_status, new_status=next_status, source="uisp")); status_events += 1
-        item.device_type = device_type; item.display_name = identity.get("displayName") or identity.get("name") or item.display_name; item.management_ip = (source.get("ipAddress") or "").split("/")[0] or None; item.mac_address = identity.get("mac"); item.current_status = next_status; item.last_seen_at = last_seen; item.last_synced_at = now; item.observed_details = details; item.offline_since = item.offline_since if next_status == NetworkDeviceStatus.offline else None
+        item.device_type = device_type; item.display_name = identity.get("displayName") or identity.get("name") or item.display_name; item.management_ip = (source.get("ipAddress") or "").split("/")[0] or None; item.mac_address = normalize_mac_address(identity.get("mac")); item.current_status = next_status; item.last_seen_at = last_seen; item.last_synced_at = now; item.observed_details = details; item.offline_since = item.offline_since if next_status == NetworkDeviceStatus.offline else None
         if next_status == NetworkDeviceStatus.offline and item.offline_since is None: item.offline_since = now
+        inventory_created += sync_inventory_asset(db, item=item, identity=identity, device_type=device_type)
+        services_linked += link_matching_service(db, item)
     db.commit()
-    return {"created": created, "updated": updated, "status_events": status_events}
+    return {"created": created, "updated": updated, "status_events": status_events, "inventory_created": inventory_created, "services_linked": services_linked}

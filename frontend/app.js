@@ -741,6 +741,10 @@ function renderDailyOperations() {
 function assetTypeLabel(value) {
   const labels = {
     antenna: "Antena",
+    cpe: "CPE",
+    access_point: "Punto de acceso",
+    mikrotik: "MikroTik",
+    pc: "PC",
     router_modem: "Router o módem",
     poe: "PoE",
     power_supply: "Fuente",
@@ -759,6 +763,7 @@ function assetStatusLabel(value) {
     defective: "Defectuoso",
     ready_for_reuse: "Listo para reutilizar",
     assigned: "Asignado",
+    installed: "Instalado",
     discarded: "Descartado",
     not_recovered: "No recuperado",
     sold_to_customer: "Vendido al cliente",

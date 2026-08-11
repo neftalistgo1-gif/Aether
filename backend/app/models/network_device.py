@@ -25,6 +25,9 @@ class NetworkDevice(Base):
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     uisp_device_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    asset_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("assets.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     service_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("services.id", ondelete="RESTRICT"), nullable=True, index=True
     )

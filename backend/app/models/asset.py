@@ -21,6 +21,10 @@ from app.db.base import Base
 
 class AssetType(str, Enum):
     antenna = "antenna"
+    cpe = "cpe"
+    access_point = "access_point"
+    mikrotik = "mikrotik"
+    pc = "pc"
     router_modem = "router_modem"
     poe = "poe"
     power_supply = "power_supply"
@@ -41,6 +45,7 @@ class AssetStatus(str, Enum):
     defective = "defective"
     ready_for_reuse = "ready_for_reuse"
     assigned = "assigned"
+    installed = "installed"
     discarded = "discarded"
     not_recovered = "not_recovered"
     sold_to_customer = "sold_to_customer"
