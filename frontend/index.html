@@ -146,8 +146,11 @@
           <button class="nav-item" data-view="support">
             <span>09</span> Soporte
           </button>
+          <button class="nav-item" data-view="network">
+            <span>10</span> Red UISP
+          </button>
           <button class="nav-item" data-view="users">
-            <span>10</span> Usuarios
+            <span>11</span> Usuarios
           </button>
         </nav>
         <div class="sidebar-foot">
@@ -545,6 +548,25 @@
               </table>
             </div>
             <p id="support-tickets-empty" class="empty-state" hidden></p>
+          </div>
+        </section>
+
+        <section id="network-panel" class="view-panel" hidden>
+          <div class="panel">
+            <div class="panel-heading table-heading">
+              <div>
+                <p class="eyebrow">TELEMETRÍA UISP</p>
+                <h2>Dispositivos de red</h2>
+                <p id="network-summary" class="muted-copy">Consultando inventario de red.</p>
+              </div>
+              <button id="sync-uisp-button" class="primary-button" type="button">Sincronizar UISP</button>
+            </div>
+            <div class="table-shell">
+              <table>
+                <thead><tr><th>Equipo</th><th>Tipo</th><th>Estado</th><th>IP</th><th>Señal</th><th>Frecuencia</th><th>Última conexión</th></tr></thead>
+                <tbody id="network-devices-table"></tbody>
+              </table>
+            </div>
           </div>
         </section>
 

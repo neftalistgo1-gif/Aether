@@ -11,6 +11,8 @@ const state = {
   supportTickets: [],
   operatorUsers: [],
   accessPointHealth: [],
+  networkDevices: [],
+  networkSummary: null,
   bootstrapStatus: {
     configured: false,
     completed: false,
@@ -404,7 +406,7 @@ async function loadBootstrapStatus() {
 
 async function loadWorkspace() {
   state.user = await api("/api/v1/auth/me");
-  const [customers, services, payments, dailyOperations, assets, plans, incidents, supportTickets, operatorUsers, accessPointHealth] = await Promise.all([
+  const [customers, services, payments, dailyOperations, assets, plans, incidents, supportTickets, operatorUsers, accessPointHealth, networkDevices, networkSummary] = await Promise.all([
     loadResource("/api/v1/customers"),
     loadResource("/api/v1/services"),
     loadResource("/api/v1/payments"),
@@ -415,6 +417,8 @@ async function loadWorkspace() {
     loadOptionalList("/api/v1/support-tickets"),
     loadOptionalList("/api/v1/auth/users"),
     loadOptionalList("/api/v1/mikrotik/access-points/health"),
+    loadOptionalList("/api/v1/network/devices"),
+    loadResource("/api/v1/network/daily-summary").catch(() => null),
   ]);
   state.customers = customers;
   state.services = services;
@@ -427,6 +431,8 @@ async function loadWorkspace() {
   state.supportTickets = supportTickets;
   state.operatorUsers = operatorUsers;
   state.accessPointHealth = accessPointHealth;
+  state.networkDevices = networkDevices;
+  state.networkSummary = networkSummary;
   renderUser();
   renderOverview();
   renderCustomers();
@@ -438,6 +444,7 @@ async function loadWorkspace() {
   renderIncidents();
   renderSupportTickets();
   renderOperatorUsers();
+  renderNetworkDevices();
 }
 
 function renderUser() {
@@ -530,6 +537,9 @@ function renderUser() {
   const canReadSupport = hasCapability("support.read");
   const canWriteSupport = hasCapability("support.write");
   document.querySelector('[data-view="support"]').hidden = !canReadSupport;
+  const canReadNetwork = hasCapability("network.read");
+  document.querySelector('[data-view="network"]').hidden = !canReadNetwork;
+  $("#sync-uisp-button").hidden = !hasCapability("network.control");
   $("#new-support-ticket-button").hidden = !canWriteSupport;
   $("#support-write-note").hidden = canWriteSupport;
   $("#support-write-note").textContent = canWriteSupport
@@ -4990,6 +5000,21 @@ async function revokeOtherUserSessions(user) {
     : "No habia otras sesiones activas para cerrar.");
 }
 
+function renderNetworkDevices() {
+  const devices = state.networkDevices || [];
+  const summary = state.networkSummary;
+  $("#network-summary").textContent = summary
+    ? `${summary.online} en línea · ${summary.offline} sin conexión · ${summary.total_devices} equipos registrados`
+    : "No hay información de red disponible.";
+  $("#network-devices-table").innerHTML = devices.length
+    ? devices.map((item) => {
+        const details = item.observed_details || {};
+        const lastSeen = item.last_seen_at ? new Date(item.last_seen_at).toLocaleString("es-MX") : "Sin lectura";
+        return `<tr><td><strong>${escapeText(item.display_name)}</strong><br><span class="muted-copy">${escapeText(item.mac_address || "")}</span></td><td>${item.device_type === "access_point" ? "AP" : item.device_type === "station" ? "CPE" : "Otro"}</td><td><span class="badge ${escapeText(item.current_status)}">${escapeText(item.current_status)}</span></td><td>${escapeText(item.management_ip || "—")}</td><td>${details.signal ?? "—"}${details.signal != null ? " dBm" : ""}</td><td>${details.frequency ?? "—"}${details.frequency != null ? " MHz" : ""}</td><td>${escapeText(lastSeen)}</td></tr>`;
+      }).join("")
+    : '<tr><td colspan="7" class="empty-state">Aún no hay dispositivos sincronizados.</td></tr>';
+}
+
 function openSupportTicketDialog() {
   $("#support-ticket-customer").innerHTML = (state.customers || [])
     .map((customer) => `<option value="${customer.id}">${escapeText(supportCustomerLabel(customer))}</option>`)
@@ -5542,6 +5567,7 @@ function showView(name) {
     plans: "Planes",
     incidents: "Incidencias",
     support: "Soporte",
+    network: "Red UISP",
     users: "Usuarios",
   };
   $("#page-title").textContent = titles[name];
@@ -5564,6 +5590,18 @@ async function enterApp() {
     setNotice(error.message);
   }
 }
+
+$("#sync-uisp-button").addEventListener("click", async () => {
+  const button = $("#sync-uisp-button");
+  button.disabled = true;
+  try {
+    await api("/api/v1/uisp/sync", { method: "POST" });
+    state.networkDevices = await loadOptionalList("/api/v1/network/devices");
+    state.networkSummary = await loadResource("/api/v1/network/daily-summary").catch(() => null);
+    renderNetworkDevices();
+    setNotice("Telemetría UISP actualizada.");
+  } catch (error) { setNotice(error.message); } finally { button.disabled = false; }
+});
 
 const SHARE_DATABASE = "aether-share-target";
 const SHARE_STORE = "receipts";
