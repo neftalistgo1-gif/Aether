@@ -116,8 +116,16 @@ main { min-width: 0; padding: 0 36px 44px; background: radial-gradient(circle at
 .hero-card { min-height: 230px; display: flex; justify-content: space-between; align-items: center; overflow: hidden; border: 1px solid rgba(69,155,245,.25); border-radius: 18px; padding: 38px; background: linear-gradient(135deg, #102b51, #0a1c35); }
 .hero-card h2 { max-width: 650px; margin: 0 0 13px; font-size: clamp(2rem, 4vw, 3.5rem); line-height: 1; letter-spacing: -.05em; }
 .hero-card p:last-child { max-width: 620px; margin: 0; color: var(--muted); }
-.pulse-orbit { width: 148px; height: 148px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid rgba(89,185,255,.25); border-radius: 50%; box-shadow: 0 0 0 28px rgba(35,136,239,.05), 0 0 0 56px rgba(35,136,239,.025); }
+.pulse-orbit { width: 148px; height: 148px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid rgba(89,185,255,.25); border-radius: 50%; box-shadow: 0 0 0 28px rgba(35,136,239,.05), 0 0 0 56px rgba(35,136,239,.025); animation: network-heartbeat 3.6s ease-in-out infinite; }
 .pulse-orbit span { width: 50px; height: 50px; border-radius: 14px; background: linear-gradient(135deg, var(--cyan), #166ed1); transform: rotate(30deg); box-shadow: 0 0 40px rgba(35,136,239,.65); }
+@keyframes network-heartbeat {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 28px rgba(35,136,239,.05), 0 0 0 56px rgba(35,136,239,.025); }
+  12% { transform: scale(1.045); box-shadow: 0 0 0 32px rgba(35,136,239,.07), 0 0 0 64px rgba(35,136,239,.03); }
+  24% { transform: scale(1); box-shadow: 0 0 0 28px rgba(35,136,239,.05), 0 0 0 56px rgba(35,136,239,.025); }
+  36% { transform: scale(1.025); }
+  48% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .pulse-orbit { animation: none; } }
 .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 14px; margin: 18px 0; }
 .metric { min-height: 126px; min-width: 0; border: 1px solid var(--line); border-radius: 14px; padding: 20px; background: rgba(13,32,61,.78); }
 .metric span { color: var(--muted); font-size: .74rem; text-transform: uppercase; letter-spacing: .1em; }
