@@ -585,7 +585,8 @@ function renderOverview() {
   const active = services?.filter((item) => item.status === "active").length;
   const suspended = services?.filter((item) => item.status === "suspended").length;
   const pendingPayments = payments?.filter((item) => item.status === "pending").length;
-  const offlineAccessPoints = state.accessPointHealth?.filter((item) => item.status !== "online").length;
+  const uispAccessPoints = (state.networkDevices || []).filter((item) => item.device_type === "access_point");
+  const offlineAccessPoints = uispAccessPoints.filter((item) => item.current_status !== "online").length;
   const metrics = [
     ["Clientes", customers?.length],
     ["Servicios activos", active],
@@ -630,7 +631,12 @@ function renderOverview() {
       })
       .join("");
   }
-  const apHealth = state.accessPointHealth || [];
+  const apHealth = uispAccessPoints.map((item) => ({
+    name: item.display_name,
+    ip_address: item.management_ip,
+    status: item.current_status,
+    observed_age: item.last_seen_at ? new Date(item.last_seen_at).toLocaleString("es-MX") : null,
+  }));
   $("#access-point-health").innerHTML = !apHealth.length
     ? '<p class="empty-state">No hay APs registrados para monitorear.</p>'
     : apHealth.map((item) => `
