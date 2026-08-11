@@ -2,6 +2,7 @@ param(
     [string]$UispAddress = "192.168.3.11",
     [int]$Port = 443,
     [int]$FailureThreshold = 3,
+    [int]$RecoveryCooldownMinutes = 15,
     [string]$VmName = "UISP"
 )
 
@@ -71,6 +72,20 @@ else {
     $state.consecutive_failures++
     Write-MonitorLog "UISP connection failed ($($state.consecutive_failures)/$FailureThreshold)."
     if ($state.consecutive_failures -ge $FailureThreshold) {
+        $lastRecovery = $null
+        if ($state.last_recovery_at) {
+            [DateTimeOffset]::TryParse(
+                $state.last_recovery_at,
+                [ref]$lastRecovery
+            ) | Out-Null
+        }
+        if (
+            $lastRecovery -and
+            (Get-Date) -lt $lastRecovery.LocalDateTime.AddMinutes($RecoveryCooldownMinutes)
+        ) {
+            Write-MonitorLog "UISP remains unavailable; recovery is paused for the $RecoveryCooldownMinutes-minute cooldown."
+        }
+        else {
         if (-not (Test-Path $vboxManage)) {
             throw "VBoxManage was not found at $vboxManage"
         }
@@ -88,6 +103,7 @@ else {
         }
         $state.consecutive_failures = 0
         $state.last_recovery_at = (Get-Date).ToString("o")
+        }
     }
 }
 
