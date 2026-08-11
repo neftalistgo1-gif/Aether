@@ -58,6 +58,9 @@ app = FastAPI(
     title="Aether API",
     description="Backend principal de Aether para Servicios AMR.",
     version="0.1.0",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 protected = [Depends(require_authorized_user)]
@@ -90,14 +93,6 @@ app.include_router(equipment_recovery_router, dependencies=protected)
 app.include_router(maintenance_inspections_router, dependencies=protected)
 app.include_router(mikrotik_router, dependencies=protected)
 app.include_router(uisp_router, dependencies=protected)
-
-
-@app.get("/")
-def root():
-    return {
-        "message": "Welcome to Aether",
-        "status": "online",
-    }
 
 
 @app.get("/about")
