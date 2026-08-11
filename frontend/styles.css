@@ -509,12 +509,14 @@ dialog form.embedded-form { padding: 0; }
 .assets-toolbar { align-items: end; }
 .ap-health-list { display: grid; gap: 9px; }
 .ap-health-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid rgba(255, 190, 80, .28); border-radius: 10px; padding: 11px 12px; background: rgba(255, 190, 80, .06); }
+.ap-health-row.online { border-color: rgba(79, 209, 161, .3); background: rgba(79, 209, 161, .06); }
 .ap-health-row.offline { border-color: rgba(255, 110, 110, .35); background: rgba(255, 110, 110, .07); }
 .ap-health-row.unknown { border-color: rgba(140, 167, 205, .3); background: rgba(140, 167, 205, .06); }
 .ap-health-row div { display: grid; gap: 3px; min-width: 0; }
 .ap-health-row strong { font-size: .84rem; overflow-wrap: anywhere; }
 .ap-health-row span { color: var(--muted); font-size: .72rem; }
 .ap-health-row b { color: #f3cc72; font-size: .72rem; white-space: nowrap; }
+.ap-health-row.online b { color: var(--green); }
 .ap-health-row.offline b { color: #ff9a9a; }
 .success-state { color: #83dcad; }
 

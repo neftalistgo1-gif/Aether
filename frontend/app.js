@@ -621,16 +621,16 @@ function renderOverview() {
       .join("");
   }
   const apHealth = state.accessPointHealth || [];
-  const problems = apHealth.filter((item) => item.status !== "online");
   $("#access-point-health").innerHTML = !apHealth.length
     ? '<p class="empty-state">No hay APs registrados para monitorear.</p>'
-    : problems.length
-      ? problems.map((item) => `
+    : apHealth.map((item) => `
         <div class="ap-health-row ${escapeText(item.status)}">
-          <div><strong>${escapeText(item.name)}</strong><span>${escapeText(item.ip_address)}</span></div>
-          <b>${item.status === "offline" ? "Sin conexión" : item.status === "attention" ? "Verificar" : "Sin lectura"}</b>
-        </div>`).join("")
-      : '<p class="empty-state success-state">Todas las APs registradas están en línea.</p>';
+          <div>
+            <strong>${escapeText(item.name)}</strong>
+            <span>${escapeText(item.ip_address)}${item.observed_age ? ` · ${escapeText(item.observed_age)}` : ""}</span>
+          </div>
+          <b>${item.status === "online" ? "En línea" : item.status === "offline" ? "Sin conexión" : item.status === "attention" ? "Verificar" : "Sin lectura"}</b>
+        </div>`).join("");
   const visibleAreas = [customers, services, payments].filter(Boolean).length;
   $("#overview-message").textContent = visibleAreas
     ? `Aether muestra ${visibleAreas} áreas según los permisos de tu cuenta.`

@@ -12,6 +12,7 @@ RUN apt-get update \
 COPY backend/pyproject.toml backend/README.md /app/backend/
 COPY backend/app /app/backend/app
 COPY backend/migrations /app/backend/migrations
+COPY backend/scripts /app/backend/scripts
 COPY backend/alembic.ini /app/backend/alembic.ini
 COPY frontend /app/frontend
 
