@@ -533,6 +533,18 @@ dialog form.embedded-form { padding: 0; }
 .traffic-legend { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; font-size: .8rem; }
 .traffic-legend small { margin-left: auto; color: var(--muted); }
 .traffic-tx { color: #48b6ff; }.traffic-rx { color: #63d9a3; }
+.traffic-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+.traffic-summary div { display: grid; gap: 4px; min-width: 0; padding: 11px 12px; border: 1px solid rgba(80, 147, 221, .2); border-radius: 9px; background: rgba(35, 136, 239, .05); }
+.traffic-summary span, .traffic-table caption { color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+.traffic-summary strong { overflow-wrap: anywhere; font-size: .82rem; line-height: 1.35; }
+.traffic-axis { display: flex; justify-content: space-between; gap: 10px; margin: 6px 0 20px; color: var(--muted); font-size: .7rem; }
+.traffic-axis span:nth-child(2) { text-align: center; }.traffic-axis span:last-child { text-align: right; }
+.traffic-table-wrap { overflow-x: auto; border-top: 1px solid var(--line); padding-top: 14px; }
+.traffic-table { width: 100%; border-collapse: collapse; font-size: .78rem; text-align: left; }
+.traffic-table caption { padding-bottom: 9px; text-align: left; }
+.traffic-table th, .traffic-table td { padding: 8px 10px; border-bottom: 1px solid rgba(80, 147, 221, .14); white-space: nowrap; }
+.traffic-table th { color: var(--muted); font-weight: 600; }
+.traffic-table td:nth-child(2) { color: #48b6ff; }.traffic-table td:nth-child(3) { color: #63d9a3; }
 
 @media (max-width: 980px) {
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
@@ -551,6 +563,7 @@ dialog form.embedded-form { padding: 0; }
   .hero-card { min-height: 200px; padding: 26px; }
   .pulse-orbit { display: none; }
   .metric-grid { grid-template-columns: 1fr 1fr; }
+  .traffic-summary { grid-template-columns: 1fr 1fr; }
   .table-heading { align-items: flex-start; flex-direction: column; }
   .search-field { width: 100%; min-width: 0; }
   .table-actions { width: 100%; align-items: stretch; flex-direction: column; }

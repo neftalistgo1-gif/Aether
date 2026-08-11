@@ -698,6 +698,26 @@ function formatTrafficRate(value) {
   return `${Math.round(value)} bps`;
 }
 
+function trafficPeriodLabel(period) {
+  return {
+    "1m": "Último minuto", "5m": "Últimos 5 minutos", "30m": "Últimos 30 minutos",
+    "1h": "Última hora", "24h": "Últimas 24 horas", "3d": "Últimos 3 días",
+    "7d": "Última semana", "30d": "Último mes", "90d": "Últimos 3 meses",
+  }[period] || "Periodo seleccionado";
+}
+
+function formatTrafficTime(value, period) {
+  const date = new Date(value);
+  const options = ["1m", "5m", "30m"].includes(period)
+    ? { hour: "2-digit", minute: "2-digit", second: "2-digit" }
+    : ["1h", "24h"].includes(period)
+      ? { hour: "2-digit", minute: "2-digit" }
+      : ["3d", "7d"].includes(period)
+        ? { weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }
+        : { day: "numeric", month: "short", year: "numeric" };
+  return new Intl.DateTimeFormat("es-MX", options).format(date);
+}
+
 function renderTrafficChart() {
   const chart = $("#traffic-chart");
   if (!chart) return;
@@ -712,7 +732,21 @@ function renderTrafficChart() {
   const maximum = Math.max(1, ...points.flatMap((point) => [point.rx_bps, point.tx_bps]));
   const coordinates = (field) => points.map((point, index) => `${(index / (points.length - 1)) * 100},${96 - (point[field] / maximum) * 88}`).join(" ");
   const latest = points.at(-1);
-  chart.innerHTML = `<div class="traffic-legend"><span class="traffic-tx">Tx ${formatTrafficRate(latest.tx_bps)}</span><span class="traffic-rx">Rx ${formatTrafficRate(latest.rx_bps)}</span><small>Máximo ${formatTrafficRate(maximum)}</small></div><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Tráfico LAN"><polyline class="traffic-grid" points="0,96 100,96"></polyline><polyline class="traffic-line tx" points="${coordinates("tx_bps")}"></polyline><polyline class="traffic-line rx" points="${coordinates("rx_bps")}"></polyline></svg>`;
+  const average = (field) => points.reduce((total, point) => total + point[field], 0) / points.length;
+  const middle = points[Math.floor((points.length - 1) / 2)];
+  const recentRows = points.slice(-6).reverse().map((point) => `
+    <tr><td>${formatTrafficTime(point.captured_at, state.trafficRange)}</td><td>${formatTrafficRate(point.tx_bps)}</td><td>${formatTrafficRate(point.rx_bps)}</td></tr>`).join("");
+  chart.innerHTML = `
+    <div class="traffic-summary">
+      <div><span>Actual</span><strong>Tx ${formatTrafficRate(latest.tx_bps)} · Rx ${formatTrafficRate(latest.rx_bps)}</strong></div>
+      <div><span>Promedio</span><strong>Tx ${formatTrafficRate(average("tx_bps"))} · Rx ${formatTrafficRate(average("rx_bps"))}</strong></div>
+      <div><span>Máximo</span><strong>${formatTrafficRate(maximum)}</strong></div>
+      <div><span>Periodo</span><strong>${trafficPeriodLabel(state.trafficRange)}</strong></div>
+    </div>
+    <div class="traffic-legend"><span class="traffic-tx">Tx · envío</span><span class="traffic-rx">Rx · recepción</span><small>${points.length} muestras · cada minuto</small></div>
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Tráfico LAN"><polyline class="traffic-grid" points="0,96 100,96"></polyline><polyline class="traffic-line tx" points="${coordinates("tx_bps")}"></polyline><polyline class="traffic-line rx" points="${coordinates("rx_bps")}"></polyline></svg>
+    <div class="traffic-axis"><span>${formatTrafficTime(points[0].captured_at, state.trafficRange)}</span><span>${formatTrafficTime(middle.captured_at, state.trafficRange)}</span><span>${formatTrafficTime(latest.captured_at, state.trafficRange)}</span></div>
+    <div class="traffic-table-wrap"><table class="traffic-table"><caption>Lecturas recientes · fecha y hora según el periodo seleccionado</caption><thead><tr><th>Fecha y hora</th><th>Tx</th><th>Rx</th></tr></thead><tbody>${recentRows}</tbody></table></div>`;
 }
 
 function upsertDailyOperation(saved) {
