@@ -75,27 +75,6 @@ Cuando quieras instalar Aether en otra PC o servidor:
 
 La primera vez también debes definir `AETHER_BOOTSTRAP_SECRET` para crear el
 primer administrador y luego retirarlo del `.env`.
-## Importacion privada de datos
-
-Si ya preparaste la carpeta local de migracion en `aether_migration/output/`,
-puedes cargar clientes, planes y servicios iniciales sin subir nada sensible a
-GitHub.
-
-1. Verifica que existan los archivos `customers.csv` y `plans.csv` dentro de
-   `aether_migration/output/`.
-2. Ejecuta:
-
-   ```powershell
-   python backend/scripts/import_migration_data.py
-   ```
-
-3. El proceso crea o actualiza clientes, servicios, planes y asignaciones
-   actuales a partir de esa carpeta local.
-4. Las fechas operativas con dia 29, 30 o 31 se normalizan al dia 1 del mes para
-   evitar calendarios invalidos en la importacion.
-5. El reporte de importacion se guarda de forma privada en
-   `backend/private_storage/import_reports/`.
-
 ## Administracion inicial
 
 - El primer administrador se crea desde la pantalla de acceso usando el boton
