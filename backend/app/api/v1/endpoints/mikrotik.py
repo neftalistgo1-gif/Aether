@@ -25,6 +25,7 @@ from app.schemas.access_point import AccessPointHealthRead
 from app.models.service import ServiceStatus
 from app.schemas.mikrotik import (
     MikrotikRouterCreate,
+    MikrotikRouterHealthRead,
     MikrotikRouterRead,
     MikrotikRouterUpdate,
     NetworkControlCommandRead,
@@ -44,6 +45,39 @@ INSPECTION_MAX_AGE = timedelta(minutes=5)
 
 def normalized_mac(value: str | None) -> str:
     return (value or "").replace("-", ":").upper()
+
+
+@router.get(
+    "/mikrotik/routers/health",
+    response_model=list[MikrotikRouterHealthRead],
+)
+def list_router_health(
+    db: Session = Depends(get_db),
+) -> list[MikrotikRouterHealthRead]:
+    checked_at = datetime.now(UTC)
+    result: list[MikrotikRouterHealthRead] = []
+    for router_config in db.scalars(
+        select(MikrotikRouter).order_by(MikrotikRouter.name)
+    ):
+        if not router_config.enabled:
+            health_status = "disabled"
+        elif not credentials_configured(router_config.credential_key):
+            health_status = "unknown"
+        else:
+            try:
+                RouterOSRestClient(router_config).list_neighbors()
+                health_status = "online"
+            except RuntimeError:
+                health_status = "offline"
+        result.append(
+            MikrotikRouterHealthRead(
+                id=router_config.id,
+                name=router_config.name,
+                status=health_status,
+                checked_at=checked_at,
+            )
+        )
+    return result
 
 
 @router.get(

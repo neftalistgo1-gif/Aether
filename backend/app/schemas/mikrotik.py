@@ -44,6 +44,13 @@ class MikrotikRouterRead(MikrotikRouterCreate):
     updated_at: datetime
 
 
+class MikrotikRouterHealthRead(BaseModel):
+    id: UUID
+    name: str
+    status: str
+    checked_at: datetime
+
+
 class MikrotikRouterUpdate(BaseModel):
     endpoint_url: str | None = Field(default=None, min_length=8, max_length=500)
     suspended_address_list: str | None = Field(

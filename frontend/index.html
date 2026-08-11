@@ -14,7 +14,7 @@
     >
     <link rel="icon" href="/app/assets/aether-mark.png">
     <link rel="manifest" href="/app/manifest.webmanifest">
-    <link rel="stylesheet" href="/app/styles.css?v=20260811-uisp-2">
+    <link rel="stylesheet" href="/app/styles.css?v=20260811-overview-1">
   </head>
   <body>
     <div id="login-view" class="login-shell">
@@ -187,10 +187,8 @@
           <div class="hero-card">
             <div>
               <p class="eyebrow">ESTADO GENERAL</p>
-              <h2>La operación está bajo control.</h2>
-              <p id="overview-message">
-                Consultando la información disponible para tu cuenta.
-              </p>
+              <h2>Estado de la red.</h2>
+              <p id="overview-message">Consultando infraestructura de red.</p>
             </div>
             <div class="pulse-orbit"><span></span></div>
           </div>
@@ -217,11 +215,11 @@
             <article class="panel">
               <div class="panel-heading">
                 <div>
-                  <p class="eyebrow">ACCESO</p>
-                  <h2>Capacidades asignadas</h2>
+                  <p class="eyebrow">ALERTAS</p>
+                  <h2>Atención reciente</h2>
                 </div>
               </div>
-              <div id="permission-list" class="permission-list"></div>
+              <div id="network-alerts" class="ap-health-list"></div>
             </article>
           </div>
         </section>
@@ -2428,6 +2426,6 @@
         </div>
       </form>
     </dialog>
-    <script src="/app/app.js?v=20260811-uisp-2"></script>
+    <script src="/app/app.js?v=20260811-overview-1"></script>
   </body>
 </html>

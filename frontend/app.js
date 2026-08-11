@@ -13,6 +13,8 @@ const state = {
   accessPointHealth: [],
   networkDevices: [],
   networkSummary: null,
+  uispConnection: null,
+  mikrotikHealth: [],
   bootstrapStatus: {
     configured: false,
     completed: false,
@@ -406,7 +408,7 @@ async function loadBootstrapStatus() {
 
 async function loadWorkspace() {
   state.user = await api("/api/v1/auth/me");
-  const [customers, services, payments, dailyOperations, assets, plans, incidents, supportTickets, operatorUsers, accessPointHealth, networkDevices, networkSummary] = await Promise.all([
+  const [customers, services, payments, dailyOperations, assets, plans, incidents, supportTickets, operatorUsers, accessPointHealth, networkDevices, networkSummary, uispConnection, mikrotikHealth] = await Promise.all([
     loadResource("/api/v1/customers"),
     loadResource("/api/v1/services"),
     loadResource("/api/v1/payments"),
@@ -419,6 +421,8 @@ async function loadWorkspace() {
     loadOptionalList("/api/v1/mikrotik/access-points/health"),
     loadOptionalList("/api/v1/network/devices"),
     loadResource("/api/v1/network/daily-summary").catch(() => null),
+    loadResource("/api/v1/uisp/connection").catch(() => null),
+    loadOptionalList("/api/v1/mikrotik/routers/health"),
   ]);
   state.customers = customers;
   state.services = services;
@@ -433,6 +437,8 @@ async function loadWorkspace() {
   state.accessPointHealth = accessPointHealth;
   state.networkDevices = networkDevices;
   state.networkSummary = networkSummary;
+  state.uispConnection = uispConnection;
+  state.mikrotikHealth = mikrotikHealth;
   renderUser();
   renderOverview();
   renderCustomers();
@@ -454,11 +460,12 @@ function renderUser() {
   const permissions = state.user.role === "administrator"
     ? ["Acceso administrativo total"]
     : state.user.permissions;
-  $("#permission-list").innerHTML = permissions.length
-    ? permissions
-        .map((item) => `<span class="permission">${escapeText(item)}</span>`)
-        .join("")
-    : '<p class="empty-state">Esta cuenta aún no tiene capacidades asignadas.</p>';
+  const permissionList = $("#permission-list");
+  if (permissionList) {
+    permissionList.innerHTML = permissions.length
+      ? permissions.map((item) => `<span class="permission">${escapeText(item)}</span>`).join("")
+      : '<p class="empty-state">Esta cuenta aún no tiene capacidades asignadas.</p>';
+  }
   const canWriteCustomers = hasCapability("customers.write");
   const canReadBilling = hasCapability("billing.read");
   $("#new-customer-button").hidden = !canWriteCustomers;
@@ -586,13 +593,20 @@ function renderOverview() {
   const suspended = services?.filter((item) => item.status === "suspended").length;
   const pendingPayments = payments?.filter((item) => item.status === "pending").length;
   const uispAccessPoints = (state.networkDevices || []).filter((item) => item.device_type === "access_point");
+  const cpes = (state.networkDevices || []).filter((item) => item.device_type === "station");
+  const offlineCpes = cpes.filter((item) => item.current_status === "offline");
   const offlineAccessPoints = uispAccessPoints.filter((item) => item.current_status !== "online").length;
+  const routers = state.mikrotikHealth || [];
+  const onlineRouters = routers.filter((item) => item.status === "online").length;
+  const uispConnected = Boolean(state.uispConnection?.connected);
   const metrics = [
+    ["UISP", uispConnected ? "Conectado" : "Sin conexión"],
+    ["MikroTik", routers.length ? `${onlineRouters}/${routers.length} en línea` : "Sin registrar"],
+    ["CPE desconectados", offlineCpes.length],
+    ["AP en línea", `${uispAccessPoints.length - offlineAccessPoints}/${uispAccessPoints.length}`],
+    ["Alertas activas", offlineCpes.length + offlineAccessPoints],
     ["Clientes", customers?.length],
     ["Servicios activos", active],
-    ["Servicios suspendidos", suspended],
-    ["Pagos por verificar", pendingPayments],
-    ["AP con atención", offlineAccessPoints],
   ];
   $("#metric-grid").innerHTML = metrics
     .map(([label, value]) => `
@@ -647,10 +661,29 @@ function renderOverview() {
           </div>
           <b>${item.status === "online" ? "En línea" : item.status === "offline" ? "Sin conexión" : item.status === "attention" ? "Verificar" : "Sin lectura"}</b>
         </div>`).join("");
-  const visibleAreas = [customers, services, payments].filter(Boolean).length;
-  $("#overview-message").textContent = visibleAreas
-    ? `Aether muestra ${visibleAreas} áreas según los permisos de tu cuenta.`
-    : "Tu cuenta está activa, pero todavía no tiene acceso a áreas operativas.";
+  const alerts = [
+    ...offlineCpes.map((item) => ({
+      title: `${item.display_name} sin conexión`,
+      detail: item.offline_since ? `Desde ${new Date(item.offline_since).toLocaleString("es-MX")}` : "Detectado por UISP",
+      status: "offline",
+    })),
+    ...uispAccessPoints.filter((item) => item.current_status !== "online").map((item) => ({
+      title: `${item.display_name} requiere revisión`,
+      detail: item.current_status === "offline" ? "AP sin conexión" : "UISP no tiene lectura actual",
+      status: item.current_status,
+    })),
+    ...routers.filter((item) => item.status !== "online").map((item) => ({
+      title: `${item.name} no está disponible`,
+      detail: item.status === "disabled" ? "Router deshabilitado" : "No respondió a la comprobación",
+      status: item.status,
+    })),
+  ];
+  $("#network-alerts").innerHTML = alerts.length
+    ? alerts.slice(0, 5).map((item) => `<div class="ap-health-row ${escapeText(item.status)}"><div><strong>${escapeText(item.title)}</strong><span>${escapeText(item.detail)}</span></div><b>Revisar</b></div>`).join("")
+    : '<p class="empty-state success-state">Sin alertas de red activas.</p>';
+  $("#overview-message").textContent = uispConnected
+    ? `UISP conectado · ${state.networkSummary?.online ?? 0} equipos en línea · ${offlineCpes.length} CPE desconectados.`
+    : "UISP no está disponible en este momento; se conserva la última telemetría recibida.";
 }
 
 function upsertDailyOperation(saved) {
