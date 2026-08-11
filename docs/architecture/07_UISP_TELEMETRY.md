@@ -18,6 +18,13 @@ Una AP offline puede explicar varias estaciones offline. Las alertas y el resume
 - `GET /api/v1/services/{service_id}/network-device`: radio vinculado al servicio.
 - `GET /api/v1/network/devices/{device_id}/status-events`: historial de transiciones.
 - `GET /api/v1/network/daily-summary`: conteos para la vista operativa diaria.
+- `GET /api/v1/uisp/connection`: prueba la lectura de UISP sin persistir ni
+  exponer su token.
+
+La conexion usa `UISP_ENDPOINT_URL` y `UISP_API_TOKEN` del archivo privado
+`backend/.env`. El token debe crearse en UISP con permiso de solo lectura. La
+primera llamada consulta `/nms/api/v2.1/devices`; antes de sincronizar se
+validara una respuesta real de la instancia AMR para fijar el mapeo de campos.
 
 Los umbrales de alerta no se guardan como reglas fijas en esta fase. El resumen expone los cortes de 24 y 72 horas como referencia operativa; la politica configurable y el envio de avisos se incorporaran despues de validar el flujo diario.
 

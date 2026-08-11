@@ -51,6 +51,7 @@ from app.api.v1.endpoints.service_plan_changes import (
 from app.api.v1.endpoints.support_tickets import (
     router as support_tickets_router,
 )
+from app.api.v1.endpoints.uisp import router as uisp_router
 from app.api.v1.endpoints.services import router as services_router
 
 app = FastAPI(
@@ -88,6 +89,7 @@ app.include_router(support_tickets_router, dependencies=protected)
 app.include_router(equipment_recovery_router, dependencies=protected)
 app.include_router(maintenance_inspections_router, dependencies=protected)
 app.include_router(mikrotik_router, dependencies=protected)
+app.include_router(uisp_router, dependencies=protected)
 
 
 @app.get("/")

@@ -15,6 +15,13 @@ AETHER_POSTAL_CODES_PATH = os.getenv(
     str(BACKEND_DIR.parent / "docs" / "journal" / "codigos_postales.json"),
 )
 
+
+def boolean_setting(name: str, default: bool = True) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
 def bounded_integer_setting(
     name: str,
     default: int,
@@ -35,3 +42,12 @@ AUTH_SESSION_HOURS = bounded_integer_setting(
     minimum=1,
     maximum=168,
 )
+UISP_ENDPOINT_URL = os.getenv("UISP_ENDPOINT_URL")
+UISP_API_TOKEN = os.getenv("UISP_API_TOKEN")
+UISP_TIMEOUT_SECONDS = bounded_integer_setting(
+    "UISP_TIMEOUT_SECONDS",
+    default=15,
+    minimum=3,
+    maximum=60,
+)
+UISP_VERIFY_TLS = boolean_setting("UISP_VERIFY_TLS", default=True)
