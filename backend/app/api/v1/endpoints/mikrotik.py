@@ -49,6 +49,7 @@ INSPECTION_MAX_AGE = timedelta(minutes=5)
 TRAFFIC_PERIODS = {
     "1m": timedelta(minutes=1), "5m": timedelta(minutes=5), "30m": timedelta(minutes=30),
     "1h": timedelta(hours=1), "24h": timedelta(hours=24), "3d": timedelta(days=3), "7d": timedelta(days=7),
+    "30d": timedelta(days=30), "90d": timedelta(days=90),
 }
 
 
@@ -102,16 +103,15 @@ def list_router_health(
     for router_config in db.scalars(
         select(MikrotikRouter).order_by(MikrotikRouter.name)
     ):
-        if not router_config.enabled:
-            health_status = "disabled"
-        elif not credentials_configured(router_config.credential_key):
-            health_status = "unknown"
-        else:
-            try:
-                RouterOSRestClient(router_config).list_neighbors()
-                health_status = "online"
-            except RuntimeError:
-                health_status = "offline"
+        # Monitoring is deliberately independent from command authorization.
+        # A router may have control disabled while its read-only monitor remains online.
+        try:
+            RouterOSRestClient(router_config, monitor=True).get_interface_stats(
+                traffic_interface_name(router_config) or "LAN"
+            )
+            health_status = "online"
+        except RuntimeError:
+            health_status = "offline"
         result.append(
             MikrotikRouterHealthRead(
                 id=router_config.id,
