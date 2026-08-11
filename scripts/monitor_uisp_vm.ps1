@@ -90,10 +90,12 @@ else {
         else {
             $lastRecovery = $null
             if ($state.last_recovery_at) {
-                [DateTimeOffset]::TryParse(
-                    $state.last_recovery_at,
-                    [ref]$lastRecovery
-                ) | Out-Null
+                try {
+                    $lastRecovery = [DateTimeOffset]$state.last_recovery_at
+                }
+                catch {
+                    Write-MonitorLog "Recovery timestamp was invalid; reset cooldown was skipped."
+                }
             }
             if (
                 $lastRecovery -and
