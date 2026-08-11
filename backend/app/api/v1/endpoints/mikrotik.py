@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -27,6 +28,8 @@ from app.schemas.mikrotik import (
     MikrotikRouterCreate,
     MikrotikRouterHealthRead,
     MikrotikRouterRead,
+    MikrotikTrafficHistoryRead,
+    MikrotikTrafficPointRead,
     MikrotikRouterUpdate,
     NetworkControlCommandRead,
     NetworkControlRequest,
@@ -36,15 +39,55 @@ from app.schemas.mikrotik import (
     credentials_configured,
 )
 from app.services.audit import record_audit_event
+from app.models.traffic_sample import MikrotikTrafficSample
+from app.services.mikrotik_traffic import traffic_interface_name
 
 router = APIRouter(prefix="/api/v1", tags=["mikrotik"])
 
 PREFLIGHT_MAX_AGE = timedelta(minutes=15)
 INSPECTION_MAX_AGE = timedelta(minutes=5)
+TRAFFIC_PERIODS = {
+    "1m": timedelta(minutes=1), "5m": timedelta(minutes=5), "30m": timedelta(minutes=30),
+    "1h": timedelta(hours=1), "24h": timedelta(hours=24), "3d": timedelta(days=3), "7d": timedelta(days=7),
+}
 
 
 def normalized_mac(value: str | None) -> str:
     return (value or "").replace("-", ":").upper()
+
+
+@router.get("/mikrotik/traffic", response_model=MikrotikTrafficHistoryRead)
+def get_mikrotik_traffic(
+    period: str = "1h",
+    db: Session = Depends(get_db),
+) -> MikrotikTrafficHistoryRead:
+    duration = TRAFFIC_PERIODS.get(period)
+    if duration is None:
+        raise HTTPException(status_code=422, detail="Unsupported traffic period")
+    router = db.scalar(select(MikrotikRouter).order_by(MikrotikRouter.name))
+    interface_name = traffic_interface_name(router) if router else None
+    if router is None or not interface_name:
+        return MikrotikTrafficHistoryRead(interface_name="LAN", period=period, points=[])
+    samples = list(db.scalars(
+        select(MikrotikTrafficSample)
+        .where(
+            MikrotikTrafficSample.router_id == router.id,
+            MikrotikTrafficSample.interface_name == interface_name,
+            MikrotikTrafficSample.captured_at >= datetime.now(UTC) - duration,
+        )
+        .order_by(MikrotikTrafficSample.captured_at)
+    ))
+    maximum_points = 360
+    step = max(1, (len(samples) + maximum_points - 1) // maximum_points)
+    points = [
+        MikrotikTrafficPointRead(
+            captured_at=item.captured_at,
+            rx_bps=item.rx_bps,
+            tx_bps=item.tx_bps,
+        )
+        for item in samples[::step]
+    ]
+    return MikrotikTrafficHistoryRead(interface_name=interface_name, period=period, points=points)
 
 
 @router.get(

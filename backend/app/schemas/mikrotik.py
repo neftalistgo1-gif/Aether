@@ -51,6 +51,18 @@ class MikrotikRouterHealthRead(BaseModel):
     checked_at: datetime
 
 
+class MikrotikTrafficPointRead(BaseModel):
+    captured_at: datetime
+    rx_bps: float
+    tx_bps: float
+
+
+class MikrotikTrafficHistoryRead(BaseModel):
+    interface_name: str
+    period: str
+    points: list[MikrotikTrafficPointRead]
+
+
 class MikrotikRouterUpdate(BaseModel):
     endpoint_url: str | None = Field(default=None, min_length=8, max_length=500)
     suspended_address_list: str | None = Field(

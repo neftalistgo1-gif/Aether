@@ -16,10 +16,20 @@ class RouterExecutionResult:
 
 
 class RouterOSRestClient:
-    def __init__(self, router: MikrotikRouter) -> None:
+    def __init__(self, router: MikrotikRouter, *, monitor: bool = False) -> None:
         prefix = router.credential_key.upper()
-        self.username = os.getenv(f"MIKROTIK_{prefix}_USERNAME")
-        self.password = os.getenv(f"MIKROTIK_{prefix}_PASSWORD")
+        monitor_username = os.getenv(f"MIKROTIK_{prefix}_MONITOR_USERNAME")
+        monitor_password = os.getenv(f"MIKROTIK_{prefix}_MONITOR_PASSWORD")
+        self.username = (
+            monitor_username or "aether-monitor"
+            if monitor
+            else os.getenv(f"MIKROTIK_{prefix}_USERNAME")
+        )
+        self.password = (
+            monitor_password or os.getenv(f"MIKROTIK_{prefix}_PASSWORD")
+            if monitor
+            else os.getenv(f"MIKROTIK_{prefix}_PASSWORD")
+        )
         if not self.username or not self.password:
             raise RuntimeError("MikroTik credentials are not configured")
         self.router = router
@@ -120,3 +130,13 @@ class RouterOSRestClient:
 
     def list_neighbors(self) -> list[dict]:
         return self._request("GET", "/rest/ip/neighbor") or []
+
+    def get_interface_stats(self, interface_name: str) -> dict:
+        interfaces = self._request("GET", "/rest/interface") or []
+        item = next(
+            (entry for entry in interfaces if entry.get("name") == interface_name),
+            None,
+        )
+        if item is None:
+            raise RuntimeError(f"MikroTik interface not found: {interface_name}")
+        return item

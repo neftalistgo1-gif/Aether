@@ -15,6 +15,8 @@ const state = {
   networkSummary: null,
   uispConnection: null,
   mikrotikHealth: [],
+  trafficHistory: null,
+  trafficRange: "1h",
   bootstrapStatus: {
     configured: false,
     completed: false,
@@ -408,7 +410,7 @@ async function loadBootstrapStatus() {
 
 async function loadWorkspace() {
   state.user = await api("/api/v1/auth/me");
-  const [customers, services, payments, dailyOperations, assets, plans, incidents, supportTickets, operatorUsers, accessPointHealth, networkDevices, networkSummary, uispConnection, mikrotikHealth] = await Promise.all([
+  const [customers, services, payments, dailyOperations, assets, plans, incidents, supportTickets, operatorUsers, accessPointHealth, networkDevices, networkSummary, uispConnection, mikrotikHealth, trafficHistory] = await Promise.all([
     loadResource("/api/v1/customers"),
     loadResource("/api/v1/services"),
     loadResource("/api/v1/payments"),
@@ -423,6 +425,7 @@ async function loadWorkspace() {
     loadResource("/api/v1/network/daily-summary").catch(() => null),
     loadResource("/api/v1/uisp/connection").catch(() => null),
     loadOptionalList("/api/v1/mikrotik/routers/health"),
+    loadResource("/api/v1/mikrotik/traffic?period=1h").catch(() => null),
   ]);
   state.customers = customers;
   state.services = services;
@@ -439,6 +442,7 @@ async function loadWorkspace() {
   state.networkSummary = networkSummary;
   state.uispConnection = uispConnection;
   state.mikrotikHealth = mikrotikHealth;
+  state.trafficHistory = trafficHistory;
   renderUser();
   renderOverview();
   renderCustomers();
@@ -684,6 +688,31 @@ function renderOverview() {
   $("#overview-message").textContent = uispConnected
     ? `UISP conectado · ${state.networkSummary?.online ?? 0} equipos en línea · ${offlineCpes.length} CPE desconectados.`
     : "UISP no está disponible en este momento; se conserva la última telemetría recibida.";
+  renderTrafficChart();
+}
+
+function formatTrafficRate(value) {
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)} Gbps`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)} Mbps`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)} Kbps`;
+  return `${Math.round(value)} bps`;
+}
+
+function renderTrafficChart() {
+  const chart = $("#traffic-chart");
+  if (!chart) return;
+  const points = state.trafficHistory?.points || [];
+  document.querySelectorAll("[data-traffic-range]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.trafficRange === state.trafficRange);
+  });
+  if (points.length < 2) {
+    chart.innerHTML = '<p class="empty-state">Reuniendo muestras de tráfico. La gráfica aparecerá después de dos minutos.</p>';
+    return;
+  }
+  const maximum = Math.max(1, ...points.flatMap((point) => [point.rx_bps, point.tx_bps]));
+  const coordinates = (field) => points.map((point, index) => `${(index / (points.length - 1)) * 100},${96 - (point[field] / maximum) * 88}`).join(" ");
+  const latest = points.at(-1);
+  chart.innerHTML = `<div class="traffic-legend"><span class="traffic-tx">Tx ${formatTrafficRate(latest.tx_bps)}</span><span class="traffic-rx">Rx ${formatTrafficRate(latest.rx_bps)}</span><small>Máximo ${formatTrafficRate(maximum)}</small></div><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Tráfico LAN"><polyline class="traffic-grid" points="0,96 100,96"></polyline><polyline class="traffic-line tx" points="${coordinates("tx_bps")}"></polyline><polyline class="traffic-line rx" points="${coordinates("rx_bps")}"></polyline></svg>`;
 }
 
 function upsertDailyOperation(saved) {
@@ -5645,6 +5674,14 @@ $("#sync-uisp-button").addEventListener("click", async () => {
     renderNetworkDevices();
     setNotice("Telemetría UISP actualizada.");
   } catch (error) { setNotice(error.message); } finally { button.disabled = false; }
+});
+
+document.querySelectorAll("[data-traffic-range]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    state.trafficRange = button.dataset.trafficRange;
+    state.trafficHistory = await loadResource(`/api/v1/mikrotik/traffic?period=${state.trafficRange}`).catch(() => null);
+    renderTrafficChart();
+  });
 });
 
 const SHARE_DATABASE = "aether-share-target";

@@ -519,6 +519,20 @@ dialog form.embedded-form { padding: 0; }
 .ap-health-row.online b { color: var(--green); }
 .ap-health-row.offline b { color: #ff9a9a; }
 .success-state { color: #83dcad; }
+.traffic-panel { grid-column: 1 / -1; }
+.traffic-ranges { display: flex; flex-wrap: wrap; gap: 5px; }
+.traffic-ranges button { border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; color: var(--muted); background: transparent; cursor: pointer; font-size: .7rem; }
+.traffic-ranges button.active { border-color: var(--cyan); color: var(--cyan); background: rgba(35, 136, 239, .12); }
+.traffic-chart { padding: 18px 24px 24px; min-height: 190px; }
+.traffic-chart svg { width: 100%; height: 150px; overflow: visible; }
+.traffic-line, .traffic-grid { fill: none; vector-effect: non-scaling-stroke; }
+.traffic-line { stroke-width: 2; }
+.traffic-line.tx { stroke: #48b6ff; }
+.traffic-line.rx { stroke: #63d9a3; }
+.traffic-grid { stroke: rgba(140, 167, 205, .3); stroke-width: 1; }
+.traffic-legend { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; font-size: .8rem; }
+.traffic-legend small { margin-left: auto; color: var(--muted); }
+.traffic-tx { color: #48b6ff; }.traffic-rx { color: #63d9a3; }
 
 @media (max-width: 980px) {
   .metric-grid { grid-template-columns: repeat(2, 1fr); }

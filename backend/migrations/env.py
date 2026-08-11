@@ -34,6 +34,7 @@ from app.models.plan import Plan, PlanPrice
 from app.models.service import Service, ServiceEvent, ServiceHolder
 from app.models.service_plan_change import ServicePlanChange
 from app.models.service_operations import Cancellation, Reactivation, Suspension
+from app.models.traffic_sample import MikrotikTrafficSample
 
 config = context.config
 config.set_main_option("sqlalchemy.url", DATABASE_URL)

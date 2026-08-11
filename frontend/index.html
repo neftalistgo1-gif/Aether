@@ -14,7 +14,7 @@
     >
     <link rel="icon" href="/app/assets/aether-mark.png">
     <link rel="manifest" href="/app/manifest.webmanifest">
-    <link rel="stylesheet" href="/app/styles.css?v=20260811-overview-1">
+    <link rel="stylesheet" href="/app/styles.css?v=20260811-traffic-1">
   </head>
   <body>
     <div id="login-view" class="login-shell">
@@ -220,6 +220,18 @@
                 </div>
               </div>
               <div id="network-alerts" class="ap-health-list"></div>
+            </article>
+            <article class="panel traffic-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">MIKROTIK · LAN</p>
+                  <h2>Tráfico total</h2>
+                </div>
+                <div class="traffic-ranges" aria-label="Periodo de tráfico">
+                  <button type="button" data-traffic-range="1m">1 m</button><button type="button" data-traffic-range="5m">5 m</button><button type="button" data-traffic-range="30m">30 m</button><button type="button" data-traffic-range="1h" class="active">1 h</button><button type="button" data-traffic-range="24h">24 h</button><button type="button" data-traffic-range="3d">3 d</button><button type="button" data-traffic-range="7d">7 d</button>
+                </div>
+              </div>
+              <div id="traffic-chart" class="traffic-chart"></div>
             </article>
           </div>
         </section>
@@ -2426,6 +2438,6 @@
         </div>
       </form>
     </dialog>
-    <script src="/app/app.js?v=20260811-overview-1"></script>
+    <script src="/app/app.js?v=20260811-traffic-1"></script>
   </body>
 </html>
