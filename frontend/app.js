@@ -605,7 +605,7 @@ function renderOverview() {
   const uispConnected = Boolean(state.uispConnection?.connected);
   const metrics = [
     ["UISP", uispConnected ? "Conectado" : "Sin conexión"],
-    ["MikroTik", routers.length ? `${onlineRouters}/${routers.length} en línea` : "Sin registrar"],
+    ["MikroTik", routers.length ? `${onlineRouters}/${routers.length}` : "Sin registrar"],
     ["CPE desconectados", offlineCpes.length],
     ["AP en línea", `${uispAccessPoints.length - offlineAccessPoints}/${uispAccessPoints.length}`],
     ["Alertas activas", offlineCpes.length + offlineAccessPoints],
