@@ -17,6 +17,7 @@ from app.models.network_device import (
     NetworkDeviceType,
 )
 from app.models.access_point import NetworkAccessPoint
+from app.models.service import Service
 from sqlalchemy import select
 
 
