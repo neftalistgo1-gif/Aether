@@ -746,7 +746,7 @@ function renderTrafficChart() {
     <div class="traffic-legend"><span class="traffic-tx">Tx · envío</span><span class="traffic-rx">Rx · recepción</span><small>${points.length} muestras · cada minuto</small></div>
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Tráfico LAN"><polyline class="traffic-grid" points="0,96 100,96"></polyline><polyline class="traffic-line tx" points="${coordinates("tx_bps")}"></polyline><polyline class="traffic-line rx" points="${coordinates("rx_bps")}"></polyline></svg>
     <div class="traffic-axis"><span>${formatTrafficTime(points[0].captured_at, state.trafficRange)}</span><span>${formatTrafficTime(middle.captured_at, state.trafficRange)}</span><span>${formatTrafficTime(latest.captured_at, state.trafficRange)}</span></div>
-    <div class="traffic-table-wrap"><table class="traffic-table"><caption>Lecturas recientes · fecha y hora según el periodo seleccionado</caption><thead><tr><th>Fecha y hora</th><th>Tx</th><th>Rx</th></tr></thead><tbody>${recentRows}</tbody></table></div>`;
+    <details class="traffic-readings"><summary>Ver lecturas recientes (${Math.min(points.length, 6)})</summary><div class="traffic-table-wrap"><table class="traffic-table"><caption>Fecha y hora según el periodo seleccionado</caption><thead><tr><th>Fecha y hora</th><th>Tx</th><th>Rx</th></tr></thead><tbody>${recentRows}</tbody></table></div></details>`;
 }
 
 function upsertDailyOperation(saved) {

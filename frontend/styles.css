@@ -539,6 +539,9 @@ dialog form.embedded-form { padding: 0; }
 .traffic-summary strong { overflow-wrap: anywhere; font-size: .82rem; line-height: 1.35; }
 .traffic-axis { display: flex; justify-content: space-between; gap: 10px; margin: 6px 0 20px; color: var(--muted); font-size: .7rem; }
 .traffic-axis span:nth-child(2) { text-align: center; }.traffic-axis span:last-child { text-align: right; }
+.traffic-readings { border-top: 1px solid var(--line); }
+.traffic-readings summary { padding: 14px 2px 0; color: #9fcfff; font-size: .78rem; font-weight: 600; cursor: pointer; }
+.traffic-readings summary::marker { color: var(--cyan); }
 .traffic-table-wrap { overflow-x: auto; border-top: 1px solid var(--line); padding-top: 14px; }
 .traffic-table { width: 100%; border-collapse: collapse; font-size: .78rem; text-align: left; }
 .traffic-table caption { padding-bottom: 9px; text-align: left; }
