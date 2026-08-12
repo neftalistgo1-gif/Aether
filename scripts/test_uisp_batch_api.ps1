@@ -7,7 +7,8 @@ if (-not (Test-Path $tokenPath) -or -not (Test-Path $metadataPath)) {
     throw "Primero ejecuta scripts\set_uisp_batch_token.ps1."
 }
 
-$secureToken = Get-Content -LiteralPath $tokenPath -Raw | ConvertTo-SecureString
+$protectedValue = (Get-Content -LiteralPath $tokenPath -Raw).Trim().TrimStart([char]0xFEFF)
+$secureToken = $protectedValue | ConvertTo-SecureString
 $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
 try {
     $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer)
