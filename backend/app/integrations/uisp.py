@@ -1,7 +1,9 @@
 import json
 import re
 import ssl
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
+from pathlib import Path
 from dataclasses import dataclass
 from urllib import error, request
 
@@ -10,6 +12,7 @@ from app.core.config import (
     UISP_ENDPOINT_URL,
     UISP_TIMEOUT_SECONDS,
     UISP_VERIFY_TLS,
+    UISP_SERVICE_REFERENCE_PATH,
 )
 from app.models.network_device import (
     DeviceStatusEvent,
@@ -142,12 +145,74 @@ def link_matching_service(db, item: NetworkDevice) -> bool:
     amr_code = device_amr_code(item.display_name)
     if not amr_code:
         return False
+    reference = load_service_reference().get(amr_code, {})
     service = db.scalar(select(Service).where(Service.amr_code == amr_code, Service.status != ServiceStatus.cancelled))
     if service is None:
-        return False
+        plan = closest_plan(db, reference.get("speed_mbps"))
+        if plan is None or plan.current_price is None:
+            return False
+        cutoff = reference_date(reference)
+        service = Service(
+            amr_code=amr_code,
+            plan_id=plan.id,
+            plan_name=plan.name,
+            monthly_price=plan.current_price,
+            payment_day=cutoff.day,
+            activation_date=cutoff,
+            address=reference.get("address") or item.display_name,
+            status=ServiceStatus.pending,
+        )
+        db.add(service)
+        db.flush()
+    elif service.status == ServiceStatus.pending and service.current_customer_id is None:
+        apply_reference_to_pending_service(service, db, reference, item.display_name)
     changed = item.service_id != service.id
     item.service_id = service.id
     return changed
+
+
+def load_service_reference() -> dict[str, dict]:
+    try:
+        source = json.loads(Path(UISP_SERVICE_REFERENCE_PATH).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return source if isinstance(source, dict) else {}
+
+
+def reference_date(reference: dict) -> date:
+    value = reference.get("start_date")
+    try:
+        return date.fromisoformat(value) if isinstance(value, str) else date(2026, 8, 1)
+    except ValueError:
+        return date(2026, 8, 1)
+
+
+def speed_mbps(value: object) -> int | None:
+    match = re.search(r"\d+", str(value or ""))
+    return int(match.group()) if match else None
+
+
+def closest_plan(db, desired_speed: object) -> Plan | None:
+    plans = list(db.scalars(select(Plan)))
+    if not plans:
+        return None
+    requested = speed_mbps(desired_speed) or 15
+    return min(plans, key=lambda plan: abs((speed_mbps(plan.speed) or 15) - requested))
+
+
+def apply_reference_to_pending_service(service: Service, db, reference: dict, fallback_address: str) -> None:
+    plan = closest_plan(db, reference.get("speed_mbps"))
+    if plan is not None and plan.current_price is not None:
+        service.plan_id = plan.id
+        service.plan_name = plan.name
+        service.monthly_price = plan.current_price
+    cutoff = reference_date(reference)
+    service.payment_day = cutoff.day
+    service.activation_date = cutoff
+    if reference.get("address"):
+        service.address = reference["address"]
+    elif not service.address:
+        service.address = fallback_address
 
 
 def sync_devices(db, devices: list[dict]) -> dict[str, int]:

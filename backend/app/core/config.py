@@ -51,3 +51,7 @@ UISP_TIMEOUT_SECONDS = bounded_integer_setting(
     maximum=60,
 )
 UISP_VERIFY_TLS = boolean_setting("UISP_VERIFY_TLS", default=True)
+UISP_SERVICE_REFERENCE_PATH = os.getenv(
+    "UISP_SERVICE_REFERENCE_PATH",
+    str(BACKEND_DIR / "private_storage" / "uisp_reference" / "services.json"),
+)

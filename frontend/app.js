@@ -5703,9 +5703,14 @@ $("#sync-uisp-button").addEventListener("click", async () => {
   button.disabled = true;
   try {
     await api("/api/v1/uisp/sync", { method: "POST" });
+    state.assets = await loadResource("/api/v1/assets");
+    state.services = await loadResource("/api/v1/services");
     state.networkDevices = await loadOptionalList("/api/v1/network/devices");
     state.networkSummary = await loadResource("/api/v1/network/daily-summary").catch(() => null);
     renderNetworkDevices();
+    renderAssets();
+    renderServices();
+    renderOverview();
     setNotice("Telemetría UISP actualizada.");
   } catch (error) { setNotice(error.message); } finally { button.disabled = false; }
 });
