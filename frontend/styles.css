@@ -134,6 +134,14 @@ main { min-width: 0; padding: 0 36px 44px; background: radial-gradient(circle at
 .panel { border: 1px solid var(--line); border-radius: 14px; background: rgba(13,32,61,.8); overflow: hidden; }
 .panel-heading { min-height: 88px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 24px; border-bottom: 1px solid var(--line); }
 .panel-heading h2 { margin: 0; font-size: 1.2rem; }
+.overview-collapsible { display: block; }
+.overview-collapsible summary { list-style: none; cursor: pointer; user-select: none; }
+.overview-collapsible summary::-webkit-details-marker { display: none; }
+.overview-collapsible summary::after { content: "⌄"; color: var(--cyan); font-size: 1.35rem; transition: transform .18s ease; }
+.overview-collapsible[open] summary::after { transform: rotate(180deg); }
+.collapsible-hint { margin-left: auto; color: var(--muted); font-size: .73rem; }
+.overview-collapsible[open] .collapsible-hint { display: none; }
+.overview-collapsible .ap-health-list { padding: 0 24px 22px; }
 .status-list, .permission-list { padding: 10px 24px 22px; }
 .status-row { display: grid; grid-template-columns: 110px 1fr 42px; align-items: center; gap: 14px; padding: 12px 0; }
 .status-row span { color: var(--muted); font-size: .8rem; }

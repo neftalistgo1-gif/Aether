@@ -14,7 +14,7 @@
     >
     <link rel="icon" href="/app/assets/aether-mark.png">
     <link rel="manifest" href="/app/manifest.webmanifest">
-    <link rel="stylesheet" href="/app/styles.css?v=20260811-heartbeat-1">
+    <link rel="stylesheet" href="/app/styles.css?v=20260811-collapsible-ap-1">
   </head>
   <body>
     <div id="login-view" class="login-shell">
@@ -204,13 +204,16 @@
               <div id="service-statuses" class="status-list"></div>
             </article>
             <article class="panel">
-              <div class="panel-heading">
-                <div>
-                  <p class="eyebrow">RED</p>
-                  <h2>Estado de puntos de acceso</h2>
-                </div>
-              </div>
-              <div id="access-point-health" class="ap-health-list"></div>
+              <details class="overview-collapsible">
+                <summary class="panel-heading">
+                  <div>
+                    <p class="eyebrow">RED</p>
+                    <h2>Estado de puntos de acceso</h2>
+                  </div>
+                  <span class="collapsible-hint">Ver AP</span>
+                </summary>
+                <div id="access-point-health" class="ap-health-list"></div>
+              </details>
             </article>
             <article class="panel">
               <div class="panel-heading">
