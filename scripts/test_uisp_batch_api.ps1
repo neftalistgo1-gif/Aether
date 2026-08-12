@@ -13,8 +13,16 @@ $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureTok
 try {
     $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer)
     $config = Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
-    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-    $response = Invoke-RestMethod -Uri "$($config.uisp_address)/nms/api/v2.1/devices" -Headers @{ "X-Auth-Token" = $token } -TimeoutSec 15
+    # curl handles the local UISP TLS certificate consistently on Windows 10.
+    # Passing the header through standard input keeps the token out of process arguments.
+    $curlConfig = @"
+url = "$($config.uisp_address)/nms/api/v2.1/devices"
+insecure
+silent
+show-error
+header = "X-Auth-Token: $token"
+"@
+    $response = $curlConfig | & curl.exe --config - | ConvertFrom-Json
     $count = @($response).Count
     Write-Host "UISP API conectada. Dispositivos visibles: $count"
 }
