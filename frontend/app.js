@@ -25,6 +25,7 @@ const state = {
   latestDailyOperationResult: null,
   selectedAssetId: null,
   selectedAssetAssignments: [],
+  selectedAssetNetworkHistory: [],
   editingCustomerId: null,
   selectedPaymentId: null,
   paymentFilter: "all",
@@ -886,15 +887,19 @@ function renderAssets() {
   }
   const query = $("#asset-search")?.value.trim().toLowerCase() || "";
   const statusFilter = $("#asset-status-filter")?.value || "";
+  const typeFilter = $("#asset-type-filter")?.value || "";
   const rows = state.assets.filter((asset) => {
     const matchesQuery = !query || [
       asset.internal_code,
       asset.description,
+      asset.device_name || "",
+      asset.management_ip || "",
       asset.serial_number || "",
       asset.mac_address || "",
     ].join(" ").toLowerCase().includes(query);
     const matchesStatus = !statusFilter || asset.status === statusFilter;
-    return matchesQuery && matchesStatus;
+    const matchesType = !typeFilter || asset.asset_type === typeFilter;
+    return matchesQuery && matchesStatus && matchesType;
   });
   body.innerHTML = rows
     .slice()
@@ -922,7 +927,7 @@ function renderAssets() {
       </tr>
     `)
     .join("");
-  empty.textContent = query || statusFilter
+  empty.textContent = query || statusFilter || typeFilter
     ? "No hay activos que coincidan con el filtro actual."
     : "Aún no hay activos registrados.";
   empty.hidden = rows.length > 0;
@@ -1010,11 +1015,31 @@ function renderAssetWorkspace(asset) {
       <strong>${escapeText(asset.mac_address || "Sin MAC")}</strong>
     </div>
     <div>
+      <span>Nombre de equipo</span>
+      <strong>${escapeText(asset.device_name || asset.description)}</strong>
+    </div>
+    <div>
+      <span>IP de administración</span>
+      <strong>${escapeText(asset.management_ip || "Sin IP")}</strong>
+    </div>
+    <div>
       <span>Adquirido</span>
       <strong>${formatDate(asset.acquired_on)}</strong>
     </div>
   `;
   $("#asset-detail-workspace").innerHTML = `
+    <section class="cancellation-stage-card">
+      <div class="stage-status"><h3>Historial de red</h3></div>
+      <div class="extension-history">
+        ${state.selectedAssetNetworkHistory.length ? state.selectedAssetNetworkHistory.map((change) => `
+          <article class="history-item">
+            <div><strong>${escapeText(change.new_device_name || "Sin nombre")} / ${escapeText(change.new_management_ip || "Sin IP")}</strong><span>UISP</span></div>
+            <small>${formatDateTime(change.changed_at)}</small>
+            <small>Antes: ${escapeText(change.previous_device_name || "Sin nombre")} / ${escapeText(change.previous_management_ip || "Sin IP")}</small>
+          </article>
+        `).join("") : '<p class="empty-state">Aún no hay cambios de IP o nombre registrados.</p>'}
+      </div>
+    </section>
     ${hasCapability("assets.write") && !activeAssignment && ["available", "ready_for_reuse"].includes(asset.status) ? `
       <form id="asset-assign-form" class="cancellation-stage-card">
         <h3>Asignar a servicio activo</h3>
@@ -1111,12 +1136,16 @@ function renderAssetWorkspace(asset) {
 async function openAssetDetailDialog(asset) {
   state.selectedAssetId = asset.id;
   state.selectedAssetAssignments = [];
+  state.selectedAssetNetworkHistory = [];
   $("#asset-detail-error").textContent = "";
   $("#asset-detail-summary").innerHTML = "";
   $("#asset-detail-workspace").innerHTML = '<p class="empty-state">Cargando historial del activo...</p>';
   $("#asset-detail-dialog").showModal();
   try {
-    state.selectedAssetAssignments = await api(`/api/v1/assets/${asset.id}/assignments`);
+    [state.selectedAssetAssignments, state.selectedAssetNetworkHistory] = await Promise.all([
+      api(`/api/v1/assets/${asset.id}/assignments`),
+      api(`/api/v1/assets/${asset.id}/network-history`),
+    ]);
     renderAssetWorkspace(asset);
   } catch (error) {
     $("#asset-detail-error").textContent = error.message;
@@ -1127,6 +1156,7 @@ function closeAssetDetailDialog() {
   $("#asset-detail-dialog").close();
   state.selectedAssetId = null;
   state.selectedAssetAssignments = [];
+  state.selectedAssetNetworkHistory = [];
 }
 
 async function assignSelectedAsset(event) {
@@ -6186,6 +6216,7 @@ $("#run-daily-operations-button").addEventListener("click", () => {
 });
 $("#asset-search").addEventListener("input", renderAssets);
 $("#asset-status-filter").addEventListener("change", renderAssets);
+$("#asset-type-filter").addEventListener("change", renderAssets);
 $("#new-asset-button").addEventListener("click", openAssetDialog);
 $("#asset-form").addEventListener("submit", saveAsset);
 $("#close-asset-dialog").addEventListener("click", closeAssetDialog);

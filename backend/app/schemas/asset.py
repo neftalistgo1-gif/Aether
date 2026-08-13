@@ -98,6 +98,8 @@ class AssetRead(BaseModel):
     internal_code: str
     asset_type: AssetType
     description: str
+    device_name: str | None
+    management_ip: str | None
     brand: str | None
     model: str | None
     serial_number: str | None
@@ -110,6 +112,19 @@ class AssetRead(BaseModel):
     notes: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class AssetNetworkHistoryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    asset_id: UUID
+    previous_device_name: str | None
+    new_device_name: str | None
+    previous_management_ip: str | None
+    new_management_ip: str | None
+    source: str
+    changed_at: datetime
 
 
 class AssetAssignmentCreate(BaseModel):

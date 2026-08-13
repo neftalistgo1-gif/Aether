@@ -86,6 +86,8 @@ class Asset(Base):
         )
     )
     description: Mapped[str] = mapped_column(String(150))
+    device_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    management_ip: Mapped[str | None] = mapped_column(String(45), nullable=True, index=True)
     brand: Mapped[str | None] = mapped_column(String(100), nullable=True)
     model: Mapped[str | None] = mapped_column(String(150), nullable=True)
     serial_number: Mapped[str | None] = mapped_column(
@@ -144,6 +146,31 @@ class Asset(Base):
         order_by="AssetAssignment.assigned_at",
         lazy="selectin",
     )
+    network_history: Mapped[list["AssetNetworkHistory"]] = relationship(
+        back_populates="asset",
+        cascade="all, delete-orphan",
+        order_by="AssetNetworkHistory.changed_at",
+        lazy="selectin",
+    )
+
+
+class AssetNetworkHistory(Base):
+    __tablename__ = "asset_network_history"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    asset_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("assets.id", ondelete="CASCADE"), index=True
+    )
+    previous_device_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    new_device_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    previous_management_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    new_management_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    source: Mapped[str] = mapped_column(String(30), default="uisp")
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True
+    )
+
+    asset: Mapped["Asset"] = relationship(back_populates="network_history")
 
 
 class AssetAssignment(Base):

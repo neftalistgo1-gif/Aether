@@ -21,7 +21,7 @@ from app.models.network_device import (
     NetworkDeviceType,
 )
 from app.models.access_point import NetworkAccessPoint
-from app.models.asset import Asset, AssetOwner, AssetStatus, AssetType
+from app.models.asset import Asset, AssetNetworkHistory, AssetOwner, AssetStatus, AssetType
 from app.models.service import Service, ServiceEvent, ServiceEventType, ServiceStatus
 from app.models.plan import Plan
 from sqlalchemy import select
@@ -116,6 +116,12 @@ def inventory_asset_type(device_type: NetworkDeviceType) -> AssetType:
 
 def sync_inventory_asset(db, *, item: NetworkDevice, identity: dict, device_type: NetworkDeviceType) -> bool:
     mac_address = normalize_mac_address(identity.get("mac"))
+    device_name = (item.display_name or "").strip()
+    # UISP also exposes temporary/generic records with only an IP address.
+    # They remain telemetry records, but are not physical inventory assets.
+    if not mac_address or not device_name or device_name == item.management_ip:
+        item.asset_id = None
+        return False
     asset = db.scalar(select(Asset).where(Asset.mac_address == mac_address)) if mac_address else None
     created = asset is None
     if asset is None:
@@ -127,8 +133,21 @@ def sync_inventory_asset(db, *, item: NetworkDevice, identity: dict, device_type
             status=AssetStatus.installed,
         )
         db.add(asset)
+    name_changed = asset.device_name != device_name
+    ip_changed = asset.management_ip != item.management_ip
+    if name_changed or ip_changed:
+        db.add(AssetNetworkHistory(
+            asset=asset,
+            previous_device_name=asset.device_name,
+            new_device_name=device_name,
+            previous_management_ip=asset.management_ip,
+            new_management_ip=item.management_ip,
+            source="uisp",
+        ))
     asset.asset_type = inventory_asset_type(device_type)
     asset.description = item.display_name
+    asset.device_name = device_name
+    asset.management_ip = item.management_ip
     asset.brand = "Ubiquiti"
     asset.model = identity.get("model") or asset.model
     asset.mac_address = mac_address
@@ -182,9 +201,12 @@ def load_service_reference() -> dict[str, dict]:
 def reference_date(reference: dict) -> date:
     value = reference.get("start_date")
     try:
-        return date.fromisoformat(value) if isinstance(value, str) else date(2026, 8, 1)
+        parsed = date.fromisoformat(value) if isinstance(value, str) else date(2026, 8, 1)
     except ValueError:
-        return date(2026, 8, 1)
+        parsed = date(2026, 8, 1)
+    # Los días 29 a 31 no se usan como corte operativo.  Se normalizan a la
+    # fecha de referencia acordada para que el servicio quede programado al día 1.
+    return date(2026, 8, 1) if parsed.day >= 29 else parsed
 
 
 def speed_mbps(value: object) -> int | None:

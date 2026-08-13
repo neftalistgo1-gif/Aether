@@ -418,7 +418,7 @@
                   <input
                     id="asset-search"
                     type="search"
-                    placeholder="Código, serie o MAC"
+                    placeholder="Código AMR, nombre, IP, serie o MAC"
                   >
                 </label>
                 <label>
@@ -435,6 +435,17 @@
                     <option value="discarded">Descartado</option>
                     <option value="not_recovered">No recuperado</option>
                     <option value="sold_to_customer">Vendido al cliente</option>
+                  </select>
+                </label>
+                <label>
+                  Tipo
+                  <select id="asset-type-filter">
+                    <option value="">Todos</option>
+                    <option value="cpe">CPE</option>
+                    <option value="access_point">AP</option>
+                    <option value="mikrotik">Router MikroTik</option>
+                    <option value="router_modem">Router</option>
+                    <option value="pc">PC</option>
                   </select>
                 </label>
                 <button
@@ -2441,6 +2452,6 @@
         </div>
       </form>
     </dialog>
-    <script src="/app/app.js?v=20260812-uisp-sync-1"></script>
+    <script src="/app/app.js?v=20260813-inventory-history-1"></script>
   </body>
 </html>

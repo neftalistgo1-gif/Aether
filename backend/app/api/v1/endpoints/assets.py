@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.models.asset import (
     Asset,
     AssetAssignment,
+    AssetNetworkHistory,
     AssetOwner,
     AssetReturnOutcome,
     AssetStatus,
@@ -24,6 +25,7 @@ from app.schemas.asset import (
     AssetAssignmentReturn,
     AssetCreate,
     AssetRead,
+    AssetNetworkHistoryRead,
     AssetUpdate,
 )
 
@@ -134,6 +136,23 @@ def get_asset(
     db: Session = Depends(get_db),
 ) -> Asset:
     return find_asset_or_404(asset_id, db)
+
+
+@router.get(
+    "/assets/{asset_id}/network-history",
+    response_model=list[AssetNetworkHistoryRead],
+)
+def list_asset_network_history(
+    asset_id: UUID,
+    db: Session = Depends(get_db),
+) -> list[AssetNetworkHistory]:
+    find_asset_or_404(asset_id, db)
+    statement = (
+        select(AssetNetworkHistory)
+        .where(AssetNetworkHistory.asset_id == asset_id)
+        .order_by(AssetNetworkHistory.changed_at.desc(), AssetNetworkHistory.id.desc())
+    )
+    return list(db.scalars(statement))
 
 
 @router.patch("/assets/{asset_id}", response_model=AssetRead)
