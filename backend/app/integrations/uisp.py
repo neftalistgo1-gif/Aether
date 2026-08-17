@@ -246,6 +246,13 @@ def sync_devices(db, devices: list[dict]) -> dict[str, int]:
         device_id = identity.get("id")
         if not isinstance(device_id, str):
             continue
+        display_name = (identity.get("displayName") or identity.get("name") or "").strip()
+        management_ip = (source.get("ipAddress") or "").split("/")[0] or None
+        mac_address = normalize_mac_address(identity.get("mac"))
+        # UISP may emit generic discovery records containing only an IP address.
+        # They do not identify physical equipment and must not be persisted by Aether.
+        if not mac_address or not display_name or display_name == management_ip:
+            continue
         role = identity.get("role")
         device_type = NetworkDeviceType.access_point if role == "ap" else NetworkDeviceType.station if role == "station" else NetworkDeviceType.other
         next_status = NetworkDeviceStatus.online if overview.get("status") == "active" else NetworkDeviceStatus.offline
@@ -253,14 +260,14 @@ def sync_devices(db, devices: list[dict]) -> dict[str, int]:
         details = {key: overview.get(key) for key in ("signal", "signalMax", "remoteSignalMax", "frequency", "channelWidth", "linkScore", "uplinkCapacity", "downlinkCapacity", "wirelessMode") if key in overview}
         item = db.scalar(select(NetworkDevice).where(NetworkDevice.uisp_device_id == device_id))
         if item is None:
-            item = NetworkDevice(uisp_device_id=device_id, device_type=device_type, display_name=identity.get("displayName") or identity.get("name") or device_id, current_status=next_status)
+            item = NetworkDevice(uisp_device_id=device_id, device_type=device_type, display_name=display_name, current_status=next_status)
             db.add(item); db.flush(); created += 1
             db.add(DeviceStatusEvent(device_id=item.id, previous_status=None, new_status=next_status, source="uisp")); status_events += 1
         else:
             updated += 1
             if item.current_status != next_status:
                 db.add(DeviceStatusEvent(device_id=item.id, previous_status=item.current_status, new_status=next_status, source="uisp")); status_events += 1
-        item.device_type = device_type; item.display_name = identity.get("displayName") or identity.get("name") or item.display_name; item.management_ip = (source.get("ipAddress") or "").split("/")[0] or None; item.mac_address = normalize_mac_address(identity.get("mac")); item.current_status = next_status; item.last_seen_at = last_seen; item.last_synced_at = now; item.observed_details = details; item.offline_since = item.offline_since if next_status == NetworkDeviceStatus.offline else None
+        item.device_type = device_type; item.display_name = display_name; item.management_ip = management_ip; item.mac_address = mac_address; item.current_status = next_status; item.last_seen_at = last_seen; item.last_synced_at = now; item.observed_details = details; item.offline_since = item.offline_since if next_status == NetworkDeviceStatus.offline else None
         if next_status == NetworkDeviceStatus.offline and item.offline_since is None: item.offline_since = now
         inventory_created += sync_inventory_asset(db, item=item, identity=identity, device_type=device_type)
         services_linked += link_matching_service(db, item)

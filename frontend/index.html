@@ -284,19 +284,29 @@
 
         <section id="services-panel" class="view-panel" hidden>
           <div class="panel">
-            <div class="panel-heading">
+            <div class="panel-heading table-heading">
               <div>
                 <p class="eyebrow">CONECTIVIDAD</p>
                 <h2>Servicios</h2>
               </div>
-              <button
-                id="new-service-button"
-                class="secondary-button"
-                type="button"
-                hidden
-              >Nuevo servicio</button>
+              <div class="table-actions">
+                <label class="search-field">
+                  <span>Buscar</span>
+                  <input id="service-search" type="search" placeholder="AMR, domicilio, colonia o código postal">
+                </label>
+                <label>Estado<select id="service-status-filter"><option value="">Todos</option><option value="pending">Pendiente</option><option value="active">Activo</option><option value="suspended">Suspendido</option><option value="cancelled">Cancelado</option></select></label>
+                <label>Plan<select id="service-plan-filter"><option value="">Todos</option></select></label>
+                <label>Día de pago<select id="service-payment-day-filter"><option value="">Todos</option></select></label>
+                <button
+                  id="new-service-button"
+                  class="secondary-button"
+                  type="button"
+                  hidden
+                >Nuevo servicio</button>
+              </div>
             </div>
             <p id="service-write-note" class="inline-note" hidden></p>
+            <div id="service-summary" class="summary-chips" aria-live="polite"></div>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -457,6 +467,7 @@
               </div>
             </div>
             <p id="assets-write-note" class="inline-note" hidden></p>
+            <div id="asset-summary" class="summary-chips" aria-live="polite"></div>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -2452,6 +2463,6 @@
         </div>
       </form>
     </dialog>
-    <script src="/app/app.js?v=20260813-inventory-history-1"></script>
+    <script src="/app/app.js?v=20260817-counts-network-filter-1"></script>
   </body>
 </html>

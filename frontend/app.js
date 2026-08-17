@@ -611,7 +611,7 @@ function renderOverview() {
     ["AP en línea", `${uispAccessPoints.length - offlineAccessPoints}/${uispAccessPoints.length}`],
     ["Alertas activas", offlineCpes.length + offlineAccessPoints],
     ["Clientes", customers?.length],
-    ["Servicios activos", active],
+    ["Servicios totales", services?.length ?? "Sin acceso"],
   ];
   $("#metric-grid").innerHTML = metrics
     .map(([label, value]) => `
@@ -901,6 +901,16 @@ function renderAssets() {
     const matchesType = !typeFilter || asset.asset_type === typeFilter;
     return matchesQuery && matchesStatus && matchesType;
   });
+  const assetCounts = rows.reduce((counts, asset) => {
+    counts[asset.asset_type] = (counts[asset.asset_type] || 0) + 1;
+    return counts;
+  }, {});
+  $("#asset-summary").innerHTML = [
+    ["Mostrando", `${rows.length} de ${state.assets.length}`],
+    ["CPE", assetCounts.cpe || 0],
+    ["AP", assetCounts.access_point || 0],
+    ["Routers", (assetCounts.mikrotik || 0) + (assetCounts.router_modem || 0)],
+  ].map(([label, value]) => `<span><b>${escapeText(String(value))}</b> ${escapeText(label)}</span>`).join("");
   body.innerHTML = rows
     .slice()
     .sort((a, b) => a.internal_code.localeCompare(b.internal_code))
@@ -1447,6 +1457,22 @@ function renderServices() {
     empty.hidden = false;
     return;
   }
+  const search = $("#service-search")?.value.trim().toLowerCase() || "";
+  const statusFilter = $("#service-status-filter")?.value || "";
+  const planFilter = $("#service-plan-filter")?.value || "";
+  const paymentDayFilter = $("#service-payment-day-filter")?.value || "";
+  const planFilterElement = $("#service-plan-filter");
+  const paymentDayFilterElement = $("#service-payment-day-filter");
+  if (planFilterElement) {
+    const planNames = [...new Set(state.services.map((service) => service.plan_name))].sort();
+    planFilterElement.innerHTML = `<option value="">Todos</option>${planNames.map((name) => `<option value="${escapeText(name)}">${escapeText(name)}</option>`).join("")}`;
+    planFilterElement.value = planFilter;
+  }
+  if (paymentDayFilterElement) {
+    const days = [...new Set(state.services.map((service) => service.payment_day))].sort((a, b) => a - b);
+    paymentDayFilterElement.innerHTML = `<option value="">Todos</option>${days.map((day) => `<option value="${day}">Día ${day}</option>`).join("")}`;
+    paymentDayFilterElement.value = paymentDayFilter;
+  }
   const canScheduleInstallation = hasCapability("installations.write");
   const canControlNetwork = hasCapability("network.control");
   const canWriteNotifications = hasCapability("notifications.write");
@@ -1475,7 +1501,27 @@ function renderServices() {
     canCancelServices ||
     canManageRecovery
   );
-  body.innerHTML = state.services
+  const rows = state.services.filter((service) => {
+    const matchesSearch = !search || [
+      service.amr_code, service.plan_name, service.address, String(service.payment_day),
+    ].join(" ").toLowerCase().includes(search);
+    return matchesSearch
+      && (!statusFilter || service.status === statusFilter)
+      && (!planFilter || service.plan_name === planFilter)
+      && (!paymentDayFilter || String(service.payment_day) === paymentDayFilter);
+  });
+  const serviceCounts = rows.reduce((counts, service) => {
+    counts[service.status] = (counts[service.status] || 0) + 1;
+    return counts;
+  }, {});
+  $("#service-summary").innerHTML = [
+    ["Mostrando", `${rows.length} de ${state.services.length}`],
+    ["Activos", serviceCounts.active || 0],
+    ["Pendientes", serviceCounts.pending || 0],
+    ["Suspendidos", serviceCounts.suspended || 0],
+    ["Cancelados", serviceCounts.cancelled || 0],
+  ].map(([label, value]) => `<span><b>${escapeText(String(value))}</b> ${escapeText(label)}</span>`).join("");
+  body.innerHTML = rows
     .map((service) => `
       <tr>
         <td><strong>${escapeText(service.amr_code)}</strong></td>
@@ -1559,7 +1605,10 @@ function renderServices() {
     `)
     .join("");
   empty.textContent = "Aún no hay servicios registrados.";
-  empty.hidden = state.services.length > 0;
+  if (search || statusFilter || planFilter || paymentDayFilter) {
+    empty.textContent = "No hay servicios que coincidan con los filtros actuales.";
+  }
+  empty.hidden = rows.length > 0;
 }
 
 function updateSelectedPlanPrice() {
@@ -5957,6 +6006,10 @@ $("#cancel-customer-dialog").addEventListener(
   closeCustomerDialog
 );
 $("#new-service-button").addEventListener("click", openServiceDialog);
+$("#service-search").addEventListener("input", renderServices);
+$("#service-status-filter").addEventListener("change", renderServices);
+$("#service-plan-filter").addEventListener("change", renderServices);
+$("#service-payment-day-filter").addEventListener("change", renderServices);
 $("#service-customer-search").addEventListener("input", (event) => {
   renderServiceCustomerOptions(event.target.value);
 });
