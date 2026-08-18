@@ -4,12 +4,31 @@ from pathlib import Path
 from app.main import app, frontend_directory
 
 
+FRONTEND_SCRIPT_FILES = (
+    "scripts/app-core.js",
+    "scripts/app-assets.js",
+    "scripts/app-services.js",
+    "scripts/app-billing.js",
+    "scripts/app-operations.js",
+    "scripts/app-administration.js",
+    "scripts/app-events.js",
+)
+
+
+def frontend_script() -> str:
+    return "\n".join(
+        (frontend_directory / path).read_text(encoding="utf-8")
+        for path in FRONTEND_SCRIPT_FILES
+    )
+
+
 class FrontendShellTestCase(unittest.TestCase):
     def test_frontend_assets_exist_and_are_mounted(self) -> None:
         expected = {
             "index.html",
             "styles.css",
             "app.js",
+            *FRONTEND_SCRIPT_FILES,
             "assets/aether-horizontal.png",
             "assets/aether-mark.png",
         }
@@ -18,6 +37,14 @@ class FrontendShellTestCase(unittest.TestCase):
                 self.assertTrue(
                     (frontend_directory / relative_path).is_file()
                 )
+        page = (frontend_directory / "index.html").read_text(encoding="utf-8")
+        worker = (frontend_directory / "service-worker.js").read_text(
+            encoding="utf-8"
+        )
+        for relative_path in FRONTEND_SCRIPT_FILES:
+            with self.subTest(script=relative_path):
+                self.assertIn(f'/app/{relative_path}', page)
+                self.assertIn(f'"/app/{relative_path}"', worker)
         mounted_paths = {
             getattr(route, "path", "")
             for route in app.routes
@@ -25,9 +52,7 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("/app", mounted_paths)
 
     def test_frontend_uses_real_auth_and_business_endpoints(self) -> None:
-        script = (frontend_directory / "app.js").read_text(
-            encoding="utf-8"
-        )
+        script = frontend_script()
         page = (frontend_directory / "index.html").read_text(
             encoding="utf-8"
         )
@@ -273,9 +298,7 @@ class FrontendShellTestCase(unittest.TestCase):
     def test_live_network_ui_requires_coordinated_preflight_confirmation(
         self,
     ) -> None:
-        script = (frontend_directory / "app.js").read_text(
-            encoding="utf-8"
-        )
+        script = frontend_script()
         page = (frontend_directory / "index.html").read_text(
             encoding="utf-8"
         )
@@ -297,9 +320,7 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("válida por 15 minutos", page)
 
     def test_cancellation_ui_preserves_staged_safe_workflow(self) -> None:
-        script = (frontend_directory / "app.js").read_text(
-            encoding="utf-8"
-        )
+        script = frontend_script()
         page = (frontend_directory / "index.html").read_text(
             encoding="utf-8"
         )
@@ -333,9 +354,7 @@ class FrontendShellTestCase(unittest.TestCase):
     def test_network_reconciliation_ui_requires_confirmed_preflight(
         self,
     ) -> None:
-        script = (frontend_directory / "app.js").read_text(
-            encoding="utf-8"
-        )
+        script = frontend_script()
         reconciliation = script.split(
             "async function startNetworkReconciliation",
             maxsplit=1,
@@ -378,7 +397,7 @@ class FrontendShellTestCase(unittest.TestCase):
             path.read_text(encoding="utf-8")
             for path in (
                 frontend_directory / "index.html",
-                frontend_directory / "app.js",
+                *(frontend_directory / path for path in FRONTEND_SCRIPT_FILES),
             )
         ).lower()
         self.assertNotIn("aether_bootstrap_secret", content)

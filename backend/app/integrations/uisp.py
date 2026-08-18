@@ -237,6 +237,24 @@ def apply_reference_to_pending_service(service: Service, db, reference: dict, fa
         service.address = fallback_address
 
 
+def merge_duplicate_device(db, *, canonical: NetworkDevice, duplicate: NetworkDevice) -> None:
+    """Keep device history when UISP assigns a new ID to the same radio.
+
+    UISP can issue a new device ID after a device is re-adopted.  The MAC is
+    the durable hardware identity, so an older record with the same MAC must
+    not remain offline alongside its newly adopted replacement.
+    """
+    for attribute in ("asset_id", "service_id", "access_point_id"):
+        if getattr(canonical, attribute) is None and getattr(duplicate, attribute) is not None:
+            setattr(canonical, attribute, getattr(duplicate, attribute))
+    for event in db.scalars(
+        select(DeviceStatusEvent).where(DeviceStatusEvent.device_id == duplicate.id)
+    ):
+        event.device_id = canonical.id
+    db.delete(duplicate)
+    db.flush()
+
+
 def sync_devices(db, devices: list[dict]) -> dict[str, int]:
     created = updated = status_events = inventory_created = services_linked = 0
     now = datetime.now(UTC)
@@ -259,6 +277,22 @@ def sync_devices(db, devices: list[dict]) -> dict[str, int]:
         last_seen = parse_uisp_datetime(overview.get("lastSeen"))
         details = {key: overview.get(key) for key in ("signal", "signalMax", "remoteSignalMax", "frequency", "channelWidth", "linkScore", "uplinkCapacity", "downlinkCapacity", "wirelessMode") if key in overview}
         item = db.scalar(select(NetworkDevice).where(NetworkDevice.uisp_device_id == device_id))
+        matching_mac_devices = list(
+            db.scalars(
+                select(NetworkDevice).where(NetworkDevice.mac_address == mac_address)
+            )
+        )
+        if item is not None:
+            # The current UISP identifier already exists, but an old record
+            # with this same radio MAC may be left behind by a re-adoption.
+            for duplicate in matching_mac_devices:
+                if duplicate.id != item.id:
+                    merge_duplicate_device(db, canonical=item, duplicate=duplicate)
+        elif matching_mac_devices:
+            # Reuse the existing physical device record and its history when
+            # UISP changes only its internal device identifier.
+            item = matching_mac_devices[0]
+            item.uisp_device_id = device_id
         if item is None:
             item = NetworkDevice(uisp_device_id=device_id, device_type=device_type, display_name=display_name, current_status=next_status)
             db.add(item); db.flush(); created += 1

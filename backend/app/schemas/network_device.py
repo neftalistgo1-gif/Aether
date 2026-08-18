@@ -22,6 +22,7 @@ class NetworkDeviceRead(BaseModel):
     offline_since: datetime | None
     last_synced_at: datetime | None
     observed_details: dict[str, object] | None
+    suspended_in_mikrotik: bool = False
 
 
 class DeviceStatusEventRead(BaseModel):

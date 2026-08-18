@@ -1,10 +1,16 @@
-const CACHE_NAME = "aether-shell-v5";
+const CACHE_NAME = "aether-shell-v6";
 const SHARE_DATABASE = "aether-share-target";
 const SHARE_STORE = "receipts";
 const APP_SHELL = [
   "/app/",
   "/app/index.html",
-  "/app/app.js",
+  "/app/scripts/app-core.js",
+  "/app/scripts/app-assets.js",
+  "/app/scripts/app-services.js",
+  "/app/scripts/app-billing.js",
+  "/app/scripts/app-operations.js",
+  "/app/scripts/app-administration.js",
+  "/app/scripts/app-events.js",
   "/app/styles.css",
   "/app/assets/aether-mark.png",
   "/app/assets/aether-horizontal.png",

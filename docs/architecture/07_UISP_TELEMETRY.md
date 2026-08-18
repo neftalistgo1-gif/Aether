@@ -4,11 +4,22 @@
 
 UISP es la fuente de telemetria de red; Aether interpreta esa telemetria en el contexto del negocio. Esta primera etapa es exclusivamente de lectura. No configura radios ni abre conexiones directas a CPE.
 
-`NetworkDevice` conserva el identificador estable de UISP (`uisp_device_id`), su vinculacion opcional con el Service y el AP registrado, el estado actual y las fechas necesarias para la operacion. `DeviceStatusEvent` guarda solamente las transiciones detectadas, no una copia completa de cada muestra de UISP.
+`NetworkDevice` conserva el identificador actual de UISP (`uisp_device_id`), su
+vinculacion opcional con el Service y el AP registrado, el estado actual y las
+fechas necesarias para la operacion. La MAC es la identidad física estable:
+UISP puede emitir un identificador nuevo cuando una radio se readopta. En ese
+caso Aether debe fusionar el registro nuevo con el existente por MAC, sin
+dejar una alerta offline histórica duplicada. `DeviceStatusEvent` guarda
+solamente las transiciones detectadas, no una copia completa de cada muestra
+de UISP.
 
 ## Sincronizacion futura
 
-Un proceso con credenciales de solo lectura consultara UISP y, por cada dispositivo, creara o encontrara el dispositivo por `uisp_device_id`, actualizara datos observados y fechas, y creara un evento solo al cambiar el estado. Al pasar a offline establecera `offline_since`; al recuperar conectividad lo limpiara.
+Un proceso con credenciales de solo lectura consultara UISP y, por cada
+dispositivo, buscara primero el identificador actual de UISP y después la MAC
+normalizada. Actualizara datos observados y fechas, y creara un evento solo al
+cambiar el estado. Al pasar a offline establecera `offline_since`; al recuperar
+conectividad lo limpiara.
 
 Una AP offline puede explicar varias estaciones offline. Las alertas y el resumen deben senalar esta correlacion antes de recomendar contactar clientes. Offline no prueba que un cliente retiro el equipo.
 

@@ -389,6 +389,19 @@ dialog form.embedded-form { padding: 0; }
 .summary-chip strong {
   color: var(--text);
 }
+#asset-summary,
+#service-summary {
+  margin: 0;
+  padding: 14px 24px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(90deg, rgba(35,136,239,.08), rgba(35,136,239,0));
+}
+#asset-summary .summary-chip:first-child,
+#service-summary .summary-chip:first-child {
+  border-color: rgba(78, 183, 255, .36);
+  background: rgba(35,136,239,.15);
+}
 .decision-summary {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

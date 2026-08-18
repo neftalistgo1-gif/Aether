@@ -7,15 +7,43 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints.services import find_service_or_404
 from app.db.session import get_db
+from app.integrations.mikrotik import RouterOSRestClient
+from app.models.mikrotik import MikrotikRouter
 from app.models.network_device import DeviceStatusEvent, NetworkDevice, NetworkDeviceStatus
 from app.schemas.network_device import DeviceStatusEventRead, NetworkDailySummaryRead, NetworkDeviceRead
 
 router = APIRouter(prefix="/api/v1", tags=["network devices"])
 
 
+def suspended_management_ips(db: Session) -> set[str]:
+    """Return the live suspension list without treating it as UISP telemetry."""
+    router_record = db.scalar(select(MikrotikRouter).order_by(MikrotikRouter.name))
+    if router_record is None:
+        return set()
+    try:
+        entries = RouterOSRestClient(router_record, monitor=True)._request(
+            "GET", "/rest/ip/firewall/address-list"
+        ) or []
+    except RuntimeError:
+        return set()
+    return {
+        str(entry.get("address"))
+        for entry in entries
+        if entry.get("list") == router_record.suspended_address_list
+        and isinstance(entry.get("address"), str)
+    }
+
+
 @router.get("/network/devices", response_model=list[NetworkDeviceRead])
-def list_network_devices(db: Session = Depends(get_db)) -> list[NetworkDevice]:
-    return list(db.scalars(select(NetworkDevice).order_by(NetworkDevice.display_name, NetworkDevice.id)))
+def list_network_devices(db: Session = Depends(get_db)) -> list[NetworkDeviceRead]:
+    suspended_ips = suspended_management_ips(db)
+    devices = list(db.scalars(select(NetworkDevice).order_by(NetworkDevice.display_name, NetworkDevice.id)))
+    return [
+        NetworkDeviceRead.model_validate(device).model_copy(
+            update={"suspended_in_mikrotik": device.management_ip in suspended_ips}
+        )
+        for device in devices
+    ]
 
 
 @router.get("/services/{service_id}/network-device", response_model=NetworkDeviceRead)
