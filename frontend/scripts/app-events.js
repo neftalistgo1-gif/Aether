@@ -214,13 +214,15 @@ $("#customers-body").addEventListener("click", (event) => {
   const button = event.target.closest(".edit-customer");
   const accountButton = event.target.closest(".view-account");
   const assignButton = event.target.closest(".assign-service-to-customer");
-  if (!button && !accountButton && !assignButton) return;
+  const deleteButton = event.target.closest(".delete-customer");
+  if (!button && !accountButton && !assignButton && !deleteButton) return;
   const customer = state.customers?.find(
-    (item) => item.id === (button || accountButton || assignButton).dataset.customerId
+    (item) => item.id === (button || accountButton || assignButton || deleteButton).dataset.customerId
   );
   if (!customer) return;
   if (accountButton) openAccountDialog(customer);
   else if (assignButton) openHolderAssignmentDialog({ customerId: customer.id });
+  else if (deleteButton) void deleteCustomer(customer);
   else openCustomerDialog(customer);
 });
 $("#customer-form").addEventListener("submit", saveCustomer);

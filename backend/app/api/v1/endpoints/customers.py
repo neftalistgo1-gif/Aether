@@ -3,10 +3,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import String, cast, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.customer import Customer
+from app.models.service import ServiceHolder
 from app.schemas.customer import CustomerCreate, CustomerRead, CustomerUpdate
 from app.services.audit import record_audit_event
 
@@ -129,3 +131,46 @@ def update_customer(
     db.commit()
     db.refresh(customer)
     return customer
+
+
+@router.delete("/{customer_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_customer(
+    customer_id: UUID,
+    db: Session = Depends(get_db),
+) -> None:
+    customer = find_customer_or_404(customer_id, db)
+    if db.scalar(
+        select(ServiceHolder.id).where(ServiceHolder.customer_id == customer.id)
+    ) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "No se puede eliminar un cliente con historial de servicios. "
+                "Conserva el registro para mantener la trazabilidad."
+            ),
+        )
+    try:
+        record_audit_event(
+            db,
+            actor="system",
+            action="customer.deleted",
+            entity_type="Customer",
+            entity_id=customer.id,
+            reason="Customer deleted",
+            before_data={
+                "full_name": customer.full_name,
+                "phones": customer.phones,
+                "email": customer.email,
+            },
+        )
+        db.delete(customer)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "No se puede eliminar un cliente con movimientos o historial "
+                "asociado."
+            ),
+        ) from exc

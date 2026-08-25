@@ -598,15 +598,12 @@ function hasCapability(capability) {
 function renderOverview() {
   const customers = state.customers;
   const services = state.services;
-  const payments = state.payments;
-  const active = services?.filter((item) => item.status === "active").length;
-  const suspended = services?.filter((item) => item.status === "suspended").length;
-  const pendingPayments = payments?.filter((item) => item.status === "pending").length;
+  const suspendedServices = services?.filter((item) => item.status === "suspended") || [];
   const uispAccessPoints = (state.networkDevices || []).filter((item) => item.device_type === "access_point");
   const cpes = (state.networkDevices || []).filter((item) => item.device_type === "station");
-  const suspendedCpes = cpes.filter((item) => item.suspended_in_mikrotik);
+  const suspendedDevices = (state.networkDevices || []).filter((item) => item.suspended_in_mikrotik);
   const offlineCpes = cpes.filter((item) => item.current_status === "offline" && !item.suspended_in_mikrotik);
-  const offlineAccessPoints = uispAccessPoints.filter((item) => item.current_status !== "online").length;
+  const offlineAccessPoints = uispAccessPoints.filter((item) => item.current_status === "offline");
   const routers = state.mikrotikHealth || [];
   const onlineRouters = routers.filter((item) => item.status === "online").length;
   const uispConnected = Boolean(state.uispConnection?.connected);
@@ -614,9 +611,10 @@ function renderOverview() {
     ["UISP", uispConnected ? "Conectado" : "Sin conexión"],
     ["MikroTik", routers.length ? `${onlineRouters}/${routers.length}` : "Sin registrar"],
     ["CPE desconectados", offlineCpes.length],
-    ["CPE suspendidos", suspendedCpes.length],
-    ["AP en línea", `${uispAccessPoints.length - offlineAccessPoints}/${uispAccessPoints.length}`],
-    ["Alertas activas", offlineCpes.length + offlineAccessPoints],
+    ["Equipos bloqueados", suspendedDevices.length],
+    ["Servicios suspendidos", suspendedServices.length],
+    ["AP en línea", `${uispAccessPoints.length - offlineAccessPoints.length}/${uispAccessPoints.length}`],
+    ["Alertas activas", offlineCpes.length + offlineAccessPoints.length],
     ["Clientes", customers?.length],
     ["Servicios totales", services?.length ?? "Sin acceso"],
   ];
@@ -674,32 +672,44 @@ function renderOverview() {
           <b>${item.status === "online" ? "En línea" : item.status === "offline" ? "Sin conexión" : item.status === "attention" ? "Verificar" : "Sin lectura"}</b>
         </div>`).join("");
   const alerts = [
-    ...suspendedCpes.map((item) => ({
-      title: `${item.display_name} suspendido`,
-      detail: item.current_status === "online" ? "Cortado en MikroTik; UISP sigue conectado" : "Cortado en MikroTik; UISP no tiene telemetría actual",
-      status: "suspended",
-    })),
     ...offlineCpes.map((item) => ({
       title: `${item.display_name} sin conexión`,
       detail: item.offline_since ? `Desde ${new Date(item.offline_since).toLocaleString("es-MX")}` : "Detectado por UISP",
       status: "offline",
     })),
-    ...uispAccessPoints.filter((item) => item.current_status !== "online").map((item) => ({
-      title: `${item.display_name} requiere revisión`,
-      detail: item.current_status === "offline" ? "AP sin conexión" : "UISP no tiene lectura actual",
-      status: item.current_status,
-    })),
-    ...routers.filter((item) => item.status !== "online").map((item) => ({
-      title: `${item.name} no está disponible`,
-      detail: item.status === "disabled" ? "Router deshabilitado" : "No respondió a la comprobación",
-      status: item.status,
+    ...offlineAccessPoints.map((item) => ({
+      title: `${item.display_name} sin conexión`,
+      detail: item.offline_since ? `AP sin telemetría desde ${new Date(item.offline_since).toLocaleString("es-MX")}` : "AP sin telemetría en UISP",
+      status: "offline",
     })),
   ];
   $("#network-alerts").innerHTML = alerts.length
     ? alerts.slice(0, 5).map((item) => `<div class="ap-health-row ${escapeText(item.status)}"><div><strong>${escapeText(item.title)}</strong><span>${escapeText(item.detail)}</span></div><b>Revisar</b></div>`).join("")
-    : '<p class="empty-state success-state">Sin alertas de red activas.</p>';
+    : '<p class="empty-state success-state">No hay antenas sin conexión a UISP.</p>';
+  const suspendedDeviceRows = suspendedDevices.slice(0, 5).map((device) => `
+    <div class="ap-health-row suspended">
+      <div>
+        <strong>${escapeText(device.display_name)}</strong>
+        <span>${escapeText(device.management_ip || "Sin IP")} · UISP: ${escapeText(device.current_status)}</span>
+      </div>
+      <b>Bloqueado en MikroTik</b>
+    </div>`).join("");
+  const suspendedServiceRows = (services || [])
+    .filter((service) => service.status === "suspended")
+    .slice(0, 5)
+    .map((service) => `
+      <div class="ap-health-row suspended">
+        <div>
+          <strong>${escapeText(service.amr_code)}</strong>
+          <span>${escapeText(service.plan_name)} · ${escapeText(service.address)} · Día ${service.payment_day}</span>
+        </div>
+        <b>Servicio suspendido</b>
+      </div>`).join("");
+  $("#suspended-services").innerHTML = suspendedDeviceRows || suspendedServiceRows
+    ? `${suspendedDeviceRows}${suspendedServiceRows}`
+    : '<p class="empty-state success-state">No hay bloqueos en MikroTik ni servicios suspendidos.</p>';
   $("#overview-message").textContent = uispConnected
-    ? `UISP conectado · ${state.networkSummary?.online ?? 0} equipos en línea · ${offlineCpes.length} CPE desconectados · ${suspendedCpes.length} suspendidos.`
+    ? `UISP conectado · ${state.networkSummary?.online ?? 0} equipos en línea · ${offlineCpes.length} CPE desconectados · ${suspendedDevices.length} bloqueados en MikroTik · ${suspendedServices.length} servicios suspendidos.`
     : "UISP no está disponible en este momento; se conserva la última telemetría recibida.";
   renderTrafficChart();
 }

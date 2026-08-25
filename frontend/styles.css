@@ -237,6 +237,37 @@ tbody tr:hover { background: rgba(35,136,239,.045); }
   font-size: .72rem;
   cursor: pointer;
 }
+.service-actions-menu { position: relative; min-width: 132px; }
+.service-actions-menu summary {
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 10px;
+  color: #bcdcff;
+  font-size: .75rem;
+  cursor: pointer;
+  user-select: none;
+}
+.service-actions-menu summary::-webkit-details-marker { display: none; }
+.service-actions-menu summary::after { content: "⌄"; margin-left: 9px; color: var(--muted); }
+.service-actions-menu[open] summary { border-color: rgba(89,185,255,.55); background: rgba(35,136,239,.1); }
+.service-actions-menu[open] summary::after { content: "⌃"; }
+.service-actions-list {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  top: calc(100% + 6px);
+  display: grid;
+  min-width: 210px;
+  padding: 6px;
+  border: 1px solid rgba(89,185,255,.3);
+  border-radius: 9px;
+  background: #10284a;
+  box-shadow: 0 12px 28px rgba(0,0,0,.3);
+}
+.service-actions-list .row-action { width: 100%; border-color: transparent; text-align: left; }
+.service-actions-list .row-action:hover,
+.service-actions-list .row-action:focus-visible { border-color: var(--line); background: rgba(35,136,239,.12); outline: none; }
 .danger-button {
   border: 1px solid rgba(255,113,133,.38);
   border-radius: 8px;
@@ -547,6 +578,8 @@ dialog form.embedded-form { padding: 0; }
 .ap-health-row b { color: #f3cc72; font-size: .72rem; white-space: nowrap; }
 .ap-health-row.online b { color: var(--green); }
 .ap-health-row.offline b { color: #ff9a9a; }
+.ap-health-row.suspended { border-color: rgba(255, 110, 110, .35); background: rgba(255, 110, 110, .07); }
+.ap-health-row.suspended b { color: #ff9a9a; }
 .success-state { color: #83dcad; }
 .traffic-panel { grid-column: 1 / -1; }
 .traffic-ranges { display: flex; flex-wrap: wrap; gap: 5px; }

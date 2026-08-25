@@ -55,6 +55,11 @@ function renderCustomers(query = "") {
                 type="button"
                 data-customer-id="${customer.id}"
               >Editar</button>
+              <button
+                class="row-action delete-customer"
+                type="button"
+                data-customer-id="${customer.id}"
+              >Eliminar</button>
             ` : ""}
             ${canAssignServices ? `
               <button
@@ -483,6 +488,22 @@ function openServiceDialog() {
 
 function closeServiceDialog() {
   $("#service-dialog").close();
+}
+
+async function deleteCustomer(customer) {
+  const confirmed = window.confirm(
+    `¿Eliminar a ${customer.full_name}? Esta acción no se puede deshacer.`
+  );
+  if (!confirmed) return;
+  try {
+    await api(`/api/v1/customers/${customer.id}`, { method: "DELETE" });
+    state.customers = state.customers?.filter((item) => item.id !== customer.id);
+    renderCustomers($("#customer-search").value);
+    renderOverview();
+    setNotice("El cliente fue eliminado.");
+  } catch (error) {
+    setNotice(error.message);
+  }
 }
 
 function serviceLabel(service) {

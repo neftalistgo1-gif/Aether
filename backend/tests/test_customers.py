@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.v1.endpoints.customers import (
     create_customer,
+    delete_customer,
     get_customer,
     list_customers,
     update_customer,
@@ -159,6 +160,23 @@ class CustomerEndpointsTestCase(unittest.TestCase):
                 self.db,
             )
         self.assertEqual(rejected.exception.status_code, 409)
+
+    def test_delete_customer_without_history(self) -> None:
+        created = create_customer(
+            CustomerCreate(
+                full_name="Cliente temporal",
+                phones=["Pendiente"],
+                email="Pendiente",
+            ),
+            self.db,
+        )
+
+        self.assertIsNone(delete_customer(created.id, self.db))
+        self.assertEqual(self.db.query(Customer).count(), 0)
+        audit = self.db.scalar(
+            select(AuditEvent).where(AuditEvent.action == "customer.deleted")
+        )
+        self.assertEqual(audit.before_data["full_name"], "Cliente temporal")
 
 
 if __name__ == "__main__":
