@@ -336,7 +336,9 @@ def uisp_assignment_details(db, device: NetworkDevice, router: MikrotikRouter) -
     return {
         "router_name": router.name,
         "ip_address": str(ip_address(device.management_ip or "")),
-        "tower_name": access_point.source_note or "UISP",
+        "tower_name": (
+            access_point.source_note if access_point and access_point.source_note else "UISP"
+        ),
         "access_point_name": access_point.name if access_point else "UISP",
         "antenna_name": device.display_name,
         "frequency_mhz": frequency if frequency and frequency > 0 else None,
