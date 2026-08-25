@@ -38,6 +38,11 @@ def responsible_customer_id(service: Service, due_date: date):
         ),
         None,
     )
+    # Imports can link the current holder after this month's payment day.
+    # The service is nevertheless already owned by that customer in the
+    # operational system, so the current holder receives this initial charge.
+    if holder is None:
+        holder = next((item for item in service.holders if item.end_date is None), None)
     if holder is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
