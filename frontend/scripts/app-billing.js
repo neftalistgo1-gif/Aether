@@ -480,6 +480,9 @@ async function openAccountDialog(customer) {
       api(`/api/v1/customers/${customer.id}/balance`),
       api(`/api/v1/customers/${customer.id}/charges`),
     ]);
+    const services = (state.services || []).filter(
+      (service) => service.current_customer_id === customer.id && service.status !== "cancelled"
+    );
     $("#account-summary").innerHTML = `
       <div>
         <span>Deuda total</span>
@@ -493,6 +496,12 @@ async function openAccountDialog(customer) {
         <span>Saldo a favor</span>
         <strong>${formatMoney(balance.credit_balance)}</strong>
       </div>
+      ${services.map((service) => `
+        <div>
+          <span>${escapeText(service.amr_code)} · ${escapeText(service.plan_name)}</span>
+          <strong>${formatMoney(service.monthly_price)} · Día ${service.payment_day}</strong>
+        </div>
+      `).join("")}
     `;
     $("#account-charges-body").innerHTML = charges
       .slice()

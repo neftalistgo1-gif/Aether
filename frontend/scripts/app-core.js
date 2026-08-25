@@ -20,6 +20,7 @@ const state = {
   uispConnection: null,
   mikrotikHealth: [],
   trafficHistory: null,
+  suspensionCandidates: [],
   trafficRange: "1h",
   bootstrapStatus: {
     configured: false,
@@ -415,7 +416,7 @@ async function loadBootstrapStatus() {
 
 async function loadWorkspace() {
   state.user = await api("/api/v1/auth/me");
-  const [customers, services, payments, dailyOperations, assets, plans, incidents, supportTickets, operatorUsers, accessPointHealth, networkDevices, networkSummary, uispConnection, mikrotikHealth, trafficHistory] = await Promise.all([
+  const [customers, services, payments, dailyOperations, assets, plans, incidents, supportTickets, operatorUsers, accessPointHealth, networkDevices, networkSummary, uispConnection, mikrotikHealth, trafficHistory, suspensionCandidates] = await Promise.all([
     loadResource("/api/v1/customers"),
     loadResource("/api/v1/services"),
     loadResource("/api/v1/payments"),
@@ -431,6 +432,7 @@ async function loadWorkspace() {
     loadResource("/api/v1/uisp/connection").catch(() => null),
     loadOptionalList("/api/v1/mikrotik/routers/health"),
     loadResource("/api/v1/mikrotik/traffic?period=1h").catch(() => null),
+    loadOptionalList("/api/v1/operations/suspension-candidates"),
   ]);
   state.customers = customers;
   state.services = services;
@@ -448,6 +450,7 @@ async function loadWorkspace() {
   state.uispConnection = uispConnection;
   state.mikrotikHealth = mikrotikHealth;
   state.trafficHistory = trafficHistory;
+  state.suspensionCandidates = suspensionCandidates;
   renderUser();
   renderOverview();
   renderCustomers();
@@ -708,6 +711,17 @@ function renderOverview() {
   $("#suspended-services").innerHTML = suspendedDeviceRows || suspendedServiceRows
     ? `${suspendedDeviceRows}${suspendedServiceRows}`
     : '<p class="empty-state success-state">No hay bloqueos en MikroTik ni servicios suspendidos.</p>';
+  const cutCandidates = state.suspensionCandidates || [];
+  $("#suspension-candidates").innerHTML = cutCandidates.length
+    ? cutCandidates.slice(0, 10).map((item) => `
+      <div class="ap-health-row attention">
+        <div>
+          <strong>${escapeText(item.customer_name)} · ${escapeText(item.amr_code)}</strong>
+          <span>${formatMoney(item.outstanding_balance)} vencido el ${formatDate(item.due_date)} · ${escapeText(item.ip_address || "IP pendiente")}</span>
+        </div>
+        <b>Listo para corte</b>
+      </div>`).join("")
+    : '<p class="empty-state success-state">No hay servicios que cumplan todos los requisitos de corte hoy.</p>';
   $("#overview-message").textContent = uispConnected
     ? `UISP conectado · ${state.networkSummary?.online ?? 0} equipos en línea · ${offlineCpes.length} CPE desconectados · ${suspendedDevices.length} bloqueados en MikroTik · ${suspendedServices.length} servicios suspendidos.`
     : "UISP no está disponible en este momento; se conserva la última telemetría recibida.";

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,3 +25,13 @@ class DailyOperationRead(BaseModel):
     extensions_expired: int
     executed_by: str
     completed_at: datetime | None = None
+
+
+class SuspensionCandidateRead(BaseModel):
+    service_id: UUID
+    customer_id: UUID
+    customer_name: str
+    amr_code: str
+    ip_address: str | None = None
+    due_date: date
+    outstanding_balance: Decimal
