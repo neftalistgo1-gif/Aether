@@ -80,6 +80,8 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("shouldRememberDeviceSession", script)
         self.assertIn("isInstalledAether", script)
         self.assertIn('id="suspended-services"', page)
+        self.assertIn("Servicio(s)", page)
+        self.assertIn("servicesByCustomerId", script)
         self.assertIn("Suspensiones", page)
         self.assertIn("No hay antenas sin conexión a UISP.", script)
         self.assertIn("Aun no hay clientes registrados", script)

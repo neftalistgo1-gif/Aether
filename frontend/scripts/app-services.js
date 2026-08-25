@@ -25,6 +25,13 @@ function renderCustomers(query = "") {
   const filteredCount = rows.length;
   const withPhones = state.customers.filter((customer) => (customer.phones || []).length > 0).length;
   const withEmail = state.customers.filter((customer) => Boolean(customer.email)).length;
+  const servicesByCustomerId = new Map();
+  (state.services || []).forEach((service) => {
+    if (!service.current_customer_id) return;
+    const assigned = servicesByCustomerId.get(service.current_customer_id) || [];
+    assigned.push(service);
+    servicesByCustomerId.set(service.current_customer_id, assigned);
+  });
   if (summary) {
     summary.innerHTML = `
       <span class="summary-chip">Total: <strong>${totalCustomers}</strong></span>
@@ -39,6 +46,11 @@ function renderCustomers(query = "") {
         <td><strong>${escapeText(customer.full_name)}</strong></td>
         <td>${escapeText(customer.phones?.[0] || "—")}</td>
         <td>${escapeText(customer.email || "—")}</td>
+        <td>${escapeText(
+          (servicesByCustomerId.get(customer.id) || [])
+            .map((service) => service.amr_code)
+            .join(", ") || "—"
+        )}</td>
         <td>${formatDate(customer.registered_at)}</td>
         ${canShowActions ? `
           <td>

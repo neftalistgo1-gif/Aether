@@ -1,4 +1,4 @@
-const CACHE_NAME = "aether-shell-v10-holder-visibility";
+const CACHE_NAME = "aether-shell-v11-customer-services";
 const SHARE_DATABASE = "aether-share-target";
 const SHARE_STORE = "receipts";
 const APP_SHELL = [
