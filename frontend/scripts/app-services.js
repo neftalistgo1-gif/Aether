@@ -234,6 +234,9 @@ function renderServices() {
     canManageRecovery ||
     canAssignHolder
   );
+  const customersById = new Map(
+    (state.customers || []).map((customer) => [customer.id, customer])
+  );
   const rows = state.services.filter((service) => {
     const matchesSearch = !search || [
       service.amr_code, service.plan_name, service.address, String(service.payment_day),
@@ -262,7 +265,12 @@ function renderServices() {
         <td>
           ${escapeText(service.address)}
           <small class="table-subtitle">
-            ${service.current_customer_id ? "Titular enlazado" : "Pendiente de titular"}
+            ${service.current_customer_id
+              ? `Titular: ${escapeText(
+                  customersById.get(service.current_customer_id)?.full_name ||
+                  "Cliente enlazado"
+                )}`
+              : "Pendiente de titular"}
           </small>
         </td>
         <td>Día ${service.payment_day} · ${formatMoney(service.monthly_price)}</td>
