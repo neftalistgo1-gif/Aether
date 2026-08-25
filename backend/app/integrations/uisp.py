@@ -1,6 +1,7 @@
 import json
 import re
 import ssl
+from ipaddress import ip_address
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -21,8 +22,11 @@ from app.models.network_device import (
     NetworkDeviceType,
 )
 from app.models.access_point import NetworkAccessPoint
+from app.models.mikrotik import MikrotikRouter
+from app.models.network_assignment import NetworkAssignment
 from app.models.asset import Asset, AssetNetworkHistory, AssetOwner, AssetStatus, AssetType
-from app.models.service import Service, ServiceEvent, ServiceEventType, ServiceStatus
+from app.models.customer import Customer
+from app.models.service import Service, ServiceEvent, ServiceEventType, ServiceHolder, ServiceStatus
 from app.models.plan import Plan
 from sqlalchemy import select
 from uuid import uuid4
@@ -185,9 +189,65 @@ def link_matching_service(db, item: NetworkDevice) -> bool:
         db.flush()
     elif service.status == ServiceStatus.pending and service.current_customer_id is None:
         apply_reference_to_pending_service(service, db, reference, item.display_name)
+    if service.current_customer_id is None:
+        customer = Customer(
+            full_name=service.amr_code,
+            phones=["Pendiente"],
+            email="Pendiente",
+            notes="Falta teléfono y correo. Creado automáticamente desde UISP.",
+        )
+        db.add(customer)
+        db.flush()
+        service.holders.append(
+            ServiceHolder(
+                customer_id=customer.id,
+                change_reason="Cliente creado automáticamente desde UISP",
+            )
+        )
+        service.events.append(
+            ServiceEvent(
+                event_type=ServiceEventType.details_updated,
+                changes={"current_customer_id": {"before": None, "after": str(customer.id)}},
+                reason="Cliente creado automáticamente desde UISP",
+            )
+        )
     changed = item.service_id != service.id
     item.service_id = service.id
     return changed
+
+
+def sync_access_point_from_device(db, device: NetworkDevice) -> bool:
+    if device.device_type != NetworkDeviceType.access_point or not device.management_ip:
+        return False
+    router = db.scalar(
+        select(MikrotikRouter)
+        .where(MikrotikRouter.enabled.is_(True))
+        .order_by(MikrotikRouter.name)
+    )
+    if router is None:
+        return False
+    access_point = db.scalar(
+        select(NetworkAccessPoint).where(
+            NetworkAccessPoint.router_id == router.id,
+            NetworkAccessPoint.ip_address == device.management_ip,
+        )
+    )
+    if access_point is None:
+        access_point = NetworkAccessPoint(
+            router_id=router.id,
+            name=device.display_name,
+            ip_address=device.management_ip,
+            mac_address=device.mac_address,
+            source_note="Sincronizado automáticamente desde UISP",
+        )
+        db.add(access_point)
+        db.flush()
+    else:
+        access_point.name = device.display_name
+        access_point.mac_address = device.mac_address
+        access_point.source_note = "Sincronizado automáticamente desde UISP"
+    device.access_point_id = access_point.id
+    return True
 
 
 def load_service_reference() -> dict[str, dict]:
@@ -255,8 +315,97 @@ def merge_duplicate_device(db, *, canonical: NetworkDevice, duplicate: NetworkDe
     db.flush()
 
 
+def uisp_assignment_details(db, device: NetworkDevice, router: MikrotikRouter) -> dict:
+    """Build the operational network record from the current UISP device."""
+    access_point = (
+        db.get(NetworkAccessPoint, device.access_point_id)
+        if device.access_point_id is not None
+        else None
+    )
+    observed = device.observed_details or {}
+
+    def decimal_value(key: str) -> Decimal | None:
+        try:
+            value = Decimal(str(observed.get(key)))
+        except (ArithmeticError, ValueError):
+            return None
+        return value
+
+    frequency = decimal_value("frequency")
+    signal = decimal_value("signal")
+    return {
+        "router_name": router.name,
+        "ip_address": str(ip_address(device.management_ip or "")),
+        "tower_name": access_point.source_note or "UISP",
+        "access_point_name": access_point.name if access_point else "UISP",
+        "antenna_name": device.display_name,
+        "frequency_mhz": frequency if frequency and frequency > 0 else None,
+        "signal_dbm": signal if signal and -150 <= signal <= 0 else None,
+        "technician": "Sincronización UISP",
+        "change_reason": "Configuración actualizada automáticamente desde UISP",
+        "notes": f"Dispositivo UISP: {device.uisp_device_id}",
+    }
+
+
+def sync_network_assignments_from_devices(db) -> dict[str, int]:
+    """Keep the current operational IP assignment aligned with UISP telemetry."""
+    router = db.scalar(
+        select(MikrotikRouter)
+        .where(MikrotikRouter.enabled.is_(True))
+        .order_by(MikrotikRouter.name)
+    )
+    result = {"network_assignments_created": 0, "network_assignments_updated": 0, "network_assignment_conflicts": 0}
+    if router is None:
+        return result
+    devices = db.scalars(
+        select(NetworkDevice).where(
+            NetworkDevice.service_id.is_not(None),
+            NetworkDevice.management_ip.is_not(None),
+        )
+    )
+    now = datetime.now(UTC)
+    for device in devices:
+        service = db.get(Service, device.service_id)
+        if service is None or service.status == ServiceStatus.cancelled:
+            continue
+        try:
+            details = uisp_assignment_details(db, device, router)
+        except ValueError:
+            continue
+        current = db.scalar(
+            select(NetworkAssignment).where(
+                NetworkAssignment.service_id == service.id,
+                NetworkAssignment.ended_at.is_(None),
+            )
+        )
+        if current is not None and (
+            current.router_name == details["router_name"]
+            and current.ip_address == details["ip_address"]
+        ):
+            for key, value in details.items():
+                setattr(current, key, value)
+            result["network_assignments_updated"] += 1
+            continue
+        conflict = db.scalar(
+            select(NetworkAssignment).where(
+                NetworkAssignment.router_name == details["router_name"],
+                NetworkAssignment.ip_address == details["ip_address"],
+                NetworkAssignment.ended_at.is_(None),
+                NetworkAssignment.service_id != service.id,
+            )
+        )
+        if conflict is not None:
+            result["network_assignment_conflicts"] += 1
+            continue
+        if current is not None:
+            current.ended_at = now
+        db.add(NetworkAssignment(service_id=service.id, **details))
+        result["network_assignments_created"] += 1
+    return result
+
+
 def sync_devices(db, devices: list[dict]) -> dict[str, int]:
-    created = updated = status_events = inventory_created = services_linked = 0
+    created = updated = status_events = inventory_created = services_linked = access_points_synced = 0
     now = datetime.now(UTC)
     for source in devices:
         identity = source.get("identification") or {}
@@ -305,5 +454,15 @@ def sync_devices(db, devices: list[dict]) -> dict[str, int]:
         if next_status == NetworkDeviceStatus.offline and item.offline_since is None: item.offline_since = now
         inventory_created += sync_inventory_asset(db, item=item, identity=identity, device_type=device_type)
         services_linked += link_matching_service(db, item)
+        access_points_synced += sync_access_point_from_device(db, item)
+    network_result = sync_network_assignments_from_devices(db)
     db.commit()
-    return {"created": created, "updated": updated, "status_events": status_events, "inventory_created": inventory_created, "services_linked": services_linked}
+    return {
+        "created": created,
+        "updated": updated,
+        "status_events": status_events,
+        "inventory_created": inventory_created,
+        "services_linked": services_linked,
+        "access_points_synced": access_points_synced,
+        **network_result,
+    }
