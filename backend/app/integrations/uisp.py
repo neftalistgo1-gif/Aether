@@ -366,14 +366,22 @@ def sync_network_assignments_from_devices(db) -> dict[str, int]:
         )
     )
     now = datetime.now(UTC)
+    # UISP can expose more than one device for a service (for example, an old
+    # device alongside its replacement).  An active network assignment is
+    # unique per service, so only the first usable telemetry record is used
+    # during each synchronization pass.
+    processed_service_ids = set()
     for device in devices:
         service = db.get(Service, device.service_id)
         if service is None or service.status == ServiceStatus.cancelled:
+            continue
+        if service.id in processed_service_ids:
             continue
         try:
             details = uisp_assignment_details(db, device, router)
         except ValueError:
             continue
+        processed_service_ids.add(service.id)
         current = db.scalar(
             select(NetworkAssignment).where(
                 NetworkAssignment.service_id == service.id,
