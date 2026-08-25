@@ -581,7 +581,8 @@ function renderUser() {
         hasCapability("billing.read") ||
         hasCapability("services.cancel") ||
         hasCapability("assets.read") ||
-        hasCapability("assets.write")
+        hasCapability("assets.write") ||
+        hasCapability("services.write")
       );
     }
   );

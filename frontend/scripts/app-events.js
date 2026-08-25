@@ -213,12 +213,14 @@ $("#new-customer-button").addEventListener("click", () => {
 $("#customers-body").addEventListener("click", (event) => {
   const button = event.target.closest(".edit-customer");
   const accountButton = event.target.closest(".view-account");
-  if (!button && !accountButton) return;
+  const assignButton = event.target.closest(".assign-service-to-customer");
+  if (!button && !accountButton && !assignButton) return;
   const customer = state.customers?.find(
-    (item) => item.id === (button || accountButton).dataset.customerId
+    (item) => item.id === (button || accountButton || assignButton).dataset.customerId
   );
   if (!customer) return;
   if (accountButton) openAccountDialog(customer);
+  else if (assignButton) openHolderAssignmentDialog({ customerId: customer.id });
   else openCustomerDialog(customer);
 });
 $("#customer-form").addEventListener("submit", saveCustomer);
@@ -263,6 +265,7 @@ $("#services-body").addEventListener("click", (event) => {
   const cancellationButton = event.target.closest(
     ".manage-cancellation"
   );
+  const holderButton = event.target.closest(".assign-service-holder");
   if (
     !button &&
     !networkButton &&
@@ -272,7 +275,8 @@ $("#services-body").addEventListener("click", (event) => {
     !reactivationButton &&
     !extensionButton &&
     !agreementButton &&
-    !cancellationButton
+    !cancellationButton &&
+    !holderButton
   ) return;
   const service = state.services?.find(
     (item) =>
@@ -286,11 +290,13 @@ $("#services-body").addEventListener("click", (event) => {
         reactivationButton ||
         extensionButton ||
         agreementButton ||
-        cancellationButton
+        cancellationButton ||
+        holderButton
       ).dataset.serviceId
   );
   if (!service) return;
-  if (networkButton) openNetworkSimulationDialog(service);
+  if (holderButton) openHolderAssignmentDialog({ serviceId: service.id });
+  else if (networkButton) openNetworkSimulationDialog(service);
   else if (reconciliationButton) {
     startNetworkReconciliation(service, reconciliationButton);
   } else if (notificationButton) openNotificationDialog(service);
@@ -301,6 +307,10 @@ $("#services-body").addEventListener("click", (event) => {
   else if (cancellationButton) openCancellationDialog(service);
   else openInstallationDialog(service);
 });
+$("#holder-assignment-service").addEventListener("change", updateHolderAssignmentContext);
+$("#holder-assignment-form").addEventListener("submit", saveHolderAssignment);
+$("#close-holder-assignment-dialog").addEventListener("click", closeHolderAssignmentDialog);
+$("#cancel-holder-assignment-dialog").addEventListener("click", closeHolderAssignmentDialog);
 $("#installation-coverage-result").addEventListener(
   "change",
   updateInstallationFields

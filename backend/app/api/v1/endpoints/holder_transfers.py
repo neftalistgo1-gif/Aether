@@ -21,6 +21,7 @@ from app.models.service import (
 from app.schemas.holder_transfer import (
     HolderTransferCreate,
     HolderTransferRead,
+    ServiceHolderAssignCreate,
     ServiceHolderRead,
 )
 from app.services.audit import record_audit_event
@@ -60,17 +61,7 @@ def find_current_holder_for_update(
     return holder
 
 
-@router.post(
-    "/{service_id}/holder-transfers",
-    response_model=HolderTransferRead,
-    status_code=status.HTTP_201_CREATED,
-)
-def transfer_service_holder(
-    service_id: UUID,
-    data: HolderTransferCreate,
-    db: Session = Depends(get_db),
-) -> HolderTransfer:
-    service = find_service_for_update(service_id, db)
+def ensure_service_can_change_holder(service: Service, db: Session) -> None:
     if service.status == ServiceStatus.cancelled:
         raise HTTPException(
             status_code=409,
@@ -85,10 +76,22 @@ def transfer_service_holder(
     if scheduled_cancellation is not None:
         raise HTTPException(
             status_code=409,
-            detail=(
-                "Resolve the scheduled cancellation before changing holder"
-            ),
+            detail="Resolve the scheduled cancellation before changing holder",
         )
+
+
+@router.post(
+    "/{service_id}/holder-transfers",
+    response_model=HolderTransferRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def transfer_service_holder(
+    service_id: UUID,
+    data: HolderTransferCreate,
+    db: Session = Depends(get_db),
+) -> HolderTransfer:
+    service = find_service_for_update(service_id, db)
+    ensure_service_can_change_holder(service, db)
     if data.effective_date != date.today():
         raise HTTPException(
             status_code=409,
@@ -179,6 +182,70 @@ def transfer_service_holder(
         ) from exc
 
     return db.get(HolderTransfer, transfer.id)
+
+
+@router.post(
+    "/{service_id}/holders",
+    response_model=ServiceHolderRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def assign_service_holder(
+    service_id: UUID,
+    data: ServiceHolderAssignCreate,
+    db: Session = Depends(get_db),
+) -> ServiceHolder:
+    """Assign a holder only when a service was registered without one."""
+    service = find_service_for_update(service_id, db)
+    ensure_service_can_change_holder(service, db)
+    if db.get(Customer, data.customer_id) is None:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    current_holder = db.scalar(
+        select(ServiceHolder)
+        .where(
+            ServiceHolder.service_id == service.id,
+            ServiceHolder.end_date.is_(None),
+        )
+        .with_for_update()
+    )
+    if current_holder is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Service already has a holder; use a holder transfer",
+        )
+
+    holder = ServiceHolder(
+        service_id=service.id,
+        customer_id=data.customer_id,
+        start_date=date.today(),
+        change_reason=data.reason,
+    )
+    db.add(holder)
+    try:
+        db.flush()
+        service.events.append(
+            ServiceEvent(
+                event_type=ServiceEventType.details_updated,
+                changes={"current_customer_id": {"before": None, "after": str(data.customer_id)}},
+                reason=data.reason,
+            )
+        )
+        record_audit_event(
+            db,
+            actor=data.assigned_by,
+            action="service.holder_assigned",
+            entity_type="Service",
+            entity_id=service.id,
+            reason=data.reason,
+            after_data={"current_customer_id": data.customer_id},
+        )
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="The holder changed concurrently; reload and try again",
+        ) from exc
+    return db.get(ServiceHolder, holder.id)
 
 
 @router.get(

@@ -1026,6 +1026,29 @@
       </form>
     </dialog>
 
+    <dialog id="holder-assignment-dialog" aria-labelledby="holder-assignment-title">
+      <form id="holder-assignment-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">ASIGNACIÓN</p>
+            <h2 id="holder-assignment-title">Editar titular del servicio</h2>
+          </div>
+          <button id="close-holder-assignment-dialog" class="icon-button" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <div class="form-grid">
+          <label class="full-row">Servicio existente<select id="holder-assignment-service" required></select></label>
+          <p id="holder-assignment-current" class="inline-note full-row"></p>
+          <label class="full-row">Asignar a cliente<select id="holder-assignment-customer" required></select></label>
+          <label class="full-row">Motivo<textarea id="holder-assignment-reason" rows="3" minlength="3" maxlength="1000" required></textarea></label>
+        </div>
+        <p id="holder-assignment-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="cancel-holder-assignment-dialog" class="text-button" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar asignación</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="service-dialog" aria-labelledby="service-dialog-title">
       <form id="service-form">
         <div class="dialog-heading">
@@ -2464,12 +2487,12 @@
       </form>
     </dialog>
     <!-- Los archivos se cargan en este orden porque comparten el estado de la aplicación. -->
-    <script src="/app/scripts/app-core.js?v=20260818-modules-1"></script>
-    <script src="/app/scripts/app-assets.js?v=20260818-modules-1"></script>
-    <script src="/app/scripts/app-services.js?v=20260818-modules-1"></script>
-    <script src="/app/scripts/app-billing.js?v=20260818-modules-1"></script>
-    <script src="/app/scripts/app-operations.js?v=20260818-modules-1"></script>
-    <script src="/app/scripts/app-administration.js?v=20260818-modules-1"></script>
-    <script src="/app/scripts/app-events.js?v=20260818-modules-1"></script>
+    <script src="/app/scripts/app-core.js?v=20260825-holder-assignment-1"></script>
+    <script src="/app/scripts/app-assets.js?v=20260825-holder-assignment-1"></script>
+    <script src="/app/scripts/app-services.js?v=20260825-holder-assignment-1"></script>
+    <script src="/app/scripts/app-billing.js?v=20260825-holder-assignment-1"></script>
+    <script src="/app/scripts/app-operations.js?v=20260825-holder-assignment-1"></script>
+    <script src="/app/scripts/app-administration.js?v=20260825-holder-assignment-1"></script>
+    <script src="/app/scripts/app-events.js?v=20260825-holder-assignment-1"></script>
   </body>
 </html>

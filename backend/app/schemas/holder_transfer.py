@@ -16,6 +16,12 @@ class HolderTransferCreate(BaseModel):
     )
 
 
+class ServiceHolderAssignCreate(BaseModel):
+    customer_id: UUID
+    assigned_by: str = Field(min_length=2, max_length=150)
+    reason: str = Field(min_length=3, max_length=1000)
+
+
 class ServiceHolderRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

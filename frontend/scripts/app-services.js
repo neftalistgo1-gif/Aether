@@ -19,7 +19,8 @@ function renderCustomers(query = "") {
   );
   const canWrite = hasCapability("customers.write");
   const canReadBilling = hasCapability("billing.read");
-  const canShowActions = canWrite || canReadBilling;
+  const canAssignServices = hasCapability("services.write");
+  const canShowActions = canWrite || canReadBilling || canAssignServices;
   const totalCustomers = state.customers.length;
   const filteredCount = rows.length;
   const withPhones = state.customers.filter((customer) => (customer.phones || []).length > 0).length;
@@ -54,6 +55,13 @@ function renderCustomers(query = "") {
                 type="button"
                 data-customer-id="${customer.id}"
               >Editar</button>
+            ` : ""}
+            ${canAssignServices ? `
+              <button
+                class="row-action assign-service-to-customer"
+                type="button"
+                data-customer-id="${customer.id}"
+              >Asignar servicio</button>
             ` : ""}
           </td>
         ` : ""}
@@ -209,6 +217,7 @@ function renderServices() {
     hasCapability("assets.read") ||
     hasCapability("assets.write")
   );
+  const canAssignHolder = hasCapability("services.write");
   const canShowActions = (
     canScheduleInstallation ||
     canControlNetwork ||
@@ -217,7 +226,8 @@ function renderServices() {
     canCheckReactivation ||
     canReadExtensions ||
     canCancelServices ||
-    canManageRecovery
+    canManageRecovery ||
+    canAssignHolder
   );
   const rows = state.services.filter((service) => {
     const matchesSearch = !search || [
@@ -254,6 +264,16 @@ function renderServices() {
         <td><span class="badge ${service.status}">${escapeText(service.status)}</span></td>
         ${canShowActions ? `
           <td>
+            <details class="service-actions-menu">
+              <summary>Acciones</summary>
+              <div class="service-actions-list" aria-label="Acciones para ${escapeText(service.amr_code)}">
+            ${canAssignHolder && service.status !== "cancelled" ? `
+              <button
+                class="row-action assign-service-holder"
+                type="button"
+                data-service-id="${service.id}"
+              >${service.current_customer_id ? "Editar titular" : "Asignar titular"}</button>
+            ` : ""}
             ${canScheduleInstallation && service.status === "pending" ? `
               <button
                 class="row-action assess-installation"
@@ -317,6 +337,8 @@ function renderServices() {
                 data-service-id="${service.id}"
               >Baja y retiro</button>
             ` : ""}
+              </div>
+            </details>
           </td>
         ` : ""}
       </tr>
@@ -461,6 +483,111 @@ function openServiceDialog() {
 
 function closeServiceDialog() {
   $("#service-dialog").close();
+}
+
+function serviceLabel(service) {
+  return `${service.amr_code} · ${service.address}`;
+}
+
+function renderHolderAssignmentOptions(preselectedServiceId, preselectedCustomerId) {
+  const serviceSelect = $("#holder-assignment-service");
+  const customerSelect = $("#holder-assignment-customer");
+  const services = (state.services || []).filter((service) =>
+    service.status !== "cancelled" &&
+    (!preselectedCustomerId || service.current_customer_id !== preselectedCustomerId)
+  );
+  serviceSelect.innerHTML = services.map((service) =>
+    `<option value="${service.id}">${escapeText(serviceLabel(service))}</option>`
+  ).join("");
+  customerSelect.innerHTML = (state.customers || []).map((customer) =>
+    `<option value="${customer.id}">${escapeText(customer.full_name)}</option>`
+  ).join("");
+  serviceSelect.value = preselectedServiceId || services[0]?.id || "";
+  customerSelect.value = preselectedCustomerId || state.customers?.[0]?.id || "";
+  updateHolderAssignmentContext();
+}
+
+function updateHolderAssignmentContext() {
+  const service = state.services?.find(
+    (item) => item.id === $("#holder-assignment-service").value
+  );
+  const currentCustomer = state.customers?.find(
+    (item) => item.id === service?.current_customer_id
+  );
+  const customerSelect = $("#holder-assignment-customer");
+  [...customerSelect.options].forEach((option) => {
+    option.disabled = option.value === service?.current_customer_id;
+  });
+  if (customerSelect.value === service?.current_customer_id) {
+    customerSelect.value = [...customerSelect.options].find(
+      (option) => !option.disabled
+    )?.value || "";
+  }
+  $("#holder-assignment-current").textContent = currentCustomer
+    ? `Titular actual: ${currentCustomer.full_name}. Se conservará el historial y los cargos anteriores.`
+    : "El servicio no tiene titular. Se enlazará sin crear otro servicio.";
+}
+
+function openHolderAssignmentDialog({ serviceId = null, customerId = null } = {}) {
+  const availableServices = state.services?.some((service) =>
+    service.status !== "cancelled" &&
+    (!customerId || service.current_customer_id !== customerId)
+  );
+  if (!availableServices) {
+    setNotice("No hay servicios disponibles para asignar.");
+    return;
+  }
+  if (!state.customers?.length) {
+    setNotice("No hay clientes disponibles para asignar.");
+    return;
+  }
+  renderHolderAssignmentOptions(serviceId, customerId);
+  $("#holder-assignment-reason").value = "Actualización de titular solicitada por atención a clientes";
+  $("#holder-assignment-error").textContent = "";
+  $("#holder-assignment-dialog").showModal();
+}
+
+function closeHolderAssignmentDialog() {
+  $("#holder-assignment-dialog").close();
+}
+
+async function saveHolderAssignment(event) {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  const errorBox = $("#holder-assignment-error");
+  const service = state.services?.find(
+    (item) => item.id === $("#holder-assignment-service").value
+  );
+  if (!service) return;
+  button.disabled = true;
+  errorBox.textContent = "";
+  try {
+    const reason = $("#holder-assignment-reason").value.trim();
+    const customerId = $("#holder-assignment-customer").value;
+    const endpoint = service.current_customer_id
+      ? `/api/v1/services/${service.id}/holder-transfers`
+      : `/api/v1/services/${service.id}/holders`;
+    const body = service.current_customer_id
+      ? {
+          new_customer_id: customerId,
+          effective_date: new Date().toISOString().slice(0, 10),
+          transferred_by: state.user.display_name,
+          reason,
+        }
+      : { customer_id: customerId, assigned_by: state.user.display_name, reason };
+    await api(endpoint, { method: "POST", body: JSON.stringify(body) });
+    state.services = await loadResource("/api/v1/services");
+    renderServices();
+    renderOverview();
+    closeHolderAssignmentDialog();
+    setNotice(service.current_customer_id
+      ? "El titular del servicio se actualizó sin duplicar el servicio."
+      : "El servicio quedó asignado al cliente sin crear un duplicado.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function saveService(event) {

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.api.v1.endpoints.holder_transfers import (
+    assign_service_holder,
     list_holder_transfers,
     list_service_holders,
     transfer_service_holder,
@@ -34,7 +35,7 @@ from app.models.network_assignment import NetworkAssignment
 from app.models.payment import Payment, PaymentStatusEvent
 from app.models.payment_allocation import CreditMovement, PaymentAllocation
 from app.models.service import ServiceHolder, ServiceStatus
-from app.schemas.holder_transfer import HolderTransferCreate
+from app.schemas.holder_transfer import HolderTransferCreate, ServiceHolderAssignCreate
 from app.schemas.charge import ChargeCreate
 from app.schemas.service import ServiceCreate
 from app.schemas.service_operations import CancellationCreate
@@ -314,6 +315,30 @@ class HolderTransferTestCase(unittest.TestCase):
             current_holders[0].customer_id,
             self.previous_customer.id,
         )
+
+    def test_unassigned_service_can_receive_an_existing_customer(self) -> None:
+        unassigned = create_service(
+            ServiceCreate(
+                amr_code="AMR721",
+                address="Calle Sin Titular 100, Reynosa",
+                plan_name="Hogar 20 Mbps",
+                monthly_price=Decimal("500.00"),
+                payment_day=10,
+            ),
+            self.db,
+        )
+        holder = assign_service_holder(
+            unassigned.id,
+            ServiceHolderAssignCreate(
+                customer_id=self.new_customer.id,
+                assigned_by="Atencion a clientes",
+                reason="Se completo el titular pendiente",
+            ),
+            self.db,
+        )
+        self.assertEqual(holder.customer_id, self.new_customer.id)
+        self.db.refresh(unassigned)
+        self.assertEqual(unassigned.current_customer_id, self.new_customer.id)
 
 
 if __name__ == "__main__":
