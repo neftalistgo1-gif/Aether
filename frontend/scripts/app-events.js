@@ -59,13 +59,9 @@ async function takeSharedReceipt(id) {
 async function openSharedReceiptIfPresent() {
   const url = new URL(window.location.href);
   const receiptId = url.searchParams.get("shared_receipt");
+  const nativeReceiptId = url.searchParams.get("native_receipt");
   const sharedError = url.searchParams.get("shared_error");
-  if (!receiptId && !sharedError) return;
-  history.replaceState({}, "", "/app/");
-  if (sharedError) {
-    setNotice("No fue posible recibir el comprobante compartido.");
-    return;
-  }
+  if (!receiptId && !nativeReceiptId && !sharedError) return;
   if (!hasCapability("billing.write")) {
     setNotice("Esta cuenta no tiene permiso para registrar comprobantes.");
     return;
@@ -74,17 +70,65 @@ async function openSharedReceiptIfPresent() {
     setNotice("El comprobante fue recibido, pero aun no hay clientes registrados para asociarlo. Importa los clientes primero y compartelo de nuevo.");
     return;
   }
+  if (nativeReceiptId) {
+    try {
+      const receiptBlob = await apiBlob(
+        `/api/v1/payments/shared-receipts/${encodeURIComponent(nativeReceiptId)}/claim`,
+        { method: "POST" }
+      );
+      history.replaceState({}, "", "/app/");
+      const extensionByType = {
+        "application/pdf": "pdf",
+        "image/png": "png",
+        "image/jpeg": "jpg",
+        "image/webp": "webp",
+      };
+      const extension = extensionByType[receiptBlob.type] || "bin";
+      const receiptFile = new File(
+        [receiptBlob],
+        `comprobante-compartido.${extension}`,
+        { type: receiptBlob.type || "application/octet-stream" }
+      );
+      if (!openPaymentDialog()) return;
+      attachPaymentProofFile(receiptFile);
+      $("#payment-method").value = "bank_transfer";
+      updatePaymentReferenceOptions();
+      $("#payment-notes").value =
+        "Comprobante recibido directamente desde el receptor Android de Aether.";
+      setNotice(
+        "Comprobante recibido. Selecciona al cliente y registra el pago para enviarlo a revisión."
+      );
+    } catch (error) {
+      console.error("Native receipt import failed", error);
+      if (error.status === 404) history.replaceState({}, "", "/app/");
+      setNotice(
+        error.status === 404
+          ? "El comprobante compartido venció, ya fue abierto o pertenece a otra sesión. Compártelo nuevamente."
+          : error.message
+      );
+    }
+    return;
+  }
+  if (sharedError) {
+    history.replaceState({}, "", "/app/");
+    openSharedReceiptFallbackDialog();
+    setNotice(
+      "Android no entregó el archivo de WhatsApp. Selecciónalo para continuar con el pago."
+    );
+    return;
+  }
   try {
+    history.replaceState({}, "", "/app/");
     const shared = await takeSharedReceipt(receiptId);
-    if (!shared?.file) {
+    const sharedFile = normalizeSharedReceiptFile(shared);
+    if (!sharedFile) {
       setNotice("El comprobante compartido ya no esta disponible. Compartelo de nuevo.");
       return;
     }
     if (!openPaymentDialog()) return;
-    const files = new DataTransfer();
-    files.items.add(shared.file);
-    $("#payment-proof-file").files = files.files;
+    attachPaymentProofFile(sharedFile);
     $("#payment-method").value = "bank_transfer";
+    updatePaymentReferenceOptions();
     const detail = [shared.title, shared.text, shared.url].filter(Boolean).join(" - ");
     $("#payment-notes").value = detail
       ? `Comprobante compartido desde WhatsApp. ${detail}`.slice(0, 1000)
@@ -94,6 +138,19 @@ async function openSharedReceiptIfPresent() {
     console.error("Shared receipt import failed", error);
     setNotice("No fue posible abrir el comprobante compartido.");
   }
+}
+
+function normalizeSharedReceiptFile(shared) {
+  if (!shared?.file || Number(shared.file.size) <= 0) return null;
+  if (shared.file instanceof File) return shared.file;
+  if (shared.file instanceof Blob) {
+    return new File(
+      [shared.file],
+      shared.fileName || "comprobante-compartido.jpg",
+      { type: shared.fileType || shared.file.type || "image/jpeg" }
+    );
+  }
+  return null;
 }
 
 async function logout(callApi = true) {
@@ -183,14 +240,12 @@ $("#close-bootstrap-dialog").addEventListener("click", closeBootstrapDialog);
 $("#cancel-bootstrap-dialog").addEventListener("click", closeBootstrapDialog);
 
 window.addEventListener("load", () => {
-  const bootstrappedFromUrl = bootstrapLoginFromUrl();
   void (async () => {
     state.bootstrapStatus = await loadBootstrapStatus();
     $("#open-bootstrap-dialog").hidden = !state.bootstrapStatus.can_bootstrap;
     if (
       state.bootstrapStatus.can_bootstrap &&
-      !state.token &&
-      !bootstrappedFromUrl
+      !state.token
     ) {
       openBootstrapDialog();
     }
@@ -207,24 +262,60 @@ document.querySelectorAll(".nav-item").forEach((item) => {
 $("#customer-search").addEventListener("input", (event) => {
   renderCustomers(event.target.value);
 });
+$("#customer-sort").addEventListener("change", (event) => {
+  state.customerSort = event.target.value;
+  renderCustomers($("#customer-search").value);
+});
 $("#new-customer-button").addEventListener("click", () => {
   openCustomerDialog();
 });
 $("#customers-body").addEventListener("click", (event) => {
-  const button = event.target.closest(".edit-customer");
-  const accountButton = event.target.closest(".view-account");
-  const assignButton = event.target.closest(".assign-service-to-customer");
-  const deleteButton = event.target.closest(".delete-customer");
-  if (!button && !accountButton && !assignButton && !deleteButton) return;
+  const button = event.target.closest(".view-customer-detail");
+  if (!button) return;
   const customer = state.customers?.find(
-    (item) => item.id === (button || accountButton || assignButton || deleteButton).dataset.customerId
+    (item) => item.id === button.dataset.customerId
   );
   if (!customer) return;
-  if (accountButton) openAccountDialog(customer);
-  else if (assignButton) openHolderAssignmentDialog({ customerId: customer.id });
-  else if (deleteButton) void deleteCustomer(customer);
-  else openCustomerDialog(customer);
+  openCustomerDetail(customer);
 });
+$("#back-to-customers").addEventListener("click", () => showView("customers"));
+$("#customer-detail-actions-list").addEventListener("click", (event) => {
+  const customer = state.customers?.find((item) => item.id === state.selectedCustomerId);
+  if (!customer) return;
+  $("#customer-detail-actions-menu").open = false;
+  if (event.target.closest(".detail-view-account")) openAccountDialog(customer);
+  else if (event.target.closest(".detail-edit-customer")) openCustomerDialog(customer);
+  else if (event.target.closest(".detail-assign-service")) openHolderAssignmentDialog({ customerId: customer.id });
+  else if (event.target.closest(".detail-generate-contract")) openContractGenerationDialog();
+  else if (event.target.closest(".detail-delete-customer")) void deleteCustomer(customer);
+});
+$("#contract-generation-service").addEventListener("change", () => void refreshContractGenerationReadiness());
+$("#contract-generation-form").addEventListener("submit", generateContract);
+$("#close-contract-generation-dialog").addEventListener("click", closeContractGenerationDialog);
+$("#cancel-contract-generation-dialog").addEventListener("click", closeContractGenerationDialog);
+$("#customer-detail-content").addEventListener("click", (event) => {
+  if (event.target.closest(".detail-add-customer-document")) { openCustomerDocumentDialog(); return; }
+  const contractButton = event.target.closest(".detail-open-contract");
+  if (contractButton) { void openAuthenticatedDocument(`/api/v1/services/${contractButton.dataset.serviceId}/contracts/${contractButton.dataset.contractId}/document`).catch((error) => setNotice(error.message)); return; }
+  const documentButton = event.target.closest(".detail-open-customer-document");
+  if (documentButton) { void openAuthenticatedDocument(`/api/v1/customers/${state.selectedCustomerId}/documents/${documentButton.dataset.documentId}/download`).catch((error) => setNotice(error.message)); return; }
+  const planButton = event.target.closest(".detail-change-service-plan");
+  if (planButton) {
+    const service = state.services?.find((item) => item.id === planButton.dataset.serviceId);
+    if (service) openServicePlanChangeDialog(service);
+    return;
+  }
+  const button = event.target.closest(".detail-edit-service-address");
+  if (!button) return;
+  const service = state.services?.find((item) => item.id === button.dataset.serviceId);
+  if (service) void openAddressDialog(service);
+});
+$("#customer-document-form").addEventListener("submit", uploadCustomerDocument);
+$("#close-customer-document-dialog").addEventListener("click", closeCustomerDocumentDialog);
+$("#cancel-customer-document-dialog").addEventListener("click", closeCustomerDocumentDialog);
+$("#service-plan-change-form").addEventListener("submit", saveServicePlanChange);
+$("#close-service-plan-change-dialog").addEventListener("click", closeServicePlanChangeDialog);
+$("#cancel-service-plan-change-dialog").addEventListener("click", closeServicePlanChangeDialog);
 $("#customer-form").addEventListener("submit", saveCustomer);
 $("#close-customer-dialog").addEventListener(
   "click",
@@ -249,7 +340,15 @@ $("#service-postal-code").addEventListener("input", () => {
 $("#service-form").addEventListener("submit", saveService);
 $("#close-service-dialog").addEventListener("click", closeServiceDialog);
 $("#cancel-service-dialog").addEventListener("click", closeServiceDialog);
-$("#services-body").addEventListener("click", (event) => {
+function handleServiceAction(event) {
+  const detailButton = event.target.closest(".view-service-detail");
+  if (detailButton) {
+    const service = state.services?.find((item) => item.id === detailButton.dataset.serviceId);
+    if (service) openServiceDetail(service);
+    return;
+  }
+  const addressButton = event.target.closest(".edit-service-address");
+  if (addressButton) { const service = state.services?.find((item) => item.id === addressButton.dataset.serviceId); if (service) void openAddressDialog(service); return; }
   const button = event.target.closest(".assess-installation");
   const networkButton = event.target.closest(".simulate-network-control");
   const reconciliationButton = event.target.closest(".reconcile-network");
@@ -268,6 +367,7 @@ $("#services-body").addEventListener("click", (event) => {
     ".manage-cancellation"
   );
   const holderButton = event.target.closest(".assign-service-holder");
+  const paymentDayButton = event.target.closest(".edit-service-payment-day");
   if (
     !button &&
     !networkButton &&
@@ -278,7 +378,8 @@ $("#services-body").addEventListener("click", (event) => {
     !extensionButton &&
     !agreementButton &&
     !cancellationButton &&
-    !holderButton
+    !holderButton &&
+    !paymentDayButton
   ) return;
   const service = state.services?.find(
     (item) =>
@@ -293,11 +394,13 @@ $("#services-body").addEventListener("click", (event) => {
         extensionButton ||
         agreementButton ||
         cancellationButton ||
-        holderButton
+        holderButton ||
+        paymentDayButton
       ).dataset.serviceId
   );
   if (!service) return;
   if (holderButton) openHolderAssignmentDialog({ serviceId: service.id });
+  else if (paymentDayButton) openServicePaymentDayDialog(service);
   else if (networkButton) openNetworkSimulationDialog(service);
   else if (reconciliationButton) {
     startNetworkReconciliation(service, reconciliationButton);
@@ -308,11 +411,42 @@ $("#services-body").addEventListener("click", (event) => {
   else if (agreementButton) openPaymentAgreementDialog(service);
   else if (cancellationButton) openCancellationDialog(service);
   else openInstallationDialog(service);
+}
+$("#services-body").addEventListener("click", handleServiceAction);
+$("#service-detail-actions-list").addEventListener("click", handleServiceAction);
+$("#back-to-services").addEventListener("click", () => showView("services"));
+$("#service-detail-content").addEventListener("click", (event) => {
+  const customerLink = event.target.closest(".service-detail-customer");
+  if (!customerLink) return;
+  event.preventDefault();
+  const customer = state.customers?.find((item) => item.id === customerLink.dataset.customerId);
+  if (customer) openCustomerDetail(customer);
+});
+$("#address-search").addEventListener("input", () => void searchAddressCatalog());
+$("#address-search").addEventListener("change", selectAddressCatalog);
+$("#address-cp").addEventListener("input", () => void updateAddressPostalCode());
+$("#address-form").addEventListener("submit", saveAddress);
+$("#close-address-dialog").addEventListener("click", () => $("#address-dialog").close());
+$("#cancel-address-dialog").addEventListener("click", () => $("#address-dialog").close());
+
+$("#suspended-services").addEventListener("click", (event) => {
+  if (!event.target.closest("#toggle-suspended-devices")) return;
+  state.showAllSuspendedDevices = !state.showAllSuspendedDevices;
+  renderOverview();
+});
+$("#network-alerts").addEventListener("click", (event) => {
+  if (!event.target.closest("#toggle-network-alerts")) return;
+  state.showAllNetworkAlerts = !state.showAllNetworkAlerts;
+  renderOverview();
 });
 $("#holder-assignment-service").addEventListener("change", updateHolderAssignmentContext);
+$("#holder-assignment-service-search").addEventListener("input", syncHolderAssignmentService);
 $("#holder-assignment-form").addEventListener("submit", saveHolderAssignment);
 $("#close-holder-assignment-dialog").addEventListener("click", closeHolderAssignmentDialog);
 $("#cancel-holder-assignment-dialog").addEventListener("click", closeHolderAssignmentDialog);
+$("#service-payment-day-form").addEventListener("submit", saveServicePaymentDay);
+$("#close-service-payment-day-dialog").addEventListener("click", closeServicePaymentDayDialog);
+$("#cancel-service-payment-day-dialog").addEventListener("click", closeServicePaymentDayDialog);
 $("#installation-coverage-result").addEventListener(
   "change",
   updateInstallationFields
@@ -490,14 +624,99 @@ $("#dismiss-agreement-dialog").addEventListener(
   closePaymentAgreementDialog
 );
 $("#new-payment-button").addEventListener("click", openPaymentDialog);
-$("#payment-customer-search").addEventListener(
-  "input",
-  syncPaymentCustomerSelection
+$("#download-payment-accounting-report").addEventListener(
+  "click",
+  downloadPaymentAccountingReport
 );
-$("#payment-customer").addEventListener("change", updatePaymentServices);
+$("#theme-toggle").addEventListener("click", () => {
+  const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  localStorage.setItem("aether_theme", nextTheme);
+  applyTheme(nextTheme);
+});
+$("#previous-payment-month").addEventListener("click", () => { state.paymentMonth = new Date(state.paymentMonth.getFullYear(), state.paymentMonth.getMonth() - 1, 1); state.paymentPage = 1; renderPayments(); });
+$("#next-payment-month").addEventListener("click", () => { state.paymentMonth = new Date(state.paymentMonth.getFullYear(), state.paymentMonth.getMonth() + 1, 1); state.paymentPage = 1; renderPayments(); });
+$("#payment-current-month").addEventListener("click", () => { state.paymentMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1); state.paymentPage = 1; renderPayments(); });
+$("#payment-month-label").addEventListener("click", () => { state.paymentMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1); state.paymentPage = 1; renderPayments(); });
+$("#payment-search").addEventListener("input", (event) => { state.paymentSearch = event.target.value; state.paymentPage = 1; renderPayments(); });
+$("#payment-status-filter").addEventListener("change", (event) => { state.paymentFilter = event.target.value; state.paymentPage = 1; renderPayments(); });
+$("#payment-queue-summary").addEventListener("click", (event) => {
+  const filter = event.target.closest(".payment-stage-filter");
+  if (!filter) return;
+  state.paymentFilter = state.paymentFilter === filter.dataset.paymentStage
+    ? "all"
+    : filter.dataset.paymentStage;
+  state.paymentPage = 1;
+  renderPayments();
+});
+$("#previous-payment-page").addEventListener("click", () => {
+  state.paymentPage = Math.max(1, state.paymentPage - 1);
+  renderPayments();
+});
+$("#next-payment-page").addEventListener("click", () => {
+  state.paymentPage += 1;
+  renderPayments();
+});
+$("#payment-lookup-input").addEventListener("input", renderPaymentLookupResults);
+$("#payment-lookup-results").addEventListener("click", (event) => {
+  const option = event.target.closest("[data-payment-result-id]");
+  if (!option) return;
+  selectPaymentLookupResult(option.dataset.paymentResultKind, option.dataset.paymentResultId);
+});
 $("#payment-form").addEventListener("submit", savePayment);
+$("#payment-proof-file").addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  if (file && !acceptPaymentProofFile(file)) {
+    event.target.value = "";
+    updatePaymentProofStatus();
+  }
+});
+const paymentProofDropzone = $("#payment-proof-dropzone");
+["dragenter", "dragover"].forEach((eventName) => {
+  paymentProofDropzone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    paymentProofDropzone.classList.add("drag-active");
+  });
+});
+["dragleave", "drop"].forEach((eventName) => {
+  paymentProofDropzone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    paymentProofDropzone.classList.remove("drag-active");
+  });
+});
+paymentProofDropzone.addEventListener("drop", (event) => {
+  const file = event.dataTransfer?.files?.[0];
+  if (file) acceptPaymentProofFile(file);
+});
+paymentProofDropzone.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  $("#payment-proof-file").click();
+});
+$("#payment-dialog").addEventListener("paste", (event) => {
+  const file = Array.from(event.clipboardData?.files || [])[0]
+    || Array.from(event.clipboardData?.items || [])
+      .find((item) => item.kind === "file")
+      ?.getAsFile();
+  if (!file) return;
+  event.preventDefault();
+  acceptPaymentProofFile(file);
+});
+$("#payment-method").addEventListener("change", updatePaymentReferenceOptions);
 $("#close-payment-dialog").addEventListener("click", closePaymentDialog);
 $("#cancel-payment-dialog").addEventListener("click", closePaymentDialog);
+$("#shared-receipt-fallback-form").addEventListener(
+  "submit",
+  continueSharedReceiptFallback
+);
+$("#close-shared-receipt-fallback-dialog").addEventListener(
+  "click",
+  closeSharedReceiptFallbackDialog
+);
+$("#cancel-shared-receipt-fallback-dialog").addEventListener(
+  "click",
+  closeSharedReceiptFallbackDialog
+);
 $("#preview-daily-operations-button").addEventListener("click", () => {
   void runDailyOperations(true);
 });
@@ -522,6 +741,8 @@ $("#asset-detail-workspace").addEventListener("submit", (event) => {
     assignSelectedAsset(event);
   } else if (event.target.id === "asset-return-form") {
     returnSelectedAsset(event);
+  } else if (event.target.id === "asset-inspection-form") {
+    inspectSelectedAsset(event);
   }
 });
 $("#close-asset-detail-dialog").addEventListener("click", closeAssetDetailDialog);
@@ -542,12 +763,6 @@ $("#payment-review-form").addEventListener(
   "submit",
   verifySelectedPayment
 );
-document.querySelectorAll(".payment-queue-tabs .tab-button").forEach((button) => {
-  button.addEventListener("click", () => {
-    state.paymentFilter = button.dataset.paymentFilter;
-    renderPayments();
-  });
-});
 $("#reject-payment-button").addEventListener("click", () => {
   decideSelectedPayment("reject");
 });
@@ -649,6 +864,10 @@ $("#dismiss-support-ticket-detail-dialog").addEventListener(
   closeSupportTicketDetailDialog
 );
 $("#new-user-button").addEventListener("click", () => openUserDialog());
+$("#import-postal-codes-button").addEventListener("click", openPostalCodesImportDialog);
+$("#postal-codes-form").addEventListener("submit", importPostalCodes);
+$("#close-postal-codes-dialog").addEventListener("click", closePostalCodesImportDialog);
+$("#cancel-postal-codes-dialog").addEventListener("click", closePostalCodesImportDialog);
 $("#user-role").addEventListener("change", (event) => {
   applyUserRolePreset(event.target.value);
 });
@@ -662,7 +881,9 @@ $("#users-body").addEventListener("click", (event) => {
   const resetButton = event.target.closest(".reset-user-password");
   const revokeSessionsButton = event.target.closest(".revoke-user-sessions");
   const deactivateButton = event.target.closest(".deactivate-user");
-  const button = editButton || resetButton || revokeSessionsButton || deactivateButton;
+  const reactivateButton = event.target.closest(".reactivate-user");
+  const deleteButton = event.target.closest(".delete-user");
+  const button = editButton || resetButton || revokeSessionsButton || deactivateButton || reactivateButton || deleteButton;
   if (!button) return;
   const user = state.operatorUsers?.find(
     (item) => item.id === button.dataset.userId
@@ -671,7 +892,9 @@ $("#users-body").addEventListener("click", (event) => {
   if (editButton) openUserDialog(user);
   else if (resetButton) void resetSelectedUserPassword(user);
   else if (revokeSessionsButton) void revokeOtherUserSessions(user);
-  else void deactivateSelectedUser(user);
+  else if (deactivateButton) void deactivateSelectedUser(user);
+  else if (reactivateButton) void reactivateSelectedUser(user);
+  else void deleteSelectedUser(user);
 });
 $("#user-form").addEventListener("submit", saveUser);
 $("#close-user-dialog").addEventListener("click", closeUserDialog);

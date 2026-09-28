@@ -214,7 +214,9 @@ function showView(name) {
   const titles = {
     overview: "Resumen",
     customers: "Clientes",
+    "customer-detail": "Detalle del cliente",
     services: "Servicios",
+    "service-detail": "Detalle del servicio",
     payments: "Pagos",
     operations: "Operación diaria",
     assets: "Inventario",

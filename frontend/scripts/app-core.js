@@ -22,6 +22,9 @@ const state = {
   trafficHistory: null,
   suspensionCandidates: [],
   trafficRange: "1h",
+  customerSort: "name-asc",
+  showAllSuspendedDevices: false,
+  showAllNetworkAlerts: false,
   bootstrapStatus: {
     configured: false,
     completed: false,
@@ -31,9 +34,17 @@ const state = {
   selectedAssetId: null,
   selectedAssetAssignments: [],
   selectedAssetNetworkHistory: [],
+  selectedAssetInspections: [],
+  selectedAssetInspectionServiceId: null,
   editingCustomerId: null,
+  selectedCustomerId: null,
   selectedPaymentId: null,
+  pendingPaymentProofFile: null,
   paymentFilter: "all",
+  paymentMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  paymentSearch: "",
+  paymentPage: 1,
+  paymentPageSize: 15,
   selectedPlanId: null,
   selectedServiceId: null,
   selectedInstallation: null,
@@ -48,6 +59,7 @@ const state = {
   selectedAgreementBalance: null,
   selectedCancellation: null,
   selectedRecovery: null,
+  selectedRecoveryInventory: [],
   selectedIncidentId: null,
   selectedSupportTicketId: null,
   selectedOperatorUserId: null,
@@ -73,6 +85,7 @@ const USER_PERMISSION_GROUPS = [
     permissions: [
       ["services.read", "Consultar servicios"],
       ["services.write", "Crear y editar servicios"],
+      ["services.payment_day.write", "Corregir día de pago"],
       ["services.cancel", "Suspender o cancelar servicios"],
     ],
   },
@@ -205,25 +218,35 @@ const USER_PERMISSION_LABELS = Object.fromEntries(
 );
 
 const $ = (selector) => document.querySelector(selector);
+
+function applyTheme(theme = localStorage.getItem("aether_theme") || "dark") {
+  const selectedTheme = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = selectedTheme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", selectedTheme === "light" ? "#f4f7fb" : "#071326");
+  const toggle = $("#theme-toggle");
+  if (toggle) {
+    toggle.setAttribute("aria-label", selectedTheme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro");
+    $("#theme-toggle-label").textContent = selectedTheme === "dark" ? "Claro" : "Oscuro";
+    toggle.querySelector("span").textContent = selectedTheme === "dark" ? "☀" : "☾";
+  }
+}
+
+applyTheme();
+const interfaceIcon = (name, className = "") => {
+  const paths = {
+    phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.64a2 2 0 0 1-.45 2.11L8.01 9.74a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.86.29 1.74.5 2.64.62A2 2 0 0 1 22 16.92Z"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+    pin: '<path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+    wifi: '<path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    router: '<rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 13h.01M11 13h.01M16 9l2-3M18 9l-2-3"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  };
+  return `<svg class="${className}" aria-hidden="true" viewBox="0 0 24 24">${paths[name] || ""}</svg>`;
+};
 const loginView = $("#login-view");
 const appView = $("#app-view");
 const notice = $("#notice");
-
-function getQueryParam(name) {
-  return new URLSearchParams(window.location.search).get(name) || "";
-}
-
-function bootstrapLoginFromUrl() {
-  const username = getQueryParam("username").trim();
-  const password = getQueryParam("password");
-  if (!username || !password) {
-    return false;
-  }
-  $("#username").value = username;
-  $("#password").value = password;
-  void handleLogin();
-  return true;
-}
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -479,10 +502,10 @@ function renderUser() {
       : '<p class="empty-state">Esta cuenta aún no tiene capacidades asignadas.</p>';
   }
   const canWriteCustomers = hasCapability("customers.write");
-  const canReadBilling = hasCapability("billing.read");
+  const canReadCustomers = hasCapability("customers.read");
   $("#new-customer-button").hidden = !canWriteCustomers;
   document.querySelectorAll(".customer-action-column").forEach((column) => {
-    column.hidden = !(canWriteCustomers || canReadBilling);
+    column.hidden = !canReadCustomers;
   });
   const canWriteServices = hasCapability("services.write");
   const hasServiceReferences = Boolean(
@@ -500,6 +523,9 @@ function renderUser() {
     ? ""
     : "Para registrar servicios se necesita al menos un cliente y un plan activo visibles para esta cuenta.";
   const canWritePayments = hasCapability("billing.write");
+  $("#download-payment-accounting-report").hidden = !hasCapability(
+    "billing.read"
+  );
   const hasPaymentReferences = Boolean(state.customers?.length);
   $("#new-payment-button").hidden = !(
     canWritePayments && hasPaymentReferences
@@ -585,7 +611,9 @@ function renderUser() {
         hasCapability("services.cancel") ||
         hasCapability("assets.read") ||
         hasCapability("assets.write") ||
-        hasCapability("services.write")
+        hasCapability("services.write") ||
+        hasCapability("services.payment_day.write") ||
+        hasCapability("services.read")
       );
     }
   );
@@ -686,10 +714,17 @@ function renderOverview() {
       status: "offline",
     })),
   ];
+  const visibleAlerts = state.showAllNetworkAlerts ? alerts : alerts.slice(0, 5);
+  const alertsToggle = alerts.length > 5
+    ? `<button id="toggle-network-alerts" class="text-button overview-expand-button" type="button">${state.showAllNetworkAlerts ? "Mostrar menos" : `Ver las ${alerts.length} antenas sin conexión`}</button>`
+    : "";
   $("#network-alerts").innerHTML = alerts.length
-    ? alerts.slice(0, 5).map((item) => `<div class="ap-health-row ${escapeText(item.status)}"><div><strong>${escapeText(item.title)}</strong><span>${escapeText(item.detail)}</span></div><b>Revisar</b></div>`).join("")
+    ? `${visibleAlerts.map((item) => `<div class="ap-health-row ${escapeText(item.status)}"><div><strong>${escapeText(item.title)}</strong><span>${escapeText(item.detail)}</span></div><b>Revisar</b></div>`).join("")}${alertsToggle}`
     : '<p class="empty-state success-state">No hay antenas sin conexión a UISP.</p>';
-  const suspendedDeviceRows = suspendedDevices.slice(0, 5).map((device) => `
+  const visibleSuspendedDevices = state.showAllSuspendedDevices
+    ? suspendedDevices
+    : suspendedDevices.slice(0, 5);
+  const suspendedDeviceRows = visibleSuspendedDevices.map((device) => `
     <div class="ap-health-row suspended">
       <div>
         <strong>${escapeText(device.display_name)}</strong>
@@ -708,8 +743,11 @@ function renderOverview() {
         </div>
         <b>Servicio suspendido</b>
       </div>`).join("");
+  const suspendedDevicesToggle = suspendedDevices.length > 5
+    ? `<button id="toggle-suspended-devices" class="text-button overview-expand-button" type="button">${state.showAllSuspendedDevices ? "Mostrar menos" : `Ver los ${suspendedDevices.length} equipos bloqueados`}</button>`
+    : "";
   $("#suspended-services").innerHTML = suspendedDeviceRows || suspendedServiceRows
-    ? `${suspendedDeviceRows}${suspendedServiceRows}`
+    ? `${suspendedDeviceRows}${suspendedDevicesToggle}${suspendedServiceRows}`
     : '<p class="empty-state success-state">No hay bloqueos en MikroTik ni servicios suspendidos.</p>';
   const cutCandidates = state.suspensionCandidates || [];
   $("#suspension-candidates").innerHTML = cutCandidates.length

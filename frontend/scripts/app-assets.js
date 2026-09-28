@@ -166,6 +166,12 @@ function renderAssetWorkspace(asset) {
   const activeServices = (state.services || []).filter(
     (service) => service.status === "active"
   );
+  const recoveryServiceId = state.selectedAssetInspectionServiceId;
+  const canInspect = (
+    hasCapability("assets.write") &&
+    recoveryServiceId &&
+    ["quarantine", "needs_repair", "defective"].includes(asset.status)
+  );
   $("#asset-detail-title").textContent = asset.internal_code;
   $("#asset-detail-summary").innerHTML = `
     <div>
@@ -193,6 +199,10 @@ function renderAssetWorkspace(asset) {
       <strong>${escapeText(asset.device_name || asset.description)}</strong>
     </div>
     <div>
+      <span>Modelo</span>
+      <strong>${escapeText(asset.model || "Sin modelo sincronizado")}</strong>
+    </div>
+    <div>
       <span>IP de administración</span>
       <strong>${escapeText(asset.management_ip || "Sin IP")}</strong>
     </div>
@@ -214,6 +224,28 @@ function renderAssetWorkspace(asset) {
         `).join("") : '<p class="empty-state">Aún no hay cambios de IP o nombre registrados.</p>'}
       </div>
     </section>
+    ${canInspect ? `
+      <form id="asset-inspection-form" class="cancellation-stage-card" data-service-id="${recoveryServiceId}">
+        <div class="stage-status"><h3>Inspección de cuarentena</h3><span class="badge pending">Requerida</span></div>
+        <p>Al aprobarla, el activo quedará listo para reutilizar. Todas las pruebas deben aprobarse y debe confirmarse la limpieza.</p>
+        <div class="form-grid">
+          <label>Técnico<input id="inspection-technician" value="${escapeText(state.user.display_name)}" minlength="2" maxlength="150" required></label>
+          <label>Modelo observado<input id="inspection-model" value="${escapeText(asset.model || "")}" maxlength="150"></label>
+          <label class="checkbox-field full-row"><input id="inspection-cleaning" type="checkbox" required> Se realizó limpieza del equipo</label>
+          <label class="full-row">Notas de limpieza<textarea id="inspection-cleaning-notes" rows="2" maxlength="2000"></textarea></label>
+          <label>Prueba realizada<input id="inspection-test-name" value="Conexión y encendido" minlength="2" maxlength="150" required></label>
+          <label>Resultado de prueba<select id="inspection-test-passed"><option value="true">Aprobada</option><option value="false">Fallida</option></select></label>
+          <label class="full-row">Notas de prueba<textarea id="inspection-test-notes" rows="2" maxlength="1000"></textarea></label>
+          <label>Dictamen<select id="inspection-result" required><option value="ready_for_reuse">Listo para reutilizar</option><option value="needs_repair">Requiere reparación</option><option value="defective">Defectuoso</option><option value="discarded">Descartado</option></select></label>
+          <label class="full-row">Motivo del dictamen<textarea id="inspection-reason" rows="2" minlength="3" maxlength="2000" required></textarea></label>
+          <label class="full-row">Notas adicionales<textarea id="inspection-notes" rows="2" maxlength="1000"></textarea></label>
+        </div>
+        <div class="dialog-actions"><button class="primary-button" type="submit">Guardar inspección</button></div>
+      </form>
+    ` : ""}
+    ${state.selectedAssetInspections.length ? `
+      <section class="cancellation-stage-card"><div class="stage-status"><h3>Historial de inspecciones</h3></div><div class="extension-history">${state.selectedAssetInspections.map((inspection) => `<article class="history-item"><div><strong>${escapeText(assetStatusLabel(inspection.result))}</strong><span>${escapeText(inspection.technician)}</span></div><small>${formatDateTime(inspection.inspected_at)} · ${escapeText(inspection.decision_reason)}</small></article>`).join("")}</div></section>
+    ` : ""}
     ${hasCapability("assets.write") && !activeAssignment && ["available", "ready_for_reuse"].includes(asset.status) ? `
       <form id="asset-assign-form" class="cancellation-stage-card">
         <h3>Asignar a servicio activo</h3>
@@ -311,6 +343,8 @@ async function openAssetDetailDialog(asset) {
   state.selectedAssetId = asset.id;
   state.selectedAssetAssignments = [];
   state.selectedAssetNetworkHistory = [];
+  state.selectedAssetInspections = [];
+  state.selectedAssetInspectionServiceId = null;
   $("#asset-detail-error").textContent = "";
   $("#asset-detail-summary").innerHTML = "";
   $("#asset-detail-workspace").innerHTML = '<p class="empty-state">Cargando historial del activo...</p>';
@@ -320,6 +354,16 @@ async function openAssetDetailDialog(asset) {
       api(`/api/v1/assets/${asset.id}/assignments`),
       api(`/api/v1/assets/${asset.id}/network-history`),
     ]);
+    const recoveryAssignment = state.selectedAssetAssignments
+      .slice()
+      .reverse()
+      .find((item) => item.returned_at !== null);
+    if (recoveryAssignment) {
+      state.selectedAssetInspectionServiceId = recoveryAssignment.service_id;
+      state.selectedAssetInspections = await loadOptionalRecord(
+        `/api/v1/services/${recoveryAssignment.service_id}/equipment-recovery/inspections`
+      ) || [];
+    }
     renderAssetWorkspace(asset);
   } catch (error) {
     $("#asset-detail-error").textContent = error.message;
@@ -331,6 +375,45 @@ function closeAssetDetailDialog() {
   state.selectedAssetId = null;
   state.selectedAssetAssignments = [];
   state.selectedAssetNetworkHistory = [];
+  state.selectedAssetInspections = [];
+  state.selectedAssetInspectionServiceId = null;
+}
+
+async function inspectSelectedAsset(event) {
+  event.preventDefault();
+  const asset = selectedAsset();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  if (!asset) return;
+  button.disabled = true;
+  $("#asset-detail-error").textContent = "";
+  try {
+    await api(`/api/v1/services/${form.dataset.serviceId}/equipment-recovery/inspections`, {
+      method: "POST",
+      body: JSON.stringify({
+        equipment_name: asset.internal_code,
+        technician: $("#inspection-technician").value.trim(),
+        model: $("#inspection-model").value.trim() || null,
+        cleaning_performed: $("#inspection-cleaning").checked,
+        cleaning_notes: $("#inspection-cleaning-notes").value.trim() || null,
+        tests: [{ name: $("#inspection-test-name").value.trim(), passed: $("#inspection-test-passed").value === "true", notes: $("#inspection-test-notes").value.trim() || null }],
+        repairs_performed: [], evidence_references: [],
+        result: $("#inspection-result").value,
+        decision_reason: $("#inspection-reason").value.trim(),
+        notes: $("#inspection-notes").value.trim() || null,
+      }),
+    });
+    state.assets = await loadResource("/api/v1/assets");
+    const updated = selectedAsset();
+    state.selectedAssetInspections = await api(`/api/v1/services/${form.dataset.serviceId}/equipment-recovery/inspections`);
+    renderAssets();
+    if (updated) renderAssetWorkspace(updated);
+    setNotice(`Inspección guardada para ${asset.internal_code}.`);
+  } catch (error) {
+    $("#asset-detail-error").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function assignSelectedAsset(event) {

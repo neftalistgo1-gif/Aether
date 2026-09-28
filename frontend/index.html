@@ -13,8 +13,8 @@
       content="Interfaz operativa de Aether para Servicios AMR."
     >
     <link rel="icon" href="/app/assets/aether-mark.png">
-    <link rel="manifest" href="/app/manifest.webmanifest">
-    <link rel="stylesheet" href="/app/styles.css?v=20260811-collapsible-ap-1">
+    <link rel="manifest" href="/app/manifest.webmanifest?v=20260927-share-fallback-1">
+    <link rel="stylesheet" href="/app/styles.css?v=20260927-share-fallback-1">
   </head>
   <body>
     <div id="login-view" class="login-shell">
@@ -120,37 +120,37 @@
         </div>
         <nav aria-label="Navegación principal">
           <button class="nav-item active" data-view="overview">
-            <span>01</span> Resumen
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5m5 14V9m5 10V3m5 16v-7"/></svg></span> Resumen
           </button>
           <button class="nav-item" data-view="customers">
-            <span>02</span> Clientes
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm13 9v-1a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Clientes
           </button>
           <button class="nav-item" data-view="services">
-            <span>03</span> Servicios
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg></span> Servicios
           </button>
           <button class="nav-item" data-view="payments">
-            <span>04</span> Pagos
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h2"/></svg></span> Pagos
           </button>
           <button class="nav-item" data-view="operations">
-            <span>05</span> Operación diaria
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4m8-4v4M7 13l3 3 6-6"/></svg></span> Operación diaria
           </button>
           <button class="nav-item" data-view="assets">
-            <span>06</span> Inventario
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m21 8-9-5-9 5 9 5 9-5ZM3 8v8l9 5 9-5V8M12 13v8"/></svg></span> Inventario
           </button>
           <button class="nav-item" data-view="plans">
-            <span>07</span> Planes
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.59 13.41 11 23l-8.59-8.59A2 2 0 0 1 2 13V4a2 2 0 0 1 2-2h9a2 2 0 0 1 1.41.59l6.18 6.18a2 2 0 0 1 0 2.82ZM7 7h.01"/></svg></span> Planes
           </button>
           <button class="nav-item" data-view="incidents">
-            <span>08</span> Incidencias
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10.3 2.86 1.82 17a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 2.86a2 2 0 0 0-3.4 0ZM12 9v4m0 4h.01"/></svg></span> Incidencias
           </button>
           <button class="nav-item" data-view="support">
-            <span>09</span> Soporte
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5a8.5 8.5 0 0 1 4.7-7.6A8.38 8.38 0 0 1 12.5 3h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg></span> Soporte
           </button>
           <button class="nav-item" data-view="network">
-            <span>10</span> Red UISP
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51 8.59 10.49"/></svg></span> Red UISP
           </button>
           <button class="nav-item" data-view="users">
-            <span>11</span> Usuarios
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/></svg></span> Usuarios
           </button>
         </nav>
         <div class="sidebar-foot">
@@ -172,6 +172,9 @@
             <h1 id="page-title">Resumen</h1>
           </div>
           <div class="user-menu">
+            <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar a tema claro" title="Cambiar tema">
+              <span aria-hidden="true">☀</span><span id="theme-toggle-label">Tema</span>
+            </button>
             <div class="user-avatar" id="user-avatar">A</div>
             <div>
               <strong id="user-name">Administrador</strong>
@@ -270,8 +273,21 @@
                   <input
                     id="customer-search"
                     type="search"
-                    placeholder="Nombre o teléfono"
+                    placeholder="Nombre, teléfono, número o AMR"
                   >
+                </label>
+                <label class="customer-sort-control">
+                  <span>Ordenar:</span>
+                  <select id="customer-sort">
+                    <option value="name-asc">Nombre: A–Z</option>
+                    <option value="name-desc">Nombre: Z–A</option>
+                    <option value="phone-asc">Teléfono: 0–9</option>
+                    <option value="phone-desc">Teléfono: 9–0</option>
+                    <option value="registered-desc">Registro: más reciente</option>
+                    <option value="registered-asc">Registro: más antiguo</option>
+                    <option value="services-desc">Servicios: más a menos</option>
+                    <option value="services-asc">Servicios: menos a más</option>
+                  </select>
                 </label>
                 <button
                   id="new-customer-button"
@@ -290,6 +306,7 @@
                     <th>Teléfono</th>
                     <th>Correo</th>
                     <th>Servicio(s)</th>
+                    <th>Fecha de pago</th>
                     <th>Registro</th>
                     <th class="customer-action-column" hidden>Acciones</th>
                   </tr>
@@ -299,6 +316,27 @@
             </div>
             <p id="customers-empty" class="empty-state" hidden></p>
           </div>
+        </section>
+
+        <section id="customer-detail-panel" class="view-panel" hidden>
+          <div class="customer-detail-header">
+            <button id="back-to-customers" class="text-button icon-text-button" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M19 12H5m6 6-6-6 6-6"/></svg> Clientes</button>
+            <div class="customer-detail-actions">
+              <details id="customer-detail-actions-menu" class="service-actions-menu">
+                <summary>Acciones</summary>
+                <div id="customer-detail-actions-list" class="service-actions-list" aria-label="Acciones del cliente"></div>
+              </details>
+            </div>
+          </div>
+          <div id="customer-detail-content"></div>
+        </section>
+
+        <section id="service-detail-panel" class="view-panel" hidden>
+          <div class="customer-detail-header">
+            <button id="back-to-services" class="text-button icon-text-button" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M19 12H5m6 6-6-6 6-6"/></svg> Servicios</button>
+            <div class="customer-detail-actions"><details id="service-detail-actions-menu" class="service-actions-menu"><summary>Acciones</summary><div id="service-detail-actions-list" class="service-actions-list" aria-label="Acciones del servicio"></div></details></div>
+          </div>
+          <div id="service-detail-content"></div>
         </section>
 
         <section id="services-panel" class="view-panel" hidden>
@@ -345,45 +383,43 @@
           </div>
         </section>
 
-        <section id="payments-panel" class="view-panel" hidden>
-          <div class="panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">INGRESOS</p>
-                <h2>Pagos recientes</h2>
+        <section id="payments-panel" class="view-panel payments-workspace" hidden>
+          <div class="payments-header">
+            <div><p class="eyebrow">INGRESOS</p><h2>Pagos</h2><p>Control mensual de cobros</p></div>
+            <div class="payments-header-actions">
+              <button id="download-payment-accounting-report" class="secondary-button" type="button" hidden>⇩ Descargar archivo contable</button>
+              <button id="new-payment-button" class="secondary-button" type="button" hidden>+ Registrar pago</button>
+            </div>
+          </div>
+          <div class="payment-month-toolbar" aria-label="Navegación mensual">
+            <button id="previous-payment-month" class="month-arrow" type="button" aria-label="Mes anterior">‹</button>
+            <button id="payment-month-label" class="month-label" type="button" title="Volver al mes actual"></button>
+            <button id="next-payment-month" class="month-arrow" type="button" aria-label="Mes siguiente">›</button>
+            <button id="payment-current-month" class="history-button" type="button">Hoy</button>
+          </div>
+          <div class="payment-queue-summary" id="payment-queue-summary"></div>
+          <div id="payment-month-calendar" class="payment-month-calendar" aria-label="Resumen diario del mes"></div>
+          <p id="payment-write-note" class="inline-note" hidden></p>
+          <div class="payments-content-grid">
+            <article class="panel payments-ledger">
+              <div class="payments-ledger-heading">
+                <div><h3 id="payments-ledger-title">Cobros del mes</h3><span id="payments-ledger-count"></span></div>
+                <div class="payment-table-controls">
+                  <label class="payment-search"><span>Buscar</span><input id="payment-search" type="search" placeholder="Cliente, AMR o referencia"></label>
+                  <select id="payment-status-filter" aria-label="Filtrar por etapa"><option value="all">Todas las etapas</option><option value="pending_review">Por revisar</option><option value="awaiting_application">Por aplicar</option><option value="applied">Aplicados</option><option value="not_processed">No procesados</option></select>
+                </div>
               </div>
-              <button
-                id="new-payment-button"
-                class="secondary-button"
-                type="button"
-                hidden
-              >Registrar pago</button>
-            </div>
-            <div class="payment-queue-summary" id="payment-queue-summary"></div>
-            <div class="payment-queue-tabs" role="tablist" aria-label="Bandeja de comprobantes">
-              <button class="tab-button active" type="button" data-payment-filter="all">Todos</button>
-              <button class="tab-button" type="button" data-payment-filter="pending">Pendientes</button>
-              <button class="tab-button" type="button" data-payment-filter="verified">Verificados</button>
-              <button class="tab-button" type="button" data-payment-filter="rejected">Rechazados</button>
-              <button class="tab-button" type="button" data-payment-filter="cancelled">Cancelados</button>
-            </div>
-            <p id="payment-write-note" class="inline-note" hidden></p>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Referencia</th>
-                    <th>Monto</th>
-                    <th>Medio</th>
-                    <th>Fecha</th>
-                    <th>Estado</th>
-                    <th class="payment-action-column" hidden>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="payments-body"></tbody>
-              </table>
-            </div>
-            <p id="payments-empty" class="empty-state" hidden></p>
+              <div class="table-wrap"><table><thead><tr><th>Cliente / referencia</th><th>AMR</th><th>Fecha</th><th>Importe</th><th>Etapa</th><th class="payment-action-column" hidden>Acción</th></tr></thead><tbody id="payments-body"></tbody></table></div>
+              <p id="payments-empty" class="empty-state" hidden></p>
+              <div id="payment-pagination" class="payment-pagination" hidden>
+                <span id="payment-page-summary"></span>
+                <div>
+                  <button id="previous-payment-page" class="row-action" type="button">‹ Anterior</button>
+                  <button id="next-payment-page" class="row-action" type="button">Siguiente ›</button>
+                </div>
+              </div>
+            </article>
+            <aside class="panel payment-upcoming"><div class="panel-heading"><div><p class="eyebrow">AGENDA</p><h3>Próximos vencimientos</h3></div></div><div id="payment-upcoming-list"></div></aside>
           </div>
         </section>
 
@@ -632,7 +668,7 @@
                 <p class="eyebrow">ADMINISTRACIÓN</p>
                 <h2>Usuarios del sistema</h2>
               </div>
-              <button id="new-user-button" class="secondary-button" type="button" hidden>Nuevo usuario</button>
+              <div class="table-actions"><button id="import-postal-codes-button" class="secondary-button" type="button" hidden>Importar códigos postales</button><button id="new-user-button" class="secondary-button" type="button" hidden>Nuevo usuario</button></div>
             </div>
             <p id="users-note" class="inline-note" hidden></p>
             <div class="table-wrap">
@@ -984,16 +1020,9 @@
           >×</button>
         </div>
         <div class="form-grid">
-          <label class="full-row">
-            Nombre completo
-            <input
-              id="customer-name"
-              name="full_name"
-              minlength="2"
-              maxlength="150"
-              required
-            >
-          </label>
+          <label class="full-row">Nombre(s)<input id="customer-given-names" maxlength="80" required></label>
+          <label>Apellido paterno<input id="customer-paternal-surname" maxlength="60"></label>
+          <label>Apellido materno<input id="customer-maternal-surname" maxlength="60"></label>
           <label>
             Teléfonos
             <textarea
@@ -1044,6 +1073,15 @@
         </div>
       </form>
     </dialog>
+    <dialog id="postal-codes-dialog" aria-labelledby="postal-codes-dialog-title">
+      <form id="postal-codes-form">
+        <div class="dialog-heading"><div><p class="eyebrow">COBERTURA</p><h2 id="postal-codes-dialog-title">Importar códigos postales</h2></div><button id="close-postal-codes-dialog" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
+        <p class="form-help">Carga el archivo .xls descargado de Correos de México. Se agregarán ciudades nuevas sin borrar el catálogo actual.</p>
+        <label>Archivo de códigos postales<input id="postal-codes-file" type="file" accept=".xls,text/html" required></label>
+        <p id="postal-codes-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions"><button id="cancel-postal-codes-dialog" class="text-button" type="button">Cancelar</button><button class="primary-button" type="submit">Importar catálogo</button></div>
+      </form>
+    </dialog>
 
     <dialog id="holder-assignment-dialog" aria-labelledby="holder-assignment-title">
       <form id="holder-assignment-form">
@@ -1055,7 +1093,12 @@
           <button id="close-holder-assignment-dialog" class="icon-button" type="button" aria-label="Cerrar">×</button>
         </div>
         <div class="form-grid">
-          <label class="full-row">Servicio existente<select id="holder-assignment-service" required></select></label>
+          <label class="full-row">
+            Buscar servicio existente
+            <input id="holder-assignment-service-search" list="holder-assignment-service-options" placeholder="Escribe AMR o dirección" autocomplete="off">
+            <datalist id="holder-assignment-service-options"></datalist>
+            <select id="holder-assignment-service" required hidden></select>
+          </label>
           <p id="holder-assignment-current" class="inline-note full-row"></p>
           <label class="full-row">Asignar a cliente<select id="holder-assignment-customer" required></select></label>
           <label class="full-row">Motivo<textarea id="holder-assignment-reason" rows="3" minlength="3" maxlength="1000" required></textarea></label>
@@ -1064,6 +1107,28 @@
         <div class="dialog-actions">
           <button id="cancel-holder-assignment-dialog" class="text-button" type="button">Cancelar</button>
           <button class="primary-button" type="submit">Guardar asignación</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="service-payment-day-dialog" aria-labelledby="service-payment-day-title">
+      <form id="service-payment-day-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">CORRECCIÓN DE COBRANZA</p>
+            <h2 id="service-payment-day-title">Corregir día de pago</h2>
+          </div>
+          <button id="close-service-payment-day-dialog" class="icon-button" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <p id="service-payment-day-summary" class="form-help"></p>
+        <div class="form-grid">
+          <label class="full-row">Nuevo día de pago<select id="service-payment-day-value" required></select></label>
+          <label class="full-row">Motivo de la corrección<textarea id="service-payment-day-reason" rows="3" minlength="3" maxlength="500" required placeholder="Ej. Fecha de pago confirmada con el cliente"></textarea></label>
+        </div>
+        <p id="service-payment-day-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="cancel-service-payment-day-dialog" class="text-button" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Guardar día de pago</button>
         </div>
       </form>
     </dialog>
@@ -1197,7 +1262,7 @@
       </form>
     </dialog>
 
-    <dialog id="payment-dialog" aria-labelledby="payment-dialog-title">
+    <dialog id="payment-dialog" class="payment-dialog" aria-labelledby="payment-dialog-title">
       <form id="payment-form">
         <div class="dialog-heading">
           <div>
@@ -1211,23 +1276,27 @@
             aria-label="Cerrar"
           >×</button>
         </div>
-        <div class="form-grid">
-          <label>
-            Cliente
-            <input
-              id="payment-customer-search"
-              list="payment-customer-options"
-              placeholder="AMR###, nombre o teléfono"
-              autocomplete="off"
-              required
-            >
-            <datalist id="payment-customer-options"></datalist>
-            <select id="payment-customer" required hidden></select>
+        <div class="payment-lookup">
+          <label for="payment-lookup-input">
+            Buscar servicio o cliente
+            <input id="payment-lookup-input" placeholder="Escribe AMR, nombre, teléfono o IP" autocomplete="off" inputmode="search">
           </label>
-          <label>
-            Servicio relacionado
-            <select id="payment-service"></select>
-          </label>
+          <div id="payment-lookup-results" class="payment-lookup-results" role="listbox" aria-live="polite">
+            Escribe para buscar un servicio o cliente.
+          </div>
+        </div>
+        <section class="payment-selection-summary" aria-label="Información seleccionada">
+          <h3>Información seleccionada</h3>
+          <div class="payment-selection-grid">
+            <label>Cliente<input id="payment-selected-customer" value="Pendiente" readonly></label>
+            <label>Teléfono<input id="payment-selected-phone" value="Pendiente" readonly></label>
+            <label>Servicio<input id="payment-selected-service" value="Pendiente" readonly></label>
+            <label>Dirección<input id="payment-selected-address" value="Pendiente" readonly></label>
+          </div>
+          <select id="payment-customer" required hidden></select>
+          <select id="payment-service" hidden></select>
+        </section>
+        <div class="form-grid payment-entry-grid">
           <label>
             Monto declarado
             <input
@@ -1254,30 +1323,28 @@
             <input id="payment-declared-at" type="datetime-local" required>
           </label>
           <label>
-            Referencia bancaria o interna
-            <input id="payment-reference" maxlength="150">
+            Cuenta receptora o referencia interna
+            <select id="payment-reference" required></select>
           </label>
-          <label>
-            Titular de la cuenta de origen
-            <input id="payment-origin-holder" maxlength="150">
-          </label>
-          <label>
-            Referencia privada del comprobante
-            <input
-              id="payment-proof-reference"
-              maxlength="500"
-              placeholder="Ej. comprobantes/folio-123"
+          <div class="payment-proof-field full-row">
+            <span class="payment-proof-label">Archivo del comprobante</span>
+            <label
+              id="payment-proof-dropzone"
+              class="payment-proof-dropzone"
+              for="payment-proof-file"
+              tabindex="0"
             >
-          </label>
-          <label>
-            Archivo del comprobante
-            <input
-              id="payment-proof-file"
-              type="file"
-              accept="image/*,.pdf"
-              capture="environment"
-            >
-          </label>
+              <input
+                id="payment-proof-file"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf"
+              >
+              <span class="payment-proof-drop-icon" aria-hidden="true">⇧</span>
+              <strong>Arrastra y suelta el comprobante aquí</strong>
+              <span>Haz clic para buscarlo o pega una imagen con Ctrl+V</span>
+              <small id="payment-proof-status" class="field-help">Imagen o PDF de hasta 10 MB.</small>
+            </label>
+          </div>
           <label class="full-row">
             Notas
             <textarea
@@ -1301,6 +1368,32 @@
           <button class="primary-button" type="submit">
             Registrar como pendiente
           </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="shared-receipt-fallback-dialog" aria-labelledby="shared-receipt-fallback-title">
+      <form id="shared-receipt-fallback-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">COMPROBANTE DE PAGO</p>
+            <h2 id="shared-receipt-fallback-title">Seleccionar comprobante</h2>
+          </div>
+          <button id="close-shared-receipt-fallback-dialog" class="icon-button" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <div class="share-receipt-fallback-message">
+          <strong>WhatsApp abrió Aether, pero Android no entregó el archivo.</strong>
+          <span>Selecciona el mismo comprobante desde Galería o Archivos para continuar sin empezar de nuevo.</span>
+        </div>
+        <label class="share-receipt-picker">
+          Imagen o PDF del comprobante
+          <input id="shared-receipt-fallback-file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf" required>
+          <small class="field-help">JPG, PNG, WebP o PDF de hasta 10 MB.</small>
+        </label>
+        <p id="shared-receipt-fallback-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="cancel-shared-receipt-fallback-dialog" class="text-button" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Continuar con el pago</button>
         </div>
       </form>
     </dialog>
@@ -1571,6 +1664,10 @@
               required
             >
           </label>
+          <label id="installation-create-charge-field" class="checkbox-field full-row">
+            <input id="installation-create-charge" type="checkbox">
+            Agregar este costo como cargo al estado de cuenta del cliente
+          </label>
           <label
             id="installation-special-equipment-field"
             class="full-row"
@@ -1593,8 +1690,8 @@
           </label>
         </div>
         <p class="form-help">
-          Una cobertura viable se agenda. Si existe costo, Aether genera un
-          cargo que deberá liquidarse antes de completar la instalación.
+          El costo puede ajustarse por promociones. Agregarlo al estado de
+          cuenta es opcional y requiere seleccionar la casilla.
         </p>
         <p id="installation-form-error" class="form-error" role="alert"></p>
         <div class="dialog-actions">
@@ -2505,13 +2602,17 @@
         </div>
       </form>
     </dialog>
+    <dialog id="address-dialog"><form id="address-form"><div class="dialog-heading"><div><p class="eyebrow">SERVICIO</p><h2>Actualizar domicilio</h2></div><button id="close-address-dialog" class="icon-button" type="button">×</button></div><div class="form-grid"><label class="full-row">Fraccionamiento o código postal<input id="address-search" list="address-options" placeholder="Escribe colonia o C.P."><datalist id="address-options"></datalist></label><label>Código postal<input id="address-cp" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}" minlength="5" maxlength="5" placeholder="5 dígitos" required><small id="address-cp-help" class="field-help">Puedes escribir o corregir el código postal.</small></label><label>Ciudad<input id="address-city" readonly></label><label>Estado<input id="address-state" readonly></label><label>País<input id="address-country" value="México" readonly></label><label>Calle<input id="address-street" required></label><label>Número exterior<input id="address-exterior" required></label><label>Número interior (opcional)<input id="address-interior"></label><label class="full-row">Motivo<textarea id="address-reason" minlength="3" required>Corrección de domicilio solicitada</textarea></label></div><p id="address-error" class="form-error"></p><div class="dialog-actions"><button id="cancel-address-dialog" class="text-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar domicilio</button></div></form></dialog>
+    <dialog id="contract-generation-dialog" aria-labelledby="contract-generation-title"><form id="contract-generation-form"><div class="dialog-heading"><div><p class="eyebrow">CONTRATOS</p><h2 id="contract-generation-title">Generar contrato</h2></div><button id="close-contract-generation-dialog" class="icon-button" type="button" aria-label="Cerrar">×</button></div><p id="contract-generation-summary" class="form-help"></p><label>Servicio<select id="contract-generation-service"></select></label><section id="contract-generation-readiness" class="extension-section" aria-live="polite"></section><p class="form-help">El pagaré será por $3,000.00 y utilizará la misma fecha, nombre y domicilio del contrato.</p><p id="contract-generation-error" class="form-error"></p><div class="dialog-actions"><button id="cancel-contract-generation-dialog" class="text-button" type="button">Cerrar</button><button id="contract-generation-submit" class="primary-button" type="submit" disabled>Generar PDF</button></div></form></dialog>
+    <dialog id="customer-document-dialog" aria-labelledby="customer-document-title"><form id="customer-document-form"><div class="dialog-heading"><div><p class="eyebrow">EXPEDIENTE</p><h2 id="customer-document-title">Agregar documento</h2></div><button id="close-customer-document-dialog" class="icon-button" type="button" aria-label="Cerrar">×</button></div><div class="form-grid"><label>Tipo de documento<select id="customer-document-type" required><option value="ine">Identificación oficial (INE)</option><option value="comprobante_domicilio">Comprobante de domicilio</option><option value="otro">Otro documento</option></select></label><label>Archivo<input id="customer-document-file" type="file" accept="application/pdf,image/jpeg,image/png" required></label></div><p class="form-help">PDF, JPG o PNG. Máximo 10 MB.</p><p id="customer-document-error" class="form-error" role="alert"></p><div class="dialog-actions"><button id="cancel-customer-document-dialog" class="text-button" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar documento</button></div></form></dialog>
+    <dialog id="service-plan-change-dialog" aria-labelledby="service-plan-change-title"><form id="service-plan-change-form"><div class="dialog-heading"><div><p class="eyebrow">SERVICIO</p><h2 id="service-plan-change-title">Actualizar / modificar plan</h2></div><button id="close-service-plan-change-dialog" class="icon-button" type="button" aria-label="Cerrar">×</button></div><p id="service-plan-change-current" class="form-help"></p><div class="form-grid"><label class="full-row">Nuevo plan<select id="service-plan-change-select" required></select></label><label class="full-row">Motivo del cambio<textarea id="service-plan-change-reason" rows="3" minlength="3" maxlength="1000" required></textarea></label></div><p class="form-help">La tarifa publicada del plan seleccionado se aplicará al servicio y el cambio quedará registrado en su historial.</p><p id="service-plan-change-error" class="form-error" role="alert"></p><div class="dialog-actions"><button id="cancel-service-plan-change-dialog" class="text-button" type="button">Cancelar</button><button class="primary-button" type="submit">Actualizar plan</button></div></form></dialog>
     <!-- Los archivos se cargan en este orden porque comparten el estado de la aplicación. -->
-    <script src="/app/scripts/app-core.js?v=20260825-billing-candidates-1"></script>
-    <script src="/app/scripts/app-assets.js?v=20260825-customer-services-4"></script>
-    <script src="/app/scripts/app-services.js?v=20260825-customer-services-4"></script>
-    <script src="/app/scripts/app-billing.js?v=20260825-billing-candidates-1"></script>
-    <script src="/app/scripts/app-operations.js?v=20260825-customer-services-4"></script>
-    <script src="/app/scripts/app-administration.js?v=20260825-customer-services-4"></script>
-    <script src="/app/scripts/app-events.js?v=20260825-customer-services-4"></script>
+    <script src="/app/scripts/app-core.js?v=20260927-payment-work-queue-1"></script>
+    <script src="/app/scripts/app-assets.js?v=20260914-inventory-model-1"></script>
+    <script src="/app/scripts/app-services.js?v=20260918-customer-documents-1"></script>
+    <script src="/app/scripts/app-billing.js?v=20260927-payment-work-queue-1"></script>
+    <script src="/app/scripts/app-operations.js?v=20260914-user-reactivation-1"></script>
+    <script src="/app/scripts/app-administration.js?v=20260914-customer-detail-1"></script>
+    <script src="/app/scripts/app-events.js?v=20260927-payment-work-queue-1"></script>
   </body>
 </html>

@@ -429,6 +429,8 @@ function renderOperatorUsers() {
     return;
   }
   const isAdmin = state.user?.role === "administrator";
+  const importButton = $("#import-postal-codes-button");
+  if (importButton) importButton.hidden = !isAdmin;
   if (actionHeader) actionHeader.hidden = !isAdmin;
   body.innerHTML = state.operatorUsers
     .map((user) => `
@@ -445,7 +447,10 @@ function renderOperatorUsers() {
             <button class="row-action edit-user" type="button" data-user-id="${user.id}">Editar</button>
             <button class="row-action reset-user-password" type="button" data-user-id="${user.id}">Contraseña</button>
             <button class="row-action revoke-user-sessions" type="button" data-user-id="${user.id}">Cerrar dispositivos</button>
-            ${user.is_active ? `<button class="row-action deactivate-user" type="button" data-user-id="${user.id}">Desactivar</button>` : ""}
+            ${user.is_active
+              ? `<button class="row-action deactivate-user" type="button" data-user-id="${user.id}">Desactivar</button>`
+              : `<button class="row-action reactivate-user" type="button" data-user-id="${user.id}">Reactivar</button>
+                 <button class="row-action danger-action delete-user" type="button" data-user-id="${user.id}">Eliminar</button>`}
           </td>
         ` : ""}
       </tr>
@@ -560,6 +565,52 @@ async function deactivateSelectedUser(user) {
   if (index >= 0) state.operatorUsers[index].is_active = false;
   renderOperatorUsers();
   setNotice("El usuario quedó desactivado.");
+}
+
+function openPostalCodesImportDialog() {
+  $("#postal-codes-file").value = "";
+  $("#postal-codes-error").textContent = "";
+  $("#postal-codes-dialog").showModal();
+}
+
+function closePostalCodesImportDialog() { $("#postal-codes-dialog").close(); }
+
+async function importPostalCodes(event) {
+  event.preventDefault();
+  const file = $("#postal-codes-file").files[0];
+  const error = $("#postal-codes-error");
+  if (!file) return;
+  const data = new FormData(); data.append("file", file);
+  try {
+    const catalog = await api("/api/v1/postal-codes/import", { method: "POST", body: data });
+    closePostalCodesImportDialog();
+    setNotice(`Catálogo actualizado: ${catalog.length} asentamientos disponibles.`);
+  } catch (exception) { error.textContent = exception.message; }
+}
+
+async function reactivateSelectedUser(user) {
+  await api(`/api/v1/auth/users/${user.id}/reactivate`, {
+    method: "POST",
+    body: JSON.stringify({ reason: "Reactivado desde UI" }),
+  });
+  const index = state.operatorUsers?.findIndex((item) => item.id === user.id);
+  if (index >= 0) {
+    state.operatorUsers[index].is_active = true;
+    state.operatorUsers[index].deactivated_at = null;
+  }
+  renderOperatorUsers();
+  setNotice("El usuario quedó reactivado.");
+}
+
+async function deleteSelectedUser(user) {
+  const confirmed = window.confirm(
+    `¿Eliminar definitivamente a ${user.display_name}? Solo se pueden eliminar cuentas inactivas sin historial operativo.`
+  );
+  if (!confirmed) return;
+  await api(`/api/v1/auth/users/${user.id}`, { method: "DELETE" });
+  state.operatorUsers = state.operatorUsers?.filter((item) => item.id !== user.id);
+  renderOperatorUsers();
+  setNotice("El usuario fue eliminado.");
 }
 
 async function revokeOtherUserSessions(user) {

@@ -51,6 +51,121 @@ class FrontendShellTestCase(unittest.TestCase):
         }
         self.assertIn("/app", mounted_paths)
 
+    def test_payments_have_a_dedicated_mobile_layout(self) -> None:
+        styles = (frontend_directory / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn(
+            ".payment-queue-summary { grid-template-columns: repeat(2, minmax(0, 1fr));",
+            styles,
+        )
+        self.assertIn(
+            ".payments-content-grid { grid-template-columns: minmax(0, 1fr); }",
+            styles,
+        )
+        self.assertIn(".payment-metric strong {", styles)
+        self.assertIn("white-space: nowrap;", styles)
+
+    def test_payments_offer_a_monthly_accounting_export(self) -> None:
+        page = (frontend_directory / "index.html").read_text(encoding="utf-8")
+        script = frontend_script()
+
+        self.assertIn('id="download-payment-accounting-report"', page)
+        self.assertIn("downloadPaymentAccountingReport", script)
+        self.assertIn("/api/v1/payments/accounting-report", script)
+        self.assertIn(".xlsx", script)
+        self.assertIn('hasCapability(\n    "billing.read"', script)
+
+    def test_applying_payment_opens_the_updated_customer_account(self) -> None:
+        billing_script = (
+            frontend_directory / "scripts/app-billing.js"
+        ).read_text(encoding="utf-8")
+        apply_flow = billing_script.split(
+            "async function applySelectedPayment",
+            maxsplit=1,
+        )[1].split(
+            "async function openAccountDialog",
+            maxsplit=1,
+        )[0]
+
+        self.assertIn('hasCapability("billing.read")', apply_flow)
+        self.assertIn("await openAccountDialog(customer)", apply_flow)
+        self.assertLess(
+            apply_flow.index("closePaymentApplyDialog()"),
+            apply_flow.index("await openAccountDialog(customer)"),
+        )
+
+    def test_payment_receipt_accepts_click_drop_and_clipboard_paste(self) -> None:
+        page = (frontend_directory / "index.html").read_text(encoding="utf-8")
+        styles = (frontend_directory / "styles.css").read_text(encoding="utf-8")
+        script = frontend_script()
+
+        self.assertIn('id="payment-proof-dropzone"', page)
+        self.assertIn("Arrastra y suelta el comprobante aquí", page)
+        self.assertIn("pega una imagen con Ctrl+V", page)
+        self.assertIn("paymentProofDropzone.addEventListener(\"drop\"", script)
+        self.assertIn('$("#payment-dialog").addEventListener("paste"', script)
+        self.assertIn("acceptPaymentProofFile(file)", script)
+        self.assertIn("10 * 1024 * 1024", script)
+        self.assertIn(".payment-proof-dropzone.drag-active", styles)
+        self.assertIn(".payment-proof-dropzone.has-file", styles)
+
+    def test_payment_ledger_separates_actionable_stages_and_paginates(self) -> None:
+        page = (frontend_directory / "index.html").read_text(encoding="utf-8")
+        styles = (frontend_directory / "styles.css").read_text(encoding="utf-8")
+        script = frontend_script()
+
+        for stage in (
+            "pending_review",
+            "awaiting_application",
+            "applied",
+            "not_processed",
+        ):
+            with self.subTest(stage=stage):
+                self.assertIn(f'value="{stage}"', page)
+        self.assertIn('id="payment-pagination"', page)
+        self.assertIn('id="previous-payment-page"', page)
+        self.assertIn('id="next-payment-page"', page)
+        self.assertIn("paymentPageSize: 15", script)
+        self.assertIn('if (payment.applied_at) return "applied"', script)
+        self.assertIn('return "awaiting_application"', script)
+        self.assertIn("stagePriority", script)
+        self.assertIn("visiblePayments = orderedPayments.slice", script)
+        self.assertIn(".payment-stage-filter.active", styles)
+        self.assertIn(".payment-stage-awaiting_application", styles)
+
+    def test_android_share_target_accepts_file_and_blob_variants(self) -> None:
+        page = (frontend_directory / "index.html").read_text(encoding="utf-8")
+        worker = (frontend_directory / "service-worker.js").read_text(
+            encoding="utf-8"
+        )
+        events = (frontend_directory / "scripts/app-events.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("findSharedReceiptFile(formData)", worker)
+        self.assertIn("formData.entries()", worker)
+        self.assertIn('typeof value.arrayBuffer === "function"', worker)
+        self.assertIn("normalizeSharedReceiptFile(shared)", events)
+        self.assertIn("shared.file instanceof Blob", events)
+        self.assertIn('accept="image/jpeg,image/png,image/webp,application/pdf', page)
+        self.assertIn('contentType === "application/pdf"', worker)
+
+    def test_android_share_failure_opens_a_manual_file_recovery(self) -> None:
+        page = (frontend_directory / "index.html").read_text(encoding="utf-8")
+        manifest = (frontend_directory / "manifest.webmanifest").read_text(
+            encoding="utf-8"
+        )
+        script = frontend_script()
+
+        self.assertIn('id="shared-receipt-fallback-dialog"', page)
+        self.assertIn('id="shared-receipt-fallback-file"', page)
+        self.assertIn("openSharedReceiptFallbackDialog()", script)
+        self.assertIn("continueSharedReceiptFallback", script)
+        self.assertIn("pendingPaymentProofFile", script)
+        self.assertIn("attachPaymentProofFile(sharedFile)", script)
+        self.assertIn('".jpg"', manifest)
+        self.assertIn('".pdf"', manifest)
+
     def test_frontend_uses_real_auth_and_business_endpoints(self) -> None:
         script = frontend_script()
         page = (frontend_directory / "index.html").read_text(
@@ -97,7 +212,7 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("updatePostalCodeFields", script)
         self.assertIn('setNotice("El servicio quedó registrado como pendiente.")', script)
         self.assertIn('hasCapability("billing.write")', script)
-        self.assertIn('"proof_reference"', script)
+        self.assertIn("payment.proof_kind", script)
         self.assertIn(
             "El pago quedó pendiente de verificación",
             script,
@@ -275,14 +390,14 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("/resolve", script)
         self.assertIn("/compensation", script)
         self.assertIn("payment-queue-summary", page)
-        self.assertIn("payment-queue-tabs", page)
-        self.assertIn("Bandeja de comprobantes", page)
-        self.assertIn("payment-customer-search", page)
+        self.assertIn("payment-month-calendar", page)
+        self.assertIn("Cobros del mes", page)
+        self.assertIn("payment-lookup-input", page)
         self.assertIn("payment-proof-file", page)
         self.assertIn("payment-proof-preview", page)
         self.assertIn('state.paymentFilter', script)
         self.assertIn("apiBlob(", script)
-        self.assertIn("syncPaymentCustomerSelection", script)
+        self.assertIn("renderPaymentLookupResults", script)
         self.assertIn("receipts", script)
         self.assertIn("Incidencias", page)
         self.assertIn("SEGUIMIENTO DE INCIDENCIA", page)
@@ -299,6 +414,18 @@ class FrontendShellTestCase(unittest.TestCase):
         self.assertIn("/api/v1/auth/users", script)
         self.assertIn("Editar usuario", script)
         self.assertIn("Contraseña inicial", page)
+
+    def test_service_address_postal_code_is_editable(self) -> None:
+        script = frontend_script()
+        page = (frontend_directory / "index.html").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('id="address-cp" inputmode="numeric"', page)
+        self.assertNotIn('id="address-cp" readonly', page)
+        self.assertIn('pattern="[0-9]{5}"', page)
+        self.assertIn("updateAddressPostalCode", script)
+        self.assertIn("entry.postal_code === postalCode", script)
 
     def test_live_network_ui_requires_coordinated_preflight_confirmation(
         self,

@@ -1,6 +1,7 @@
 {
   "name": "Aether - Recepcion de pagos",
   "short_name": "Aether",
+  "id": "/app/",
   "start_url": "/app/",
   "scope": "/app/",
   "display": "standalone",
@@ -17,7 +18,17 @@
       "files": [
         {
           "name": "proof_file",
-          "accept": ["image/*", "application/pdf"]
+          "accept": [
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "application/pdf",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp",
+            ".pdf"
+          ]
         }
       ]
     }

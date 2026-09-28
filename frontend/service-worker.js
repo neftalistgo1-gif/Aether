@@ -1,4 +1,4 @@
-const CACHE_NAME = "aether-shell-v12-billing-candidates";
+const CACHE_NAME = "aether-shell-v38-payment-work-queue";
 const SHARE_DATABASE = "aether-share-target";
 const SHARE_STORE = "receipts";
 const APP_SHELL = [
@@ -41,22 +41,23 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (APP_SHELL.includes(url.pathname)) {
-    event.respondWith(networkFirst(request));
+    const cacheKey = new Request(`${url.origin}${url.pathname}`);
+    event.respondWith(networkFirst(request, cacheKey));
     return;
   }
   event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
 });
 
-async function networkFirst(request) {
+async function networkFirst(request, cacheKey = request) {
   try {
     const response = await fetch(request);
     if (response.ok) {
       const cache = await caches.open(CACHE_NAME);
-      await cache.put(request, response.clone());
+      await cache.put(cacheKey, response.clone());
     }
     return response;
   } catch (error) {
-    const cached = await caches.match(request);
+    const cached = await caches.match(cacheKey);
     if (cached) return cached;
     throw error;
   }
@@ -73,14 +74,16 @@ function shareDatabase() {
 
 async function receiveSharedReceipt(request) {
   const formData = await request.formData();
-  const file = formData.get("proof_file");
-  if (!(file instanceof File) || file.size === 0) {
+  const file = findSharedReceiptFile(formData);
+  if (!file) {
     return Response.redirect("/app/?shared_error=missing-file", 303);
   }
   const id = crypto.randomUUID();
   const entry = {
     id,
     file,
+    fileName: file.name || sharedReceiptFileName(file.type),
+    fileType: file.type || "application/octet-stream",
     title: String(formData.get("title") || ""),
     text: String(formData.get("text") || ""),
     url: String(formData.get("url") || ""),
@@ -95,4 +98,26 @@ async function receiveSharedReceipt(request) {
   });
   database.close();
   return Response.redirect(`/app/?shared_receipt=${encodeURIComponent(id)}`, 303);
+}
+
+function findSharedReceiptFile(formData) {
+  // Android share targets are not consistent about preserving the manifest's
+  // field name or the File prototype. Search every multipart value and accept
+  // any non-empty binary payload that the browser can store in IndexedDB.
+  const preferredNames = ["proof_file", "file", "files", "image", "photo"];
+  const candidates = preferredNames.flatMap((name) => formData.getAll(name));
+  for (const [, value] of formData.entries()) candidates.push(value);
+  return candidates.find((value) => (
+    value
+    && typeof value === "object"
+    && typeof value.arrayBuffer === "function"
+    && Number(value.size) > 0
+  )) || null;
+}
+
+function sharedReceiptFileName(contentType = "") {
+  if (contentType === "application/pdf") return "comprobante-compartido.pdf";
+  if (contentType === "image/png") return "comprobante-compartido.png";
+  if (contentType === "image/webp") return "comprobante-compartido.webp";
+  return "comprobante-compartido.jpg";
 }

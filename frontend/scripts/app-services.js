@@ -11,18 +11,8 @@ function renderCustomers(query = "") {
     return;
   }
   const normalized = query.trim().toLowerCase();
-  const rows = state.customers.filter((customer) =>
-    [customer.full_name, ...(customer.phones || [])]
-      .join(" ")
-      .toLowerCase()
-      .includes(normalized)
-  );
-  const canWrite = hasCapability("customers.write");
-  const canReadBilling = hasCapability("billing.read");
-  const canAssignServices = hasCapability("services.write");
-  const canShowActions = canWrite || canReadBilling || canAssignServices;
+  const canShowActions = hasCapability("customers.read");
   const totalCustomers = state.customers.length;
-  const filteredCount = rows.length;
   const withPhones = state.customers.filter((customer) => (customer.phones || []).length > 0).length;
   const withEmail = state.customers.filter((customer) => Boolean(customer.email)).length;
   const servicesByCustomerId = new Map();
@@ -31,6 +21,29 @@ function renderCustomers(query = "") {
     const assigned = servicesByCustomerId.get(service.current_customer_id) || [];
     assigned.push(service);
     servicesByCustomerId.set(service.current_customer_id, assigned);
+  });
+  const rows = state.customers.filter((customer) =>
+    [
+      customer.full_name,
+      customer.id,
+      customer.id.slice(0, 8),
+      ...(customer.phones || []),
+      ...(servicesByCustomerId.get(customer.id) || []).map((service) => service.amr_code),
+    ].join(" ").toLowerCase().includes(normalized)
+  );
+  const filteredCount = rows.length;
+  const sort = state.customerSort || "name-asc";
+  rows.sort((left, right) => {
+    const phone = (customer) => String(customer.phones?.[0] || "").replace(/\D/g, "");
+    const serviceCount = (customer) => (servicesByCustomerId.get(customer.id) || []).length;
+    if (sort === "name-desc") return right.full_name.localeCompare(left.full_name, "es");
+    if (sort === "phone-asc") return phone(left).localeCompare(phone(right), "es", { numeric: true });
+    if (sort === "phone-desc") return phone(right).localeCompare(phone(left), "es", { numeric: true });
+    if (sort === "registered-desc") return new Date(right.registered_at) - new Date(left.registered_at);
+    if (sort === "registered-asc") return new Date(left.registered_at) - new Date(right.registered_at);
+    if (sort === "services-desc") return serviceCount(right) - serviceCount(left) || left.full_name.localeCompare(right.full_name, "es");
+    if (sort === "services-asc") return serviceCount(left) - serviceCount(right) || left.full_name.localeCompare(right.full_name, "es");
+    return left.full_name.localeCompare(right.full_name, "es");
   });
   if (summary) {
     summary.innerHTML = `
@@ -51,35 +64,19 @@ function renderCustomers(query = "") {
             .map((service) => service.amr_code)
             .join(", ") || "—"
         )}</td>
+        <td>${escapeText(
+          (servicesByCustomerId.get(customer.id) || [])
+            .map((service) => `Día ${service.payment_day}`)
+            .join(" · ") || "—"
+        )}</td>
         <td>${formatDate(customer.registered_at)}</td>
         ${canShowActions ? `
           <td>
-            ${canReadBilling ? `
-              <button
-                class="row-action view-account"
-                type="button"
-                data-customer-id="${customer.id}"
-              >Estado de cuenta</button>
-            ` : ""}
-            ${canWrite ? `
-              <button
-                class="row-action edit-customer"
-                type="button"
-                data-customer-id="${customer.id}"
-              >Editar</button>
-              <button
-                class="row-action delete-customer"
-                type="button"
-                data-customer-id="${customer.id}"
-              >Eliminar</button>
-            ` : ""}
-            ${canAssignServices ? `
-              <button
-                class="row-action assign-service-to-customer"
-                type="button"
-                data-customer-id="${customer.id}"
-              >Asignar servicio</button>
-            ` : ""}
+            <button
+              class="row-action view-customer-detail"
+              type="button"
+              data-customer-id="${customer.id}"
+            >Ver en detalle</button>
           </td>
         ` : ""}
       </tr>
@@ -96,9 +93,15 @@ function openCustomerDialog(customer = null) {
   $("#customer-dialog-title").textContent = customer
     ? "Editar cliente"
     : "Nuevo cliente";
-  $("#customer-name").value = customer?.full_name || "";
+  $("#customer-given-names").value = customer?.given_names || customer?.full_name || "";
+  $("#customer-paternal-surname").value = customer?.paternal_surname || "";
+  $("#customer-maternal-surname").value = customer?.maternal_surname || "";
   $("#customer-phones").value = customer?.phones?.join("\n") || "";
-  $("#customer-email").value = customer?.email || "";
+  // UISP-created placeholders such as "Pendiente" must not block phone-only edits.
+  const savedEmail = customer?.email || "";
+  $("#customer-email").value = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(savedEmail)
+    ? savedEmail
+    : "";
   $("#customer-notes").value = customer?.notes || "";
   $("#customer-reason").value = "";
   $("#customer-form-error").textContent = "";
@@ -106,7 +109,7 @@ function openCustomerDialog(customer = null) {
   reasonField.hidden = !customer;
   $("#customer-reason").required = Boolean(customer);
   $("#customer-dialog").showModal();
-  $("#customer-name").focus();
+  $("#customer-given-names").focus();
 }
 
 function closeCustomerDialog() {
@@ -122,8 +125,17 @@ function customerPayload() {
   if (!phones.length) {
     throw new Error("Registra al menos un teléfono.");
   }
+  const givenNames = $("#customer-given-names").value.trim();
+  const paternalSurname = $("#customer-paternal-surname").value.trim();
+  const maternalSurname = $("#customer-maternal-surname").value.trim();
+  if (!givenNames) {
+    throw new Error("Registra al menos el nombre del cliente.");
+  }
   return {
-    full_name: $("#customer-name").value.trim(),
+    full_name: [givenNames, paternalSurname, maternalSurname].join(" "),
+    given_names: givenNames,
+    paternal_surname: paternalSurname,
+    maternal_surname: maternalSurname,
     phones,
     email: $("#customer-email").value.trim() || null,
     notes: $("#customer-notes").value.trim() || null,
@@ -176,6 +188,7 @@ async function saveCustomer(event) {
       if (index === -1) state.customers.push(saved);
       else state.customers[index] = saved;
       renderCustomers($("#customer-search").value);
+      if (state.selectedCustomerId === saved.id) renderCustomerDetail();
       renderOverview();
     }
     closeCustomerDialog();
@@ -235,7 +248,9 @@ function renderServices() {
     hasCapability("assets.write")
   );
   const canAssignHolder = hasCapability("services.write");
+  const canEditPaymentDay = hasCapability("services.payment_day.write");
   const canShowActions = (
+    hasCapability("services.read") ||
     canScheduleInstallation ||
     canControlNetwork ||
     canWriteNotifications ||
@@ -244,7 +259,8 @@ function renderServices() {
     canReadExtensions ||
     canCancelServices ||
     canManageRecovery ||
-    canAssignHolder
+    canAssignHolder ||
+    canEditPaymentDay
   );
   const customersById = new Map(
     (state.customers || []).map((customer) => [customer.id, customer])
@@ -289,81 +305,7 @@ function renderServices() {
         <td><span class="badge ${service.status}">${escapeText(service.status)}</span></td>
         ${canShowActions ? `
           <td>
-            <details class="service-actions-menu">
-              <summary>Acciones</summary>
-              <div class="service-actions-list" aria-label="Acciones para ${escapeText(service.amr_code)}">
-            ${canAssignHolder && service.status !== "cancelled" ? `
-              <button
-                class="row-action assign-service-holder"
-                type="button"
-                data-service-id="${service.id}"
-              >${service.current_customer_id ? "Editar titular" : "Asignar titular"}</button>
-            ` : ""}
-            ${canScheduleInstallation && service.status === "pending" ? `
-              <button
-                class="row-action assess-installation"
-                type="button"
-                data-service-id="${service.id}"
-              >${service.has_scheduled_installation
-                ? "Ver instalación"
-                : "Cobertura y agenda"}</button>
-            ` : ""}
-            ${canControlNetwork && ["active", "suspended"].includes(service.status) ? `
-              <button
-                class="row-action simulate-network-control"
-                type="button"
-                data-service-id="${service.id}"
-              >Simular ${service.status === "active" ? "suspensión" : "reactivación"}</button>
-              <button
-                class="row-action reconcile-network"
-                type="button"
-                data-service-id="${service.id}"
-              >Revisar red</button>
-            ` : ""}
-            ${canWriteNotifications ? `
-              <button
-                class="row-action record-notification"
-                type="button"
-                data-service-id="${service.id}"
-              >Registrar aviso</button>
-            ` : ""}
-            ${canCheckSuspension && service.status === "active" ? `
-              <button
-                class="row-action check-commercial-suspension"
-                type="button"
-                data-service-id="${service.id}"
-              >Validar suspensión</button>
-            ` : ""}
-            ${canCheckReactivation && service.status === "suspended" ? `
-              <button
-                class="row-action check-commercial-reactivation"
-                type="button"
-                data-service-id="${service.id}"
-              >Validar reactivación</button>
-            ` : ""}
-            ${canReadExtensions ? `
-              <button
-                class="row-action manage-extensions"
-                type="button"
-                data-service-id="${service.id}"
-              >Prórrogas</button>
-              <button
-                class="row-action manage-payment-agreements"
-                type="button"
-                data-service-id="${service.id}"
-              >Convenios</button>
-            ` : ""}
-            ${(canCancelServices || (
-              canManageRecovery && service.status === "cancelled"
-            )) ? `
-              <button
-                class="row-action manage-cancellation"
-                type="button"
-                data-service-id="${service.id}"
-              >Baja y retiro</button>
-            ` : ""}
-              </div>
-            </details>
+            <button class="row-action view-service-detail" type="button" data-service-id="${service.id}">Detalles</button>
           </td>
         ` : ""}
       </tr>
@@ -374,6 +316,62 @@ function renderServices() {
     empty.textContent = "No hay servicios que coincidan con los filtros actuales.";
   }
   empty.hidden = rows.length > 0;
+}
+
+function serviceDetailActionButtons(service) {
+  const buttons = [];
+  if (hasCapability("services.write") && service.status !== "cancelled") buttons.push(`<button class="row-action assign-service-holder" type="button" data-service-id="${service.id}">${service.current_customer_id ? "Editar titular" : "Asignar titular"}</button>`);
+  if (hasCapability("services.payment_day.write")) buttons.push(`<button class="row-action edit-service-payment-day" type="button" data-service-id="${service.id}">Corregir día de pago</button>`);
+  if (hasCapability("services.write")) buttons.push(`<button class="row-action edit-service-address" type="button" data-service-id="${service.id}">Actualizar domicilio</button>`);
+  if (hasCapability("installations.write") && service.status === "pending") buttons.push(`<button class="row-action assess-installation" type="button" data-service-id="${service.id}">${service.has_scheduled_installation ? "Ver instalación" : "Cobertura y agenda"}</button>`);
+  if (hasCapability("network.control") && ["active", "suspended"].includes(service.status)) {
+    buttons.push(`<button class="row-action simulate-network-control" type="button" data-service-id="${service.id}">Simular ${service.status === "active" ? "suspensión" : "reactivación"}</button>`);
+    buttons.push(`<button class="row-action reconcile-network" type="button" data-service-id="${service.id}">Revisar red</button>`);
+  }
+  if (hasCapability("notifications.write")) buttons.push(`<button class="row-action record-notification" type="button" data-service-id="${service.id}">Registrar aviso</button>`);
+  if (hasCapability("network.control") && hasCapability("billing.read") && hasCapability("notifications.read") && service.status === "active") buttons.push(`<button class="row-action check-commercial-suspension" type="button" data-service-id="${service.id}">Validar suspensión</button>`);
+  if (hasCapability("network.control") && hasCapability("billing.read") && service.status === "suspended") buttons.push(`<button class="row-action check-commercial-reactivation" type="button" data-service-id="${service.id}">Validar reactivación</button>`);
+  if (hasCapability("billing.read")) {
+    buttons.push(`<button class="row-action manage-extensions" type="button" data-service-id="${service.id}">Prórrogas</button>`);
+    buttons.push(`<button class="row-action manage-payment-agreements" type="button" data-service-id="${service.id}">Convenios</button>`);
+  }
+  if (hasCapability("services.cancel") || ((hasCapability("assets.read") || hasCapability("assets.write")) && service.status === "cancelled")) buttons.push(`<button class="row-action manage-cancellation" type="button" data-service-id="${service.id}">Baja y retiro</button>`);
+  return buttons.join("") || '<p class="empty-state">No tienes acciones disponibles para este servicio.</p>';
+}
+
+function deviceImageForModel(model) {
+  const normalized = (model || "").toLowerCase();
+  if (normalized.includes("litebeam") || normalized.includes("lbe-5ac")) {
+    return '<img src="https://cdn.ecomm.ui.com/products/5987bfd2-8c3c-4191-9f09-71654bb89925/538d9d97-bd97-44ba-ad3a-d1d4948ee24f.png" alt="Antena LiteBeam">';
+  }
+  return `<div class="device-placeholder">${interfaceIcon("router")}</div>`;
+}
+
+function openServiceDetail(service) {
+  state.selectedServiceId = service.id;
+  renderServiceDetail();
+  showView("service-detail");
+}
+
+function renderServiceDetail() {
+  const service = state.services?.find((item) => item.id === state.selectedServiceId);
+  if (!service) { showView("services"); return; }
+  const customer = state.customers?.find((item) => item.id === service.current_customer_id);
+  const device = state.networkDevices?.find((item) => item.service_id === service.id);
+  const asset = state.assets?.find((item) => item.id === device?.asset_id || item.management_ip === device?.management_ip || item.mac_address === device?.mac_address);
+  const accessPoint = state.accessPointHealth?.find((item) => item.id === device?.access_point_id);
+  const model = asset?.model || "Modelo pendiente de sincronizar";
+  const connectionStatus = device?.current_status === "online" ? "En línea" : device?.current_status === "offline" ? "Sin conexión" : "Sin lectura";
+  const lastSeen = device?.last_seen_at ? new Date(device.last_seen_at).toLocaleString("es-MX") : "Sin telemetría";
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(service.address)}`;
+  $("#service-detail-actions-list").innerHTML = serviceDetailActionButtons(service);
+  $("#service-detail-content").innerHTML = `
+    <div class="customer-profile-title"><div><p class="eyebrow">SERVICIO · ${escapeText(service.amr_code)}</p><h2>Servicio ${escapeText(serviceStatusLabel(service.status)).toLowerCase()}</h2><p>${escapeText(service.plan_name)} · ${formatMoney(service.monthly_price)}</p></div><span class="badge ${escapeText(service.status)}">${escapeText(serviceStatusLabel(service.status))}</span></div>
+    <div class="service-detail-grid"><div class="service-detail-stack">
+      <article class="panel customer-detail-card"><div class="panel-heading"><div><p class="eyebrow">TITULAR</p><h2>Cliente relacionado</h2></div>${customer ? `<a class="service-detail-link service-detail-customer" href="#" data-customer-id="${customer.id}">Ver cliente →</a>` : ""}</div><div class="customer-detail-list"><div><span>${interfaceIcon("user", "detail-item-icon")}Nombre</span><strong>${escapeText(customer?.full_name || "Sin titular asignado")}</strong></div><div><span>${interfaceIcon("phone", "detail-item-icon")}Teléfono</span><strong>${escapeText(customer?.phones?.join(" · ") || "—")}</strong></div><div><span>${interfaceIcon("mail", "detail-item-icon")}Correo</span><strong>${escapeText(customer?.email || "—")}</strong></div></div></article>
+      <article class="panel customer-detail-card"><div class="panel-heading"><div><p class="eyebrow">UBICACIÓN</p><h2>Domicilio del servicio</h2></div><a class="service-detail-link" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">Ver en mapa →</a></div><div class="customer-detail-list"><div><span>${interfaceIcon("pin", "detail-item-icon")}Dirección</span><strong>${escapeText(service.address)}</strong></div></div></article>
+      <article class="panel customer-detail-card"><div class="panel-heading"><div><p class="eyebrow">FACTURACIÓN</p><h2>Plan y pago</h2></div></div><div class="customer-detail-list"><div><span>Plan contratado</span><strong>${escapeText(service.plan_name)}</strong></div><div><span>Mensualidad</span><strong>${formatMoney(service.monthly_price)}</strong></div><div><span>Día de pago</span><strong>${service.payment_day}</strong></div></div></article>
+    </div><div class="service-detail-stack"><article class="panel service-connectivity-card"><div class="panel-heading"><div><p class="eyebrow">RED UISP</p><h2>Conectividad actual</h2></div><span class="badge ${device?.current_status || "unknown"}">${connectionStatus}</span></div><div class="connectivity-visual"><div class="connectivity-device">${deviceImageForModel(model)}<strong>${escapeText(model)}</strong></div><i class="connectivity-line"></i><div class="connectivity-device"><div class="device-placeholder">${interfaceIcon("wifi")}</div><strong>${escapeText(accessPoint?.name || "AP pendiente de identificar")}</strong></div></div><div class="connectivity-details"><div><span>${interfaceIcon("router", "detail-item-icon")}Dirección IP</span><strong>${escapeText(device?.management_ip || "Sin IP")}</strong></div><div><span>${interfaceIcon("wifi", "detail-item-icon")}Antena</span><strong>${escapeText(model)}</strong></div><div><span>${interfaceIcon("router", "detail-item-icon")}AP conectado</span><strong>${escapeText(accessPoint?.name || "Pendiente")}</strong></div><div><span>Estado</span><strong>${connectionStatus}</strong></div><div><span>${interfaceIcon("clock", "detail-item-icon")}Última conexión</span><strong>${escapeText(lastSeen)}</strong></div></div></article></div></div>`;
 }
 
 function updateSelectedPlanPrice() {
@@ -510,6 +508,367 @@ function closeServiceDialog() {
   $("#service-dialog").close();
 }
 
+async function openAddressDialog(service) {
+  state.selectedServiceId = service.id;
+  [
+    "#address-search",
+    "#address-cp",
+    "#address-city",
+    "#address-state",
+    "#address-street",
+    "#address-exterior",
+    "#address-interior",
+  ].forEach((selector) => {
+    $(selector).value = "";
+  });
+  $("#address-country").value = "México";
+  $("#address-options").innerHTML = "";
+  $("#address-cp-help").textContent =
+    "Puedes escribir o corregir el código postal.";
+  $("#address-error").textContent = "";
+  state.addressMatches = [];
+  $("#address-dialog").showModal();
+}
+
+function renderAddressCatalogOptions(matches) {
+  $("#address-options").innerHTML = matches
+    .map(
+      (item) =>
+        `<option value="${escapeText(item.settlement_name)} · ${item.postal_code}"></option>`
+    )
+    .join("");
+}
+
+async function searchAddressCatalog() {
+  const query = $("#address-search").value.trim();
+  if (query.length < 2) {
+    state.addressMatches = [];
+    renderAddressCatalogOptions([]);
+    return;
+  }
+  const matches = await api(`/api/v1/postal-codes?q=${encodeURIComponent(query)}`);
+  renderAddressCatalogOptions(matches);
+  state.addressMatches = matches;
+}
+
+function selectAddressCatalog() {
+  const value = $("#address-search").value.trim();
+  const normalizedValue = value.toLocaleLowerCase("es-MX");
+  const item = (state.addressMatches || []).find((entry) => {
+    const optionValue = `${entry.settlement_name} · ${entry.postal_code}`;
+    return (
+      value === optionValue ||
+      value === entry.postal_code ||
+      normalizedValue === entry.settlement_name.toLocaleLowerCase("es-MX")
+    );
+  });
+  if (!item) return;
+  $("#address-cp").value = item.postal_code;
+  $("#address-city").value = item.city;
+  $("#address-state").value = item.state;
+  $("#address-country").value = "México";
+  $("#address-search").value = item.settlement_name;
+  $("#address-cp-help").textContent =
+    "Ciudad y estado se completaron desde el catálogo.";
+}
+
+async function updateAddressPostalCode() {
+  const field = $("#address-cp");
+  const postalCode = field.value.replace(/\D/g, "").slice(0, 5);
+  if (field.value !== postalCode) field.value = postalCode;
+
+  $("#address-cp-help").textContent =
+    postalCode.length === 5
+      ? "Consultando el catálogo..."
+      : "Escribe los 5 dígitos del código postal.";
+  if (postalCode.length !== 5) return;
+
+  try {
+    const matches = await api(
+      `/api/v1/postal-codes?q=${encodeURIComponent(postalCode)}`
+    );
+    // La búsqueda admite prefijos; aquí sólo se usan coincidencias exactas para
+    // no reemplazar ciudad o estado con los datos de otro código postal.
+    const exactMatches = matches.filter(
+      (entry) => entry.postal_code === postalCode
+    );
+    if ($("#address-cp").value !== postalCode) return;
+
+    if (!exactMatches.length) {
+      $("#address-cp-help").textContent =
+        "No está en el catálogo; puedes conservarlo y guardar la corrección manual.";
+      return;
+    }
+
+    state.addressMatches = exactMatches;
+    renderAddressCatalogOptions(exactMatches);
+    const currentSettlement = $("#address-search").value.trim();
+    const selected =
+      exactMatches.find(
+        (entry) =>
+          entry.settlement_name.toLocaleLowerCase("es-MX") ===
+          currentSettlement.toLocaleLowerCase("es-MX")
+      ) || exactMatches[0];
+    $("#address-city").value = selected.city || "";
+    $("#address-state").value = selected.state || "";
+    $("#address-country").value = "México";
+    $("#address-cp-help").textContent =
+      "Código reconocido; ciudad y estado se actualizaron automáticamente.";
+  } catch (error) {
+    $("#address-cp-help").textContent =
+      "No se pudo consultar el catálogo; puedes guardar el código escrito manualmente.";
+  }
+}
+
+async function saveAddress(event) {
+  event.preventDefault();
+  const service = state.services.find(
+    (item) => item.id === state.selectedServiceId
+  );
+  const postalCode = $("#address-cp").value.trim();
+  if (!/^\d{5}$/.test(postalCode)) {
+    $("#address-error").textContent =
+      "El código postal debe contener exactamente 5 dígitos.";
+    return;
+  }
+  const interior = $("#address-interior").value.trim();
+  const address = [
+    `${$("#address-street").value.trim()} ${$("#address-exterior").value.trim()}`,
+    interior ? `Int. ${interior}` : "",
+    $("#address-search").value.trim(),
+    `C.P. ${postalCode}`,
+    $("#address-city").value,
+    $("#address-state").value,
+    "México",
+  ]
+    .filter(Boolean)
+    .join(", ");
+  try { const saved=await api(`/api/v1/services/${service.id}/address`, {method:"PATCH",body:JSON.stringify({address,reason:$("#address-reason").value.trim()})}); state.services=state.services.map((item)=>item.id===saved.id?saved:item); $("#address-dialog").close(); renderServices(); if(state.selectedCustomerId) renderCustomerDetail(); if(state.selectedServiceId === saved.id) renderServiceDetail(); setNotice("El domicilio fue actualizado."); } catch(error) { $("#address-error").textContent=error.message; }
+}
+
+function serviceStatusLabel(status) {
+  return {
+    active: "Activo",
+    suspended: "Suspendido",
+    cancelled: "Cancelado",
+    pending_installation: "Pendiente de instalación",
+  }[status] || status;
+}
+
+function openCustomerDetail(customer) {
+  state.selectedCustomerId = customer.id;
+  renderCustomerDetail();
+  showView("customer-detail");
+}
+
+function renderCustomerDetail() {
+  const customer = state.customers?.find((item) => item.id === state.selectedCustomerId);
+  if (!customer) {
+    showView("customers");
+    return;
+  }
+  const services = (state.services || []).filter(
+    (service) => service.current_customer_id === customer.id
+  );
+  const activeServices = services.filter((service) => service.status === "active");
+  const suspendedServices = services.filter((service) => service.status === "suspended");
+  const addresses = [...new Set(services.map((service) => service.address).filter(Boolean))];
+  const canWrite = hasCapability("customers.write");
+  const canReadBilling = hasCapability("billing.read");
+  const canAssignServices = hasCapability("services.write");
+  const canGenerateContracts = hasCapability("contracts.write");
+  const actionList = $("#customer-detail-actions-list");
+  actionList.innerHTML = [
+    canReadBilling ? '<button class="row-action detail-view-account" type="button">Estado de cuenta</button>' : "",
+    canWrite ? '<button class="row-action detail-edit-customer" type="button">Editar cliente</button>' : "",
+    canAssignServices ? '<button class="row-action detail-assign-service" type="button">Asignar servicio</button>' : "",
+    canGenerateContracts ? '<button class="row-action detail-generate-contract" type="button">Generar contrato</button>' : "",
+    canWrite ? '<button class="row-action danger-action detail-delete-customer" type="button">Eliminar cliente</button>' : "",
+  ].join("");
+  const suspensionNotice = suspendedServices.length
+    ? `<section class="customer-detail-warning"><strong>${suspendedServices.length} servicio${suspendedServices.length === 1 ? "" : "s"} suspendido${suspendedServices.length === 1 ? "" : "s"}</strong><span>Revisa el estado de cuenta o los servicios relacionados.</span></section>`
+    : "";
+  $("#customer-detail-content").innerHTML = `
+    <div class="customer-profile-title">
+      <div><p class="eyebrow">CLIENTE · ${escapeText(customer.id.slice(0, 8).toUpperCase())}</p><h2>${escapeText(customer.full_name)}</h2><p>Cliente desde ${formatDate(customer.registered_at)}</p></div>
+      <span class="badge ${suspendedServices.length ? "suspended" : ""}">${suspendedServices.length ? "Atención requerida" : "Activo"}</span>
+    </div>
+    ${suspensionNotice}
+    <div class="customer-detail-grid">
+      <div class="customer-detail-stack">
+        <article class="panel customer-detail-card"><div class="panel-heading"><div><p class="eyebrow">CONTACTO</p><h2>Información de contacto</h2></div></div><div class="customer-detail-list"><div><span>${interfaceIcon("phone", "detail-item-icon")}Teléfono</span><strong>${escapeText(customer.phones?.join(" · ") || "—")}</strong></div><div><span>${interfaceIcon("mail", "detail-item-icon")}Correo electrónico</span><strong>${escapeText(customer.email || "—")}</strong></div></div></article>
+        <article class="panel customer-detail-card"><div class="panel-heading"><div><p class="eyebrow">UBICACIONES</p><h2>Domicilios</h2></div></div><div class="address-list">${services.length ? services.map((service, index) => `<div class="address-item"><span>${interfaceIcon("pin", "detail-item-icon")}${index === 0 ? "Servicio principal" : "Domicilio adicional"}</span><strong>${escapeText(service.address)}</strong><button class="row-action detail-edit-service-address" type="button" data-service-id="${service.id}">Actualizar domicilio</button></div>`).join("") : '<p class="empty-state">No hay domicilios vinculados.</p>'}</div></article>
+        <article class="panel customer-detail-card customer-documents-card"><div class="panel-heading"><div><p class="eyebrow">DOCUMENTOS</p><h2>Expediente del cliente</h2></div>${canWrite ? '<button class="row-action detail-add-customer-document" type="button">Agregar documento</button>' : ""}</div><div id="customer-documents-list"><p class="form-help">Cargando contratos y documentos…</p></div></article>
+      </div>
+      <article class="panel customer-services-card"><div class="panel-heading"><div><p class="eyebrow">CONECTIVIDAD</p><h2>Servicios relacionados</h2></div><span class="badge">${services.length}</span></div><div class="customer-service-list">${services.length ? services.map((service) => `<div class="customer-service-item"><div><strong>${interfaceIcon("wifi", "service-item-icon")}${escapeText(service.plan_name)}</strong><span>${escapeText(service.amr_code)} · ${escapeText(service.address)}</span></div><div><span class="badge ${escapeText(service.status)}">${escapeText(serviceStatusLabel(service.status))}</span><small>${formatMoney(service.monthly_price)} · Día ${service.payment_day}</small>${hasCapability("services.write") ? `<button class="row-action detail-change-service-plan" type="button" data-service-id="${service.id}">Actualizar / modificar plan</button>` : ""}</div></div>`).join("") : '<p class="empty-state">No hay servicios vinculados a este cliente.</p>'}</div><div class="customer-service-summary"><span>Activos: <strong>${activeServices.length}</strong></span><span>Suspendidos: <strong>${suspendedServices.length}</strong></span></div></article>
+    </div>`;
+  void renderCustomerDocuments(customer, services);
+}
+
+const customerDocumentTypeLabel = (type) => ({ ine: "Identificación oficial", comprobante_domicilio: "Comprobante de domicilio", otro: "Documento" }[type] || "Documento");
+
+async function openAuthenticatedDocument(path) {
+  const blob = await apiBlob(path);
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank", "noopener");
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+async function renderCustomerDocuments(customer, services) {
+  const container = $("#customer-documents-list");
+  if (!container || state.selectedCustomerId !== customer.id) return;
+  try {
+    const [uploads, contractGroups] = await Promise.all([
+      api(`/api/v1/customers/${customer.id}/documents`),
+      Promise.all(services.map(async (service) => ({ service, contracts: await api(`/api/v1/services/${service.id}/contracts`) }))),
+    ]);
+    if (state.selectedCustomerId !== customer.id || !$("#customer-documents-list")) return;
+    const contracts = contractGroups.flatMap(({ service, contracts: rows }) => rows.filter((contract) => contract.has_document).map((contract) => ({ service, contract })));
+    const rows = [
+      ...contracts.map(({ service, contract }) => `<div class="document-item"><div><strong>Contrato ${escapeText(contract.folio)}</strong><span>${escapeText(service.amr_code)} · ${formatDate(contract.start_date)}</span></div><button class="row-action detail-open-contract" data-service-id="${service.id}" data-contract-id="${contract.id}" type="button">Ver contrato</button></div>`),
+      ...uploads.map((document) => `<div class="document-item"><div><strong>${escapeText(customerDocumentTypeLabel(document.document_type))}</strong><span>${escapeText(document.original_name)} · ${formatDate(document.created_at)}</span></div><button class="row-action detail-open-customer-document" data-document-id="${document.id}" type="button">Ver archivo</button></div>`),
+    ];
+    container.innerHTML = rows.length ? `<div class="document-list">${rows.join("")}</div>` : '<p class="empty-state">Aún no hay documentos en el expediente.</p>';
+  } catch (error) {
+    container.innerHTML = `<p class="form-error">${escapeText(error.message)}</p>`;
+  }
+}
+
+function openCustomerDocumentDialog() {
+  $("#customer-document-form").reset();
+  $("#customer-document-error").textContent = "";
+  $("#customer-document-dialog").showModal();
+}
+
+function closeCustomerDocumentDialog() { $("#customer-document-dialog").close(); }
+
+async function uploadCustomerDocument(event) {
+  event.preventDefault();
+  const customer = state.customers?.find((item) => item.id === state.selectedCustomerId);
+  const file = $("#customer-document-file").files?.[0];
+  const errorBox = $("#customer-document-error");
+  const button = event.currentTarget.querySelector('[type="submit"]');
+  if (!customer || !file) return;
+  button.disabled = true; errorBox.textContent = "";
+  try {
+    const body = new FormData();
+    body.append("document_type", $("#customer-document-type").value);
+    body.append("uploaded_by", state.user.display_name);
+    body.append("file", file);
+    await api(`/api/v1/customers/${customer.id}/documents`, { method: "POST", body });
+    closeCustomerDocumentDialog();
+    renderCustomerDetail();
+    setNotice("El documento quedó guardado en el expediente.");
+  } catch (error) { errorBox.textContent = error.message; }
+  finally { button.disabled = false; }
+}
+
+function openServicePlanChangeDialog(service) {
+  const plans = (state.plans || []).filter((plan) => plan.status === "active" && Number(plan.current_price) > 0);
+  if (!plans.length) { setNotice("No hay planes activos con tarifa vigente para seleccionar."); return; }
+  state.selectedServiceId = service.id;
+  $("#service-plan-change-title").textContent = `Actualizar plan · ${service.amr_code}`;
+  $("#service-plan-change-current").textContent = `Plan actual: ${service.plan_name} · ${formatMoney(service.monthly_price)}.`;
+  $("#service-plan-change-select").innerHTML = plans.map((plan) => `<option value="${plan.id}" ${plan.id === service.plan_id ? "selected" : ""}>${escapeText(plan.name)} · ${formatMoney(plan.current_price)}</option>`).join("");
+  $("#service-plan-change-reason").value = "Cambio de plan solicitado por el cliente";
+  $("#service-plan-change-error").textContent = "";
+  $("#service-plan-change-dialog").showModal();
+}
+
+function closeServicePlanChangeDialog() { $("#service-plan-change-dialog").close(); }
+
+async function saveServicePlanChange(event) {
+  event.preventDefault();
+  const service = state.services?.find((item) => item.id === state.selectedServiceId);
+  const errorBox = $("#service-plan-change-error");
+  const button = event.currentTarget.querySelector('[type="submit"]');
+  if (!service) return;
+  button.disabled = true; errorBox.textContent = "";
+  try {
+    await api(`/api/v1/services/${service.id}/plan-changes`, { method: "POST", body: JSON.stringify({
+      plan_id: $("#service-plan-change-select").value,
+      requested_by: state.user.display_name,
+      applied_by: state.user.display_name,
+      reason: $("#service-plan-change-reason").value.trim(),
+    }) });
+    state.services = await loadResource("/api/v1/services");
+    renderServices(); renderCustomerDetail(); renderOverview();
+    closeServicePlanChangeDialog();
+    setNotice("El plan se actualizó y quedó registrado en el historial del servicio.");
+  } catch (error) { errorBox.textContent = error.message; }
+  finally { button.disabled = false; }
+}
+
+async function refreshContractGenerationReadiness() {
+  const customer = state.customers?.find((item) => item.id === state.selectedCustomerId);
+  const service = state.services?.find((item) => item.id === $("#contract-generation-service").value);
+  const result = $("#contract-generation-readiness");
+  if (!customer || !service) {
+    result.innerHTML = '<p class="empty-state">Selecciona un servicio para revisar sus datos.</p>';
+    return;
+  }
+  result.innerHTML = '<p class="form-help">Revisando información actualizada…</p>';
+  try {
+    const readiness = await api(`/api/v1/services/${service.id}/contracts/generation-readiness?customer_id=${customer.id}`);
+    const suggestedCost = Number(readiness.suggested_installation_cost || 0).toFixed(2);
+    result.innerHTML = readiness.can_generate
+      ? `<p class="success-message">El expediente está completo. Confirma los datos finales antes de generar el contrato.</p><div class="form-grid"><label>Fecha del contrato<input id="contract-generation-date" type="date" value="${service.activation_date || new Date().toISOString().slice(0, 10)}" required></label><label>Costo de instalación<input id="contract-generation-installation-cost" type="number" min="0" step="0.01" value="${suggestedCost}" required></label><label class="checkbox-field full-row"><input id="contract-generation-create-installation-charge" type="checkbox">Agregar este costo como deuda al estado de cuenta</label></div><p class="form-help">El costo se imprimirá en el contrato. Sólo se convertirá en deuda si seleccionas la casilla.</p>`
+      : `<p class="form-error">Aún no se puede generar el contrato. Completa lo siguiente:</p><ul>${readiness.missing_fields.map((field) => `<li>${escapeText(field)}</li>`).join("")}</ul>`;
+    $("#contract-generation-submit").disabled = !readiness.can_generate;
+  } catch (error) {
+    result.innerHTML = `<p class="form-error">${escapeText(error.message)}</p>`;
+  }
+}
+
+async function generateContract(event) {
+  event.preventDefault();
+  const customer = state.customers.find((item) => item.id === state.selectedCustomerId);
+  const service = state.services.find((item) => item.id === $("#contract-generation-service").value);
+  const preview = window.open("about:blank", "_blank");
+  try {
+    const saved = await api(`/api/v1/services/${service.id}/contracts/generate`, {
+      method: "POST",
+      body: JSON.stringify({
+        customer_id: customer.id,
+        contract_date: $("#contract-generation-date").value,
+        installation_cost: Number($("#contract-generation-installation-cost").value || 0),
+        create_installation_charge: $("#contract-generation-create-installation-charge").checked,
+        requested_by: state.user.display_name,
+      }),
+    });
+    // A new browser tab does not include Aether's Bearer token by itself.
+    // Download it through the authenticated API, then display the PDF locally.
+    const documentBlob = await apiBlob(
+      `/api/v1/services/${service.id}/contracts/${saved.id}/document`,
+    );
+    const documentUrl = URL.createObjectURL(documentBlob);
+    if (preview) preview.location.href = documentUrl;
+    else window.open(documentUrl, "_blank");
+    window.setTimeout(() => URL.revokeObjectURL(documentUrl), 60_000);
+    closeContractGenerationDialog();
+  } catch (error) {
+    if (preview && !preview.closed) preview.close();
+    $("#contract-generation-error").textContent = error.message;
+  }
+}
+
+function openContractGenerationDialog() {
+  const customer = state.customers?.find((item) => item.id === state.selectedCustomerId);
+  const services = (state.services || []).filter((service) => service.current_customer_id === customer?.id && service.status !== "cancelled");
+  if (!services.length) {
+    setNotice("El cliente no tiene un servicio vigente para generar contrato.");
+    return;
+  }
+  $("#contract-generation-summary").textContent = `Se revisará la información vigente de ${customer.full_name}.`;
+  $("#contract-generation-service").innerHTML = services.map((service) => `<option value="${service.id}">${escapeText(service.amr_code)} · ${escapeText(service.plan_name)}</option>`).join("");
+  $("#contract-generation-dialog").showModal();
+  void refreshContractGenerationReadiness();
+}
+
+function closeContractGenerationDialog() {
+  $("#contract-generation-dialog").close();
+}
+
 async function deleteCustomer(customer) {
   const confirmed = window.confirm(
     `¿Eliminar a ${customer.full_name}? Esta acción no se puede deshacer.`
@@ -520,6 +879,10 @@ async function deleteCustomer(customer) {
     state.customers = state.customers?.filter((item) => item.id !== customer.id);
     renderCustomers($("#customer-search").value);
     renderOverview();
+    if (state.selectedCustomerId === customer.id) {
+      state.selectedCustomerId = null;
+      showView("customers");
+    }
     setNotice("El cliente fue eliminado.");
   } catch (error) {
     setNotice(error.message);
@@ -532,6 +895,8 @@ function serviceLabel(service) {
 
 function renderHolderAssignmentOptions(preselectedServiceId, preselectedCustomerId) {
   const serviceSelect = $("#holder-assignment-service");
+  const serviceSearch = $("#holder-assignment-service-search");
+  const serviceOptions = $("#holder-assignment-service-options");
   const customerSelect = $("#holder-assignment-customer");
   const services = (state.services || []).filter((service) =>
     service.status !== "cancelled" &&
@@ -540,11 +905,26 @@ function renderHolderAssignmentOptions(preselectedServiceId, preselectedCustomer
   serviceSelect.innerHTML = services.map((service) =>
     `<option value="${service.id}">${escapeText(serviceLabel(service))}</option>`
   ).join("");
+  serviceOptions.innerHTML = services.map((service) =>
+    `<option value="${escapeText(serviceLabel(service))}"></option>`
+  ).join("");
   customerSelect.innerHTML = (state.customers || []).map((customer) =>
     `<option value="${customer.id}">${escapeText(customer.full_name)}</option>`
   ).join("");
-  serviceSelect.value = preselectedServiceId || services[0]?.id || "";
+  serviceSelect.value = preselectedServiceId || "";
+  serviceSearch.value = preselectedServiceId
+    ? serviceLabel(services.find((service) => service.id === preselectedServiceId))
+    : "";
   customerSelect.value = preselectedCustomerId || state.customers?.[0]?.id || "";
+  updateHolderAssignmentContext();
+}
+
+function syncHolderAssignmentService() {
+  const search = $("#holder-assignment-service-search").value.trim().toLowerCase();
+  const service = (state.services || []).find((item) =>
+    serviceLabel(item).toLowerCase() === search
+  );
+  $("#holder-assignment-service").value = service?.id || "";
   updateHolderAssignmentContext();
 }
 
@@ -556,6 +936,10 @@ function updateHolderAssignmentContext() {
     (item) => item.id === service?.current_customer_id
   );
   const customerSelect = $("#holder-assignment-customer");
+  if (!service) {
+    $("#holder-assignment-current").textContent = "Busca y selecciona el servicio al que se asignará este cliente.";
+    return;
+  }
   [...customerSelect.options].forEach((option) => {
     option.disabled = option.value === service?.current_customer_id;
   });
@@ -592,6 +976,53 @@ function closeHolderAssignmentDialog() {
   $("#holder-assignment-dialog").close();
 }
 
+function openServicePaymentDayDialog(service) {
+  state.selectedServiceId = service.id;
+  $("#service-payment-day-title").textContent = `Corregir día de pago · ${service.amr_code}`;
+  $("#service-payment-day-summary").textContent = `Día actual: ${service.payment_day}. Esta corrección quedará registrada en el historial del servicio.`;
+  const daySelect = $("#service-payment-day-value");
+  daySelect.innerHTML = Array.from({ length: 28 }, (_, index) => `<option value="${index + 1}">Día ${index + 1}</option>`).join("");
+  daySelect.value = String(service.payment_day);
+  $("#service-payment-day-reason").value = "";
+  $("#service-payment-day-error").textContent = "";
+  $("#service-payment-day-dialog").showModal();
+  daySelect.focus();
+}
+
+function closeServicePaymentDayDialog() {
+  $("#service-payment-day-dialog").close();
+  state.selectedServiceId = null;
+}
+
+async function saveServicePaymentDay(event) {
+  event.preventDefault();
+  const serviceId = state.selectedServiceId;
+  const errorBox = $("#service-payment-day-error");
+  const form = $("#service-payment-day-form");
+  if (!serviceId) return;
+  errorBox.textContent = "";
+  const submitButton = form.querySelector('[type="submit"]');
+  submitButton.disabled = true;
+  try {
+    const saved = await api(`/api/v1/services/${serviceId}/payment-day`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        payment_day: Number($("#service-payment-day-value").value),
+        reason: $("#service-payment-day-reason").value.trim(),
+      }),
+    });
+    state.services = state.services.map((service) => service.id === saved.id ? { ...service, ...saved } : service);
+    closeServicePaymentDayDialog();
+    renderServices();
+    renderOverview();
+    setNotice("El día de pago fue corregido y quedó en el historial del servicio.");
+  } catch (error) {
+    errorBox.textContent = error.message;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 async function saveHolderAssignment(event) {
   event.preventDefault();
   const button = event.currentTarget.querySelector('button[type="submit"]');
@@ -619,6 +1050,7 @@ async function saveHolderAssignment(event) {
     await api(endpoint, { method: "POST", body: JSON.stringify(body) });
     state.services = await loadResource("/api/v1/services");
     renderServices();
+    if (state.selectedCustomerId) renderCustomerDetail();
     renderOverview();
     closeHolderAssignmentDialog();
     setNotice(service.current_customer_id
@@ -682,11 +1114,12 @@ function updateInstallationFields() {
   const special = result === "special_equipment";
   $("#installation-date-field").hidden = rejected;
   $("#installation-cost-field").hidden = rejected;
+  $("#installation-create-charge-field").hidden = rejected;
   $("#installation-scheduled-for").required = !rejected;
   $("#installation-cost").required = !rejected;
   $("#installation-special-equipment-field").hidden = !special;
   $("#installation-special-equipment").required = special;
-  if (rejected) $("#installation-cost").value = "0";
+  if (rejected) { $("#installation-cost").value = "0"; $("#installation-create-charge").checked = false; }
 }
 
 async function openInstallationDialog(service) {
@@ -717,6 +1150,7 @@ async function openInstallationDialog(service) {
   tomorrow.setDate(tomorrow.getDate() + 1);
   $("#installation-scheduled-for").value = localDateValue(tomorrow);
   $("#installation-cost").value = "0";
+  $("#installation-create-charge").checked = false;
   $("#installation-special-equipment").value = "";
   $("#installation-notes").value = "";
   $("#installation-form-error").textContent = "";
@@ -1351,6 +1785,7 @@ async function openCancellationDialog(service) {
   state.selectedServiceId = service.id;
   state.selectedCancellation = null;
   state.selectedRecovery = null;
+  state.selectedRecoveryInventory = [];
   $("#cancellation-dialog-title").textContent =
     `Baja y retiro · ${service.amr_code}`;
   $("#cancellation-summary").innerHTML = `
@@ -1379,6 +1814,11 @@ async function openCancellationDialog(service) {
       state.selectedRecovery = await loadOptionalRecord(
         `/api/v1/services/${service.id}/equipment-recovery`
       );
+      if (!state.selectedRecovery && hasCapability("assets.read")) {
+        state.selectedRecoveryInventory = await loadOptionalRecord(
+          `/api/v1/services/${service.id}/recovery-inventory`
+        ) || [];
+      }
     }
     renderCancellationWorkspace();
   } catch (error) {
@@ -1392,6 +1832,7 @@ function closeCancellationDialog() {
   state.selectedServiceId = null;
   state.selectedCancellation = null;
   state.selectedRecovery = null;
+  state.selectedRecoveryInventory = [];
   $("#cancellation-error").textContent = "";
 }
 
@@ -1481,13 +1922,30 @@ function recoveryScheduleMarkup(cancellation) {
   const minimumDate = cancellation.effective_date > localDateValue()
     ? cancellation.effective_date
     : localDateValue();
+  const detectedAssets = state.selectedRecoveryInventory || [];
+  const detectedCodes = detectedAssets.map((asset) => asset.internal_code);
+  const auxiliaryEquipment = ["Módem", "PoE", "Fuente"];
+  const expectedEquipment = [...detectedCodes, ...auxiliaryEquipment].join("\n");
+  const detectedMarkup = detectedAssets.length ? `
+    <div class="decision-summary full-row">
+      ${detectedAssets.map((asset) => `
+        <div>
+          <span>Antena UISP · ${escapeText(asset.internal_code)}</span>
+          <strong>${escapeText(asset.device_name || asset.description)}</strong>
+          <small>MAC ${escapeText(asset.mac_address || "sin MAC")} · última IP ${escapeText(asset.management_ip || "sin IP")}</small>
+        </div>
+      `).join("")}
+    </div>
+  ` : `
+    <p class="form-help full-row">No hay antena UISP vinculada a este servicio. Registra los equipos físicos por su código AST cuando estén disponibles.</p>
+  `;
   return `
     <form id="recovery-schedule-form" class="cancellation-stage-card">
       <div class="stage-status">
         <h3>3. Programar recuperación</h3>
         <span class="badge pending">Pendiente</span>
       </div>
-      <p>La visita queda vinculada al folio y no libera la IP por sí sola.</p>
+      <p>La visita queda vinculada al folio y no libera la IP por sí sola. La antena detectada se identifica por su código Aether y MAC.</p>
       <div class="form-grid">
         <label>
           Fecha acordada
@@ -1503,16 +1961,14 @@ function recoveryScheduleMarkup(cancellation) {
           Técnico asignado
           <input id="recovery-technician" minlength="2" maxlength="150" required>
         </label>
+        ${detectedMarkup}
         <label class="full-row">
-          Equipos esperados, uno por línea
+          Equipos esperados, uno por línea. No borres el código AST de la antena.
           <textarea
             id="recovery-expected-equipment"
             rows="5"
             required
-          >Antena
-Módem
-PoE
-Fuente</textarea>
+          >${escapeText(expectedEquipment)}</textarea>
         </label>
         <label class="full-row">
           Notas
@@ -2942,6 +3398,7 @@ async function saveInstallation(event) {
             ? null
             : $("#installation-scheduled-for").value,
           cost: rejected ? "0" : $("#installation-cost").value,
+          create_charge: !rejected && $("#installation-create-charge").checked,
           new_address: null,
           registered_by: state.user.display_name,
           notes: $("#installation-notes").value.trim() || null,
