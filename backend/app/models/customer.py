@@ -16,6 +16,11 @@ class Customer(Base):
         default=uuid4,
     )
     full_name: Mapped[str] = mapped_column(String(150), index=True)
+    # Kept alongside full_name for backwards compatibility with UISP imports
+    # and historical records. New manual records use the three legal-name fields.
+    given_names: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    paternal_surname: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    maternal_surname: Mapped[str | None] = mapped_column(String(60), nullable=True)
     phones: Mapped[list[str]] = mapped_column(JSON)
     email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -30,7 +30,19 @@ def create_customer(
     customer: CustomerCreate,
     db: Session = Depends(get_db),
 ) -> Customer:
-    new_customer = Customer(**customer.model_dump())
+    customer_data = customer.model_dump()
+    legal_name = " ".join(
+        part.strip()
+        for part in (
+            customer.given_names,
+            customer.paternal_surname,
+            customer.maternal_surname,
+        )
+        if part and part.strip()
+    )
+    if legal_name:
+        customer_data["full_name"] = legal_name
+    new_customer = Customer(**customer_data)
     db.add(new_customer)
     db.flush()
     record_audit_event(
@@ -115,6 +127,19 @@ def update_customer(
     }
     for field_name, value in changes.items():
         setattr(customer, field_name, value)
+    if {"given_names", "paternal_surname", "maternal_surname"} & changes.keys():
+        legal_name = " ".join(
+            part.strip()
+            for part in (
+                customer.given_names,
+                customer.paternal_surname,
+                customer.maternal_surname,
+            )
+            if part and part.strip()
+        )
+        if legal_name:
+            customer.full_name = legal_name
+            changes["full_name"] = legal_name
     record_audit_event(
         db,
         actor="system",

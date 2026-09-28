@@ -11,6 +11,7 @@ from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.charges import router as charges_router
 from app.api.v1.endpoints.contracts import router as contracts_router
 from app.api.v1.endpoints.customers import router as customers_router
+from app.api.v1.endpoints.customer_documents import router as customer_documents_router
 from app.api.v1.endpoints.daily_operations import (
     router as daily_operations_router,
 )
@@ -74,6 +75,7 @@ app.include_router(incidents_router, dependencies=protected)
 app.include_router(installations_router, dependencies=protected)
 app.include_router(holder_transfers_router, dependencies=protected)
 app.include_router(customers_router, dependencies=protected)
+app.include_router(customer_documents_router, dependencies=protected)
 app.include_router(contracts_router, dependencies=protected)
 app.include_router(services_router, dependencies=protected)
 app.include_router(assets_router, dependencies=protected)

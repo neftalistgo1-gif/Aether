@@ -7,6 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class CustomerBase(BaseModel):
     full_name: str = Field(min_length=2, max_length=150)
+    given_names: str | None = Field(default=None, min_length=1, max_length=80)
+    paternal_surname: str | None = Field(default=None, min_length=1, max_length=60)
+    maternal_surname: str | None = Field(default=None, min_length=1, max_length=60)
     phones: list[str] = Field(min_length=1)
     email: str | None = Field(default=None, max_length=254)
     notes: str | None = Field(default=None, max_length=1000)
@@ -19,6 +22,9 @@ class CustomerCreate(CustomerBase):
 class CustomerUpdate(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
     full_name: str | None = Field(default=None, min_length=2, max_length=150)
+    given_names: str | None = Field(default=None, min_length=1, max_length=80)
+    paternal_surname: str | None = Field(default=None, min_length=1, max_length=60)
+    maternal_surname: str | None = Field(default=None, min_length=1, max_length=60)
     phones: list[str] | None = Field(default=None, min_length=1)
     email: str | None = Field(default=None, max_length=254)
     notes: str | None = Field(default=None, max_length=1000)

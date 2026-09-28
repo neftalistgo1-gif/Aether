@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from uuid import UUID
 
@@ -82,16 +82,12 @@ def create_installation(
             status_code=409,
             detail="Cancelled services cannot receive installation work",
         )
-    if as_utc(data.coverage_checked_at) > datetime.now(UTC):
-        raise HTTPException(
-            status_code=409,
-            detail="Coverage check cannot be in the future",
-        )
-    if data.scheduled_for is not None and data.scheduled_for < date.today():
-        raise HTTPException(
-            status_code=409,
-            detail="Installation cannot be scheduled in the past",
-        )
+    server_now = datetime.now(UTC)
+    installation_data = data.model_dump(exclude={"create_charge"})
+    # The coverage assessment is performed in this screen. A device clock can
+    # be ahead of the server, so record server time instead of rejecting it.
+    if as_utc(data.coverage_checked_at) > server_now:
+        installation_data["coverage_checked_at"] = server_now
     if (
         data.installation_type == InstallationType.installation
         and service.status != ServiceStatus.pending
@@ -111,23 +107,42 @@ def create_installation(
         )
 
     rejected = data.coverage_result == CoverageResult.out_of_coverage
+    # A past date represents an installation that was completed before it was
+    # captured in Aether, rather than an invalid appointment in the past.
+    historical_completion = (
+        not rejected
+        and data.scheduled_for is not None
+        and data.scheduled_for < date.today()
+    )
     installation = Installation(
         service_id=service.id,
         status=(
             InstallationStatus.cancelled
             if rejected
+            else InstallationStatus.completed
+            if historical_completion
             else InstallationStatus.scheduled
+        ),
+        completed_at=(
+            datetime.combine(data.scheduled_for, time.min, tzinfo=UTC)
+            if historical_completion and data.scheduled_for is not None
+            else None
         ),
         cancellation_reason=(
             "Coverage assessment was not viable" if rejected else None
         ),
         cancelled_at=datetime.now(UTC) if rejected else None,
-        **data.model_dump(),
+        **installation_data,
     )
+    if historical_completion:
+        service.status = ServiceStatus.active
+        service.activation_date = data.scheduled_for
     db.add(installation)
     try:
         db.flush()
-        if not rejected and data.cost > 0:
+        # A promotional price can be recorded without automatically becoming
+        # a customer debt. Creating the charge is always an explicit choice.
+        if not rejected and data.cost > 0 and data.create_charge:
             charge = Charge(
                 customer_id=service.current_customer_id,
                 service_id=service.id,
@@ -160,6 +175,7 @@ def create_installation(
                 "coverage_result": data.coverage_result,
                 "scheduled_for": data.scheduled_for,
                 "cost": data.cost,
+                "create_charge": data.create_charge,
                 "status": installation.status,
                 "charge_id": installation.charge_id,
             },

@@ -20,6 +20,7 @@ class InstallationCreate(BaseModel):
     special_equipment_notes: str | None = Field(default=None, max_length=2000)
     scheduled_for: date | None = None
     cost: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
+    create_charge: bool = False
     new_address: str | None = Field(default=None, min_length=5, max_length=250)
     registered_by: str = Field(min_length=2, max_length=150)
     notes: str | None = Field(default=None, max_length=2000)

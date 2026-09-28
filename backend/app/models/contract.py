@@ -116,6 +116,15 @@ class Contract(Base):
     plan_name_snapshot: Mapped[str] = mapped_column(String(100))
     monthly_price_snapshot: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     payment_day_snapshot: Mapped[int] = mapped_column()
+    installation_cost_snapshot: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    installation_charge_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("charges.id", ondelete="RESTRICT"),
+        unique=True,
+        nullable=True,
+    )
     created_by: Mapped[str] = mapped_column(String(150))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

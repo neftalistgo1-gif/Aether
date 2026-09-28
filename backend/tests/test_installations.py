@@ -80,6 +80,7 @@ class InstallationTestCase(unittest.TestCase):
             coverage_checked_at=datetime.now(UTC),
             scheduled_for=date.today() + timedelta(days=1),
             cost=Decimal("1000.00"),
+            create_charge=True,
             new_address=new_address,
             registered_by="Atencion a clientes",
         )
@@ -135,6 +136,15 @@ class InstallationTestCase(unittest.TestCase):
         self.db.refresh(self.service)
         self.assertEqual(self.service.status, ServiceStatus.active)
         self.assertIsNotNone(self.service.activation_date)
+
+    def test_installation_cost_does_not_create_debt_without_explicit_choice(self) -> None:
+        data = self.installation_data()
+        data.create_charge = False
+        installation = create_installation(self.service.id, data, self.db)
+
+        self.assertEqual(installation.status, InstallationStatus.scheduled)
+        self.assertIsNone(installation.charge_id)
+        self.assertEqual(self.db.query(Charge).count(), 0)
 
     def test_navigation_and_required_photos_are_enforced(self) -> None:
         with self.assertRaises(ValidationError):

@@ -20,6 +20,24 @@ class ContractCreate(BaseModel):
     notes: str | None = Field(default=None, max_length=2000)
 
 
+class ContractGenerate(BaseModel):
+    customer_id: UUID
+    contract_date: date
+    installation_cost: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
+    create_installation_charge: bool = False
+    requested_by: str = Field(min_length=2, max_length=150)
+
+
+class ContractGenerationReadiness(BaseModel):
+    """Checklist returned before a template is rendered for a customer."""
+
+    service_id: UUID
+    customer_id: UUID
+    can_generate: bool
+    missing_fields: list[str]
+    suggested_installation_cost: Decimal | None = None
+
+
 class EvidenceData(BaseModel):
     evidence_kind: EvidenceKind
     document_reference: str = Field(min_length=3, max_length=500)

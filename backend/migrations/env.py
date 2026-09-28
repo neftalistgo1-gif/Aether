@@ -12,6 +12,7 @@ from app.models.audit import AuditEvent
 from app.models.charge import Charge
 from app.models.contract import Contract, ContractAmendment
 from app.models.customer import Customer
+from app.models.customer_document import CustomerDocument
 from app.models.daily_operation import DailyOperationRun
 from app.models.equipment_recovery import EquipmentRecovery
 from app.models.extension import Extension
