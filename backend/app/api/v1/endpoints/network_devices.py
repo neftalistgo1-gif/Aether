@@ -7,7 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.endpoints.services import find_service_or_404
 from app.db.session import get_db
-from app.integrations.mikrotik import RouterOSRestClient
+from app.integrations.mikrotik import (
+    RouterOSRestClient,
+    address_list_entry_is_disabled,
+)
 from app.models.mikrotik import MikrotikRouter
 from app.models.network_device import DeviceStatusEvent, NetworkDevice, NetworkDeviceStatus
 from app.schemas.network_device import DeviceStatusEventRead, NetworkDailySummaryRead, NetworkDeviceRead
@@ -16,7 +19,7 @@ router = APIRouter(prefix="/api/v1", tags=["network devices"])
 
 
 def suspended_management_ips(db: Session) -> set[str]:
-    """Return the live suspension list without treating it as UISP telemetry."""
+    """Return enabled MikroTik blocks without treating them as UISP telemetry."""
     router_record = db.scalar(select(MikrotikRouter).order_by(MikrotikRouter.name))
     if router_record is None:
         return set()
@@ -31,6 +34,7 @@ def suspended_management_ips(db: Session) -> set[str]:
         for entry in entries
         if entry.get("list") == router_record.suspended_address_list
         and isinstance(entry.get("address"), str)
+        if not address_list_entry_is_disabled(entry)
     }
 
 

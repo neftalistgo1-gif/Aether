@@ -11,6 +11,7 @@ class NetworkDeviceRead(BaseModel):
 
     id: UUID
     uisp_device_id: str
+    asset_id: UUID | None
     service_id: UUID | None
     access_point_id: UUID | None
     device_type: NetworkDeviceType

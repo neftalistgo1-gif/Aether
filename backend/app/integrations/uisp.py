@@ -118,7 +118,23 @@ def inventory_asset_type(device_type: NetworkDeviceType) -> AssetType:
     return AssetType.access_point if device_type == NetworkDeviceType.access_point else AssetType.cpe
 
 
-def sync_inventory_asset(db, *, item: NetworkDevice, identity: dict, device_type: NetworkDeviceType) -> bool:
+def uisp_device_model(source: dict, identity: dict) -> str | None:
+    """Read model names from the alternate field names used by UISP versions."""
+    candidates = (
+        identity,
+        source,
+        source.get("overview") if isinstance(source.get("overview"), dict) else {},
+        source.get("device") if isinstance(source.get("device"), dict) else {},
+    )
+    for data in candidates:
+        for field in ("model", "modelName", "productName", "productShortName", "platform"):
+            value = data.get(field)
+            if isinstance(value, str) and value.strip():
+                return value.strip()[:150]
+    return None
+
+
+def sync_inventory_asset(db, *, item: NetworkDevice, source: dict, identity: dict, device_type: NetworkDeviceType) -> bool:
     mac_address = normalize_mac_address(identity.get("mac"))
     device_name = (item.display_name or "").strip()
     # UISP also exposes temporary/generic records with only an IP address.
@@ -153,9 +169,23 @@ def sync_inventory_asset(db, *, item: NetworkDevice, identity: dict, device_type
     asset.device_name = device_name
     asset.management_ip = item.management_ip
     asset.brand = "Ubiquiti"
-    asset.model = identity.get("model") or asset.model
+    # UISP inventory responses vary between firmware/API versions; retain a
+    # manually entered model only when UISP does not provide one at all.
+    asset.model = uisp_device_model(source, identity) or asset.model
     asset.mac_address = mac_address
-    asset.status = AssetStatus.installed
+    # A radio can continue appearing offline in UISP after it was physically
+    # recovered.  Telemetry must keep its last name/IP current but must never
+    # undo an inventory decision made by Aether.
+    protected_inventory_statuses = {
+        AssetStatus.quarantine,
+        AssetStatus.needs_repair,
+        AssetStatus.defective,
+        AssetStatus.discarded,
+        AssetStatus.not_recovered,
+        AssetStatus.sold_to_customer,
+    }
+    if asset.status not in protected_inventory_statuses:
+        asset.status = AssetStatus.installed
     asset.notes = f"Sincronizado desde UISP: {item.uisp_device_id}"
     db.flush()
     item.asset_id = asset.id
@@ -169,7 +199,22 @@ def link_matching_service(db, item: NetworkDevice) -> bool:
     if not amr_code:
         return False
     reference = load_service_reference().get(amr_code, {})
-    service = db.scalar(select(Service).where(Service.amr_code == amr_code, Service.status != ServiceStatus.cancelled))
+    service = db.scalar(
+        select(Service).where(
+            Service.amr_code == amr_code,
+            Service.status != ServiceStatus.cancelled,
+        )
+    )
+    # A recovered radio may remain visible as offline in UISP for days.  Its
+    # historical device record must stay attached to the cancelled service;
+    # telemetry must not resurrect a new pending AMR service from that name.
+    if service is None and db.scalar(
+        select(Service.id).where(
+            Service.amr_code == amr_code,
+            Service.status == ServiceStatus.cancelled,
+        )
+    ) is not None:
+        return False
     if service is None:
         plan = closest_plan(db, reference.get("speed_mbps"))
         if plan is None or plan.current_price is None:
@@ -182,18 +227,20 @@ def link_matching_service(db, item: NetworkDevice) -> bool:
             monthly_price=plan.current_price,
             payment_day=cutoff.day,
             activation_date=cutoff,
-            address=reference.get("address") or item.display_name,
+            # A UISP display name identifies equipment, not a reliable domicile.
+            address=reference.get("address") or "Domicilio pendiente de completar",
             status=ServiceStatus.pending,
         )
         db.add(service)
         db.flush()
     elif service.status == ServiceStatus.pending and service.current_customer_id is None:
-        apply_reference_to_pending_service(service, db, reference, item.display_name)
+        apply_reference_to_pending_service(service, db, reference)
     if service.current_customer_id is None:
         customer = Customer(
             full_name=service.amr_code,
             phones=["Pendiente"],
-            email="Pendiente",
+            # Contact details are optional during automatic UISP creation.
+            email=None,
             notes="Falta teléfono y correo. Creado automáticamente desde UISP.",
         )
         db.add(customer)
@@ -282,7 +329,7 @@ def closest_plan(db, desired_speed: object) -> Plan | None:
     return min(plans, key=lambda plan: abs((speed_mbps(plan.speed) or 15) - requested))
 
 
-def apply_reference_to_pending_service(service: Service, db, reference: dict, fallback_address: str) -> None:
+def apply_reference_to_pending_service(service: Service, db, reference: dict) -> None:
     plan = closest_plan(db, reference.get("speed_mbps"))
     if plan is not None and plan.current_price is not None:
         service.plan_id = plan.id
@@ -291,10 +338,8 @@ def apply_reference_to_pending_service(service: Service, db, reference: dict, fa
     cutoff = reference_date(reference)
     service.payment_day = cutoff.day
     service.activation_date = cutoff
-    if reference.get("address"):
+    if reference.get("address") and not service.address_is_manual:
         service.address = reference["address"]
-    elif not service.address:
-        service.address = fallback_address
 
 
 def merge_duplicate_device(db, *, canonical: NetworkDevice, duplicate: NetworkDevice) -> None:
@@ -435,6 +480,9 @@ def sync_devices(db, devices: list[dict]) -> dict[str, int]:
         next_status = NetworkDeviceStatus.online if overview.get("status") == "active" else NetworkDeviceStatus.offline
         last_seen = parse_uisp_datetime(overview.get("lastSeen"))
         details = {key: overview.get(key) for key in ("signal", "signalMax", "remoteSignalMax", "frequency", "channelWidth", "linkScore", "uplinkCapacity", "downlinkCapacity", "wirelessMode") if key in overview}
+        model = uisp_device_model(source, identity)
+        if model:
+            details["model"] = model
         item = db.scalar(select(NetworkDevice).where(NetworkDevice.uisp_device_id == device_id))
         matching_mac_devices = list(
             db.scalars(
@@ -462,7 +510,7 @@ def sync_devices(db, devices: list[dict]) -> dict[str, int]:
                 db.add(DeviceStatusEvent(device_id=item.id, previous_status=item.current_status, new_status=next_status, source="uisp")); status_events += 1
         item.device_type = device_type; item.display_name = display_name; item.management_ip = management_ip; item.mac_address = mac_address; item.current_status = next_status; item.last_seen_at = last_seen; item.last_synced_at = now; item.observed_details = details; item.offline_since = item.offline_since if next_status == NetworkDeviceStatus.offline else None
         if next_status == NetworkDeviceStatus.offline and item.offline_since is None: item.offline_since = now
-        inventory_created += sync_inventory_asset(db, item=item, identity=identity, device_type=device_type)
+        inventory_created += sync_inventory_asset(db, item=item, source=source, identity=identity, device_type=device_type)
         services_linked += link_matching_service(db, item)
         access_points_synced += sync_access_point_from_device(db, item)
     network_result = sync_network_assignments_from_devices(db)

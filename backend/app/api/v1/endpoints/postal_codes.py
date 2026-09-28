@@ -3,10 +3,13 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from app.core.config import AETHER_POSTAL_CODES_PATH
 from app.schemas.postal_code import PostalCodeRead
+from app.api.dependencies.auth import require_administrator
+from app.models.auth import OperatorUser
+from app.services.postal_catalog import merge_catalog, parse_catalog
 
 router = APIRouter(prefix="/api/v1/postal-codes", tags=["postal codes"])
 
@@ -38,9 +41,8 @@ def list_postal_codes(
         str,
         Query(
             min_length=2,
-            max_length=5,
-            pattern=r"^\d{2,5}$",
-            description="Postal code prefix or exact code",
+            max_length=160,
+            description="Postal code prefix or settlement name",
         ),
     ],
 ) -> list[PostalCodeRead]:
@@ -56,7 +58,7 @@ def list_postal_codes(
     matches = [
         entry
         for entry in catalog
-        if entry.postal_code.startswith(normalized_query)
+        if entry.postal_code.startswith(normalized_query) or normalized_query.casefold() in entry.settlement_name.casefold()
     ]
     matches.sort(
         key=lambda entry: (
@@ -66,3 +68,19 @@ def list_postal_codes(
         )
     )
     return matches[:100]
+
+
+@router.post("/import", response_model=list[PostalCodeRead])
+async def import_postal_codes(
+    file: UploadFile = File(...),
+    administrator: OperatorUser = Depends(require_administrator),
+) -> list[PostalCodeRead]:
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="El archivo excede 5 MB")
+    try:
+        catalog = merge_catalog(CATALOG_PATH, parse_catalog(content))
+        load_postal_code_catalog.cache_clear()
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return [PostalCodeRead(**item) for item in catalog]

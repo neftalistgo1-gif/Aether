@@ -57,6 +57,18 @@ class ServiceUpdate(BaseModel):
         return self
 
 
+class ServiceAddressUpdate(BaseModel):
+    address: str = Field(min_length=5, max_length=250)
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class ServicePaymentDayUpdate(BaseModel):
+    """Restricted change used for correcting a service billing date."""
+
+    payment_day: int = Field(ge=1, le=28)
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class ServiceTransitionCreate(BaseModel):
     target_status: ServiceStatus
     reason: str = Field(min_length=3, max_length=500)
@@ -70,6 +82,7 @@ class ServiceRead(BaseModel):
     plan_id: UUID | None
     amr_code: str
     address: str
+    address_is_manual: bool
     plan_name: str
     monthly_price: Decimal
     payment_day: int

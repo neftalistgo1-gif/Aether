@@ -15,6 +15,18 @@ class RouterExecutionResult:
     entry_count: int
 
 
+def address_list_entry_is_disabled(entry: dict) -> bool:
+    """Normalize RouterOS REST's string/boolean disabled flag.
+
+    A disabled address-list entry stays visible in WinBox but does not match
+    firewall rules.  It must not be reported as a service block.
+    """
+    value = entry.get("disabled", False)
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"true", "yes", "1", "on"}
+
+
 class RouterOSRestClient:
     def __init__(self, router: MikrotikRouter, *, monitor: bool = False) -> None:
         prefix = router.credential_key.upper()
@@ -85,6 +97,7 @@ class RouterOSRestClient:
             for item in (entries or [])
             if item.get("list") == self.router.suspended_address_list
             and item.get("address") == target_ip
+            and not address_list_entry_is_disabled(item)
         ]
 
     def set_blocked(

@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     CheckConstraint,
+    Boolean,
     Date,
     DateTime,
     Enum as SqlEnum,
@@ -69,6 +70,8 @@ class Service(Base):
         index=True,
     )
     address: Mapped[str] = mapped_column(String(250))
+    # Separates the operator-confirmed service address from UISP equipment names.
+    address_is_manual: Mapped[bool] = mapped_column(Boolean, default=False)
     plan_name: Mapped[str] = mapped_column(String(100))
     monthly_price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     payment_day: Mapped[int] = mapped_column(SmallInteger)

@@ -74,6 +74,7 @@ class ServiceEndpointsTestCase(unittest.TestCase):
         self.assertEqual(created.amr_code, "AMR301")
         self.assertEqual(created.current_customer_id, self.customer.id)
         self.assertEqual(created.status, ServiceStatus.pending)
+        self.assertTrue(created.address_is_manual)
         self.assertEqual(self.db.query(Service).count(), 1)
         self.assertEqual(self.db.query(ServiceHolder).count(), 1)
         self.assertEqual(self.db.query(ServiceEvent).count(), 1)
@@ -200,6 +201,15 @@ class ServiceEndpointsTestCase(unittest.TestCase):
                         reason="Debe usar el flujo especializado",
                         **{field_name: value},
                     )
+
+    def test_generic_update_rejects_missing_or_null_fields(self) -> None:
+        with self.assertRaises(ValidationError):
+            ServiceUpdate(reason="No contiene ningún cambio")
+        with self.assertRaises(ValidationError):
+            ServiceUpdate(
+                reason="No se permite borrar el día de pago",
+                payment_day=None,
+            )
 
     def test_generic_transition_only_activates_service(self) -> None:
         service = create_service(self.service_payload(), self.db)

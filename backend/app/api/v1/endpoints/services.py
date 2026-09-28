@@ -23,6 +23,8 @@ from app.services.audit import record_audit_event
 from app.schemas.service import (
     ServiceCreate,
     ServiceEventRead,
+    ServiceAddressUpdate,
+    ServicePaymentDayUpdate,
     ServiceRead,
     ServiceTransitionCreate,
     ServiceUpdate,
@@ -91,7 +93,9 @@ def create_service(
     service_data = service.model_dump(
         exclude={"customer_id", "registered_by", "reason"}
     )
-    new_service = Service(**service_data)
+    # This endpoint represents an address curated by an operator. Automated
+    # imports are the only flows allowed to leave address_is_manual as false.
+    new_service = Service(**service_data, address_is_manual=True)
     if service.customer_id is not None:
         new_service.holders.append(
             ServiceHolder(customer_id=service.customer_id)
@@ -227,6 +231,53 @@ def update_service(
         ServiceEvent(
             event_type=ServiceEventType.details_updated,
             changes=changes,
+            reason=update.reason,
+        )
+    )
+    db.commit()
+    db.refresh(service)
+    return find_service_or_404(service.id, db)
+
+
+@router.patch("/{service_id}/address", response_model=ServiceRead)
+def update_service_address(service_id: UUID, update: ServiceAddressUpdate, db: Session = Depends(get_db)) -> Service:
+    """Update only the curated operational address; UISP never writes this path."""
+    service = find_service_or_404(service_id, db)
+    if service.address == update.address and service.address_is_manual:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The address is already up to date")
+    before = service.address
+    service.address = update.address
+    service.address_is_manual = True
+    service.events.append(ServiceEvent(event_type=ServiceEventType.details_updated, changes={"address": {"from": before, "to": update.address}}, reason=update.reason))
+    db.commit(); db.refresh(service)
+    return find_service_or_404(service.id, db)
+
+
+@router.patch("/{service_id}/payment-day", response_model=ServiceRead)
+def update_service_payment_day(
+    service_id: UUID,
+    update: ServicePaymentDayUpdate,
+    db: Session = Depends(get_db),
+) -> Service:
+    """Correct only the billing day, retaining an auditable reason."""
+    service = find_service_or_404(service_id, db)
+    previous_day = service.payment_day
+    if previous_day == update.payment_day:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The payment day is already set to that value",
+        )
+
+    service.payment_day = update.payment_day
+    service.events.append(
+        ServiceEvent(
+            event_type=ServiceEventType.details_updated,
+            changes={
+                "payment_day": {
+                    "from": previous_day,
+                    "to": update.payment_day,
+                }
+            },
             reason=update.reason,
         )
     )
