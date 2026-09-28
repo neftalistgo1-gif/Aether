@@ -3,16 +3,16 @@ services:
     image: postgres:18.4-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: aether
-      POSTGRES_USER: aether
-      POSTGRES_PASSWORD: aether
+      POSTGRES_DB: ${POSTGRES_DB:-aether}
+      POSTGRES_USER: ${POSTGRES_USER:-aether}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aether}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       # PostgreSQL 18 guarda los datos en un subdirectorio versionado.
       - aether_postgres_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aether -d aether"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -28,11 +28,23 @@ services:
     env_file:
       - ../backend/.env
     environment:
-      DATABASE_URL: postgresql+psycopg://aether:aether@postgres:5432/aether
+      # Ignore a DATABASE_URL from backend/.env: this Compose stack uses its
+      # own PostgreSQL container, not the developer's current database.
+      DATABASE_URL: ""
+      DATABASE_HOST: postgres
+      DATABASE_NAME: ${POSTGRES_DB:-aether}
+      DATABASE_USER: ${POSTGRES_USER:-aether}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-aether}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${AETHER_PORT:-8000}:8000"
     volumes:
       - ../backend/private_storage:/app/backend/private_storage
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   aether_postgres_data:

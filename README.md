@@ -75,6 +75,10 @@ Cuando quieras instalar Aether en otra PC o servidor:
 
 La primera vez también debes definir `AETHER_BOOTSTRAP_SECRET` para crear el
 primer administrador y luego retirarlo del `.env`.
+
+Para un servidor dedicado usa la configuración endurecida con TLS, secretos,
+respaldos y red interna de PostgreSQL descrita en
+[`docs/deployment/DEDICATED_SERVERS.md`](docs/deployment/DEDICATED_SERVERS.md).
 ## Administracion inicial
 
 - El primer administrador se crea desde la pantalla de acceso usando el boton

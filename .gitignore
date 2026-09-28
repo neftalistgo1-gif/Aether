@@ -19,7 +19,26 @@ node_modules/
 dist/
 build/
 
+# Artefactos temporales y entregables generados localmente.
+/.deploy-*/
+/outputs/
+/tmp/
+*.vsix
+
+# Artefactos locales del receptor Android.
+android-receiver/.gradle/
+android-receiver/local.properties
+android-receiver/app/build/
+*.jks
+*.keystore
+
 # Documentos privados y datos personales: nunca se versionan.
 /private_storage/
 /backend/private_storage/
 /docs/journal/codigos_postales.json
+
+# Datos, configuración y secretos del despliegue dedicado.
+/docker/.env.production
+/docker/secrets/*
+!/docker/secrets/README.md
+/docker/backups/

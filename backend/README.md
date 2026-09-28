@@ -120,7 +120,8 @@ los precios acordados de servicios existentes.
 
 Las cuentas con `installations.write` pueden registrar desde la UI la
 evaluación de cobertura de un servicio pendiente. Una evaluación viable se
-agenda y genera el cargo correspondiente cuando el costo es mayor que cero;
+agenda; el costo sólo se convierte en deuda cuando se selecciona expresamente
+la opción de crear un cargo. Sin esa elección se registra como costo informativo;
 un resultado fuera de cobertura no se agenda ni cobra. Completar el trabajo y
 activar el servicio permanece en un flujo posterior con evidencias obligatorias.
 Cuando ya existe una instalación programada, la UI permite reprogramarla o
