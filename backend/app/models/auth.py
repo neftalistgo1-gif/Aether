@@ -29,6 +29,7 @@ class Capability(str, Enum):
     customers_write = "customers.write"
     services_read = "services.read"
     services_write = "services.write"
+    services_payment_day_write = "services.payment_day.write"
     services_cancel = "services.cancel"
     billing_read = "billing.read"
     billing_write = "billing.write"
@@ -139,6 +140,7 @@ class UserPermission(Base):
             name="capability",
             native_enum=False,
             validate_strings=True,
+            length=50,
         ),
         index=True,
     )

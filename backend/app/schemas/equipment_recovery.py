@@ -1,10 +1,17 @@
 from datetime import date, datetime
-from typing import Self
+from typing import Annotated, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.service_operations import EquipmentRecoveryStatus
+
+MAX_EVIDENCE_REFERENCE_LENGTH = 3_000_000
+MAX_EVIDENCE_TOTAL_LENGTH = 13_000_000
+EvidenceReference = Annotated[
+    str,
+    Field(min_length=1, max_length=MAX_EVIDENCE_REFERENCE_LENGTH),
+]
 
 
 def normalize_equipment_list(items: list[str]) -> list[str]:
@@ -33,9 +40,9 @@ class EquipmentRecoveryComplete(BaseModel):
     recovered_equipment: list[str] = Field(default_factory=list, max_length=20)
     missing_equipment: list[str] = Field(default_factory=list, max_length=20)
     condition_notes: str = Field(min_length=3, max_length=2000)
-    evidence_references: list[str] = Field(
+    evidence_references: list[EvidenceReference] = Field(
         default_factory=list,
-        max_length=20,
+        max_length=6,
     )
     receipt_reference: str | None = Field(default=None, max_length=500)
     notes: str | None = Field(default=None, max_length=1000)
@@ -44,6 +51,13 @@ class EquipmentRecoveryComplete(BaseModel):
     @classmethod
     def validate_equipment(cls, items: list[str]) -> list[str]:
         return normalize_equipment_list(items)
+
+    @field_validator("evidence_references")
+    @classmethod
+    def validate_evidence_size(cls, references: list[str]) -> list[str]:
+        if sum(len(reference) for reference in references) > MAX_EVIDENCE_TOTAL_LENGTH:
+            raise ValueError("Equipment evidence exceeds the 13 MB request limit")
+        return references
 
     @model_validator(mode="after")
     def validate_classification(self) -> Self:

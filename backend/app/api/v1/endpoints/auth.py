@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from app.core.security import (
     verify_password,
 )
 from app.db.session import get_db
+from app.models.audit import AuditEvent
 from app.models.auth import (
     AuthSession,
     OperatorUser,
@@ -114,6 +115,11 @@ def bootstrap_administrator(
         AETHER_BOOTSTRAP_SECRET,
     ):
         raise HTTPException(status_code=401, detail="Invalid bootstrap secret")
+    # PostgreSQL needs a transaction-scoped lock because there is no row to
+    # lock before the first administrator exists. SQLite is used by unit tests
+    # and serializes this flow in-process.
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(184374921)"))
     if db.scalar(select(func.count()).select_from(OperatorUser)) != 0:
         raise HTTPException(
             status_code=409,
@@ -461,6 +467,89 @@ def reset_operator_password(
     )
     db.commit()
     return user
+
+
+@router.post(
+    "/users/{user_id}/reactivate",
+    response_model=OperatorUserRead,
+)
+def reactivate_operator_user(
+    user_id: UUID,
+    data: UserDeactivate,
+    administrator: OperatorUser = Depends(require_administrator),
+    db: Session = Depends(get_db),
+) -> OperatorUser:
+    user = db.get(OperatorUser, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Operator user not found")
+    if user.is_active:
+        raise HTTPException(status_code=409, detail="User is already active")
+    user.is_active = True
+    user.deactivated_at = None
+    record_audit_event(
+        db,
+        actor=administrator.display_name,
+        action="auth.user_reactivated",
+        entity_type="OperatorUser",
+        entity_id=user.id,
+        reason=data.reason,
+        before_data={"is_active": False},
+        after_data={"is_active": True},
+    )
+    db.commit()
+    return user
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_operator_user(
+    user_id: UUID,
+    administrator: OperatorUser = Depends(require_administrator),
+    db: Session = Depends(get_db),
+) -> None:
+    user = db.get(OperatorUser, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Operator user not found")
+    if user.id == administrator.id:
+        raise HTTPException(
+            status_code=409,
+            detail="Administrator cannot delete the current account",
+        )
+    if user.is_active:
+        raise HTTPException(
+            status_code=409,
+            detail="Deactivate the user before deleting it",
+        )
+    has_created_users = db.scalar(
+        select(func.count()).select_from(OperatorUser).where(
+            OperatorUser.created_by_id == user.id
+        )
+    )
+    has_granted_permissions = db.scalar(
+        select(func.count()).select_from(UserPermission).where(
+            UserPermission.granted_by_id == user.id
+        )
+    )
+    has_audit_history = db.scalar(
+        select(func.count()).select_from(AuditEvent).where(
+            AuditEvent.actor_user_id == user.id
+        )
+    )
+    if has_created_users or has_granted_permissions or has_audit_history:
+        raise HTTPException(
+            status_code=409,
+            detail="This user has an audit or authorization history and cannot be deleted",
+        )
+    record_audit_event(
+        db,
+        actor=administrator.display_name,
+        action="auth.user_deleted",
+        entity_type="OperatorUser",
+        entity_id=user.id,
+        reason="Inactive user deleted from administrative UI",
+        before_data={"username": user.username, "display_name": user.display_name},
+    )
+    db.delete(user)
+    db.commit()
 
 
 @router.post(

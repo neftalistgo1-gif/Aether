@@ -107,8 +107,14 @@ def create_maintenance_inspection(
     asset = db.scalar(
         select(Asset).where(
             Asset.latest_recovery_id == recovery.id,
-            func.lower(Asset.recovery_equipment_name)
-            == canonical_equipment_name.casefold(),
+            (
+                func.lower(Asset.recovery_equipment_name)
+                == canonical_equipment_name.casefold()
+            )
+            | (
+                func.lower(Asset.internal_code)
+                == canonical_equipment_name.casefold()
+            ),
         )
     )
     if asset is None:
@@ -210,18 +216,27 @@ def get_equipment_inspection_status(
     latest_by_equipment: dict[str, MaintenanceInspection] = {}
     for inspection in history:
         latest_by_equipment[inspection.equipment_name.casefold()] = inspection
-    assets_by_equipment = {
-        asset.recovery_equipment_name.casefold(): asset
-        for asset in db.scalars(
+    recovered_assets = list(
+        db.scalars(
             select(Asset).where(Asset.latest_recovery_id == recovery.id)
         )
+    )
+    assets_by_equipment = {
+        asset.recovery_equipment_name.casefold(): asset
+        for asset in recovered_assets
         if asset.recovery_equipment_name is not None
+    }
+    assets_by_internal_code = {
+        asset.internal_code.casefold(): asset for asset in recovered_assets
     }
 
     result: list[EquipmentInspectionStatus] = []
     for equipment_name in recovery.recovered_equipment or []:
         latest = latest_by_equipment.get(equipment_name.casefold())
-        asset = assets_by_equipment.get(equipment_name.casefold())
+        asset = (
+            assets_by_equipment.get(equipment_name.casefold())
+            or assets_by_internal_code.get(equipment_name.casefold())
+        )
         if asset is None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

@@ -17,6 +17,7 @@ from app.models.asset import (
     AssetType,
 )
 from app.models.equipment_recovery import EquipmentRecovery
+from app.models.network_device import NetworkDevice
 from app.models.service_operations import (
     Cancellation,
     CancellationStatus,
@@ -27,6 +28,7 @@ from app.schemas.equipment_recovery import (
     EquipmentRecoveryCreate,
     EquipmentRecoveryRead,
 )
+from app.schemas.asset import AssetRead
 
 router = APIRouter(prefix="/api/v1/services", tags=["equipment recovery"])
 
@@ -63,6 +65,39 @@ def find_asset_by_internal_code(
             func.lower(Asset.internal_code) == equipment_name.casefold()
         )
     )
+
+
+def recovery_inventory_for_service(service_id: UUID, db: Session) -> list[Asset]:
+    """Return the physical assets currently known for a service.
+
+    A CPE discovered by UISP is already linked to its service through
+    ``NetworkDevice`` even when nobody has created a manual inventory
+    assignment.  Recovery must use that durable asset (and its MAC), rather
+    than creating a second generic "Antena" record.
+    """
+    assets_by_id: dict[UUID, Asset] = {}
+    assignments = db.scalars(
+        select(AssetAssignment).where(
+            AssetAssignment.service_id == service_id,
+            AssetAssignment.returned_at.is_(None),
+        )
+    )
+    for assignment in assignments:
+        asset = db.get(Asset, assignment.asset_id)
+        if asset is not None:
+            assets_by_id[asset.id] = asset
+
+    devices = db.scalars(
+        select(NetworkDevice).where(
+            NetworkDevice.service_id == service_id,
+            NetworkDevice.asset_id.is_not(None),
+        )
+    )
+    for device in devices:
+        asset = db.get(Asset, device.asset_id)
+        if asset is not None:
+            assets_by_id[asset.id] = asset
+    return sorted(assets_by_id.values(), key=lambda item: item.internal_code)
 
 
 def close_active_assignment(
@@ -112,14 +147,22 @@ def synchronize_recovery_inventory(
             )
             db.add(asset)
         else:
-            close_active_assignment(
-                asset,
-                service_id,
-                completion.performed_by,
-                completion.condition_notes,
-                AssetReturnOutcome.recovered,
-                db,
+            active_assignment = db.scalar(
+                select(AssetAssignment).where(
+                    AssetAssignment.asset_id == asset.id,
+                    AssetAssignment.service_id == service_id,
+                    AssetAssignment.returned_at.is_(None),
+                )
             )
+            if active_assignment is not None:
+                close_active_assignment(
+                    asset,
+                    service_id,
+                    completion.performed_by,
+                    completion.condition_notes,
+                    AssetReturnOutcome.recovered,
+                    db,
+                )
         asset.latest_recovery_id = recovery.id
         asset.recovery_equipment_name = equipment_name
         asset.status = AssetStatus.quarantine
@@ -226,6 +269,18 @@ def get_equipment_recovery(
     find_service_or_404(service_id, db)
     cancellation = find_cancellation_or_404(service_id, db)
     return find_recovery_or_404(cancellation.id, db)
+
+
+@router.get(
+    "/{service_id}/recovery-inventory",
+    response_model=list[AssetRead],
+)
+def get_recovery_inventory(
+    service_id: UUID,
+    db: Session = Depends(get_db),
+) -> list[Asset]:
+    find_service_or_404(service_id, db)
+    return recovery_inventory_for_service(service_id, db)
 
 
 @router.post(
