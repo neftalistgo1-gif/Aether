@@ -54,6 +54,7 @@ class PaymentRead(BaseModel):
     method: PaymentMethod
     reference: str | None
     has_proof: bool
+    proof_kind: str | None
     origin_account_holder: str | None
     status: PaymentStatus
     received_by: str
@@ -76,3 +77,11 @@ class PaymentStatusEventRead(BaseModel):
     performed_by: str
     reason: str
     occurred_at: datetime
+
+
+class NativeSharedReceiptRead(BaseModel):
+    receipt_id: UUID
+    filename: str
+    content_type: str
+    expires_at: datetime
+    launch_path: str

@@ -127,6 +127,37 @@ class AuthenticationTestCase(unittest.TestCase):
         )
         self.assertFalse(verify_password("clave-incorrecta", first))
 
+    def test_native_session_header_uses_the_same_session_validation(self) -> None:
+        token = self.bootstrap().access_token
+        dependency = require_authenticated_user(
+            build_request(),
+            None,
+            self.db,
+            native_session=token,
+        )
+        try:
+            user = next(dependency)
+            self.assertEqual(user.username, "admin")
+        finally:
+            dependency.close()
+
+    def test_valid_native_session_wins_over_replaced_bearer_header(self) -> None:
+        token = self.bootstrap().access_token
+        dependency = require_authenticated_user(
+            build_request(),
+            HTTPAuthorizationCredentials(
+                scheme="Bearer",
+                credentials="token-reemplazado-por-proxy",
+            ),
+            self.db,
+            native_session=token,
+        )
+        try:
+            user = next(dependency)
+            self.assertEqual(user.username, "admin")
+        finally:
+            dependency.close()
+
     def test_bootstrap_is_single_use_and_credentials_are_not_stored(self) -> None:
         status = bootstrap_status(self.db)
         self.assertTrue(status["configured"])

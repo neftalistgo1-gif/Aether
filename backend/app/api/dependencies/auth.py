@@ -1,6 +1,9 @@
 from datetime import UTC, datetime
+import logging
 
-from fastapi import Depends, HTTPException, Request, status
+from typing import Annotated
+
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,6 +18,7 @@ from app.db.session import get_db
 from app.models.auth import AuthSession, Capability, OperatorUser, UserRole
 
 bearer_scheme = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
 
 
 def as_utc(value: datetime) -> datetime:
@@ -29,18 +33,30 @@ def require_authenticated_user(
         bearer_scheme
     ),
     db: Session = Depends(get_db),
+    native_session: Annotated[
+        str | None,
+        Header(alias="X-Aether-Session"),
+    ] = None,
 ):
-    if credentials is None or credentials.scheme.lower() != "bearer":
+    # Android's share sheet can pass through browser/proxy layers that remove
+    # Authorization. The dedicated header carries the same opaque session
+    # token and follows exactly the same database validation below.
+    session_tokens: list[str] = []
+    if native_session:
+        session_tokens.append(native_session)
+    if credentials is not None and credentials.scheme.lower() == "bearer":
+        session_tokens.append(credentials.credentials)
+    if not session_tokens:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # Validate both candidates independently. Some reverse proxies preserve the
+    # dedicated native header while replacing the standard Authorization one.
+    token_hashes = {hash_session_token(token) for token in session_tokens}
     session = db.scalar(
-        select(AuthSession).where(
-            AuthSession.token_hash
-            == hash_session_token(credentials.credentials)
-        )
+        select(AuthSession).where(AuthSession.token_hash.in_(token_hashes))
     )
     now = datetime.now(UTC)
     if (
@@ -48,6 +64,12 @@ def require_authenticated_user(
         or session.revoked_at is not None
         or as_utc(session.expires_at) <= now
     ):
+        logger.warning(
+            "Rejected Aether session for %s; fingerprints=%s; device=%s",
+            request.url.path,
+            sorted(token_hash[:16] for token_hash in token_hashes),
+            (request.headers.get("user-agent") or "unknown")[:80],
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session is invalid or expired",
@@ -142,6 +164,7 @@ def capability_for_operation(
     if (
         "/network-assignments" in route_path
         or "/network-assignment" in route_path
+        or route_path.endswith("/network-device")
         or route_path.startswith("/api/v1/mikrotik/routers")
     ):
         return (
@@ -165,6 +188,7 @@ def capability_for_operation(
         "/assets" in route_path
         or "/asset-assignments" in route_path
         or "/equipment-recovery" in route_path
+        or route_path.endswith("/recovery-inventory")
     ):
         return (
             Capability.assets_read
@@ -221,6 +245,12 @@ def capability_for_operation(
         )
     if route_path.startswith("/api/v1/postal-codes"):
         return Capability.services_read if is_read else None
+    if route_path.endswith("/payment-day"):
+        return (
+            Capability.services_read
+            if is_read
+            else Capability.services_payment_day_write
+        )
     if route_path.startswith("/api/v1/services"):
         return (
             Capability.services_read

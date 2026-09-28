@@ -1,10 +1,14 @@
 import unittest
 from datetime import UTC, datetime
 from decimal import Decimal
+from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 from uuid import uuid4
-from unittest.mock import Mock, patch
+from zipfile import ZipFile
 
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -12,9 +16,11 @@ from sqlalchemy.pool import StaticPool
 from app.api.v1.endpoints.payments import (
     cancel_payment,
     create_payment,
+    download_payment_accounting_report,
     list_payment_events,
     list_payments,
     reject_payment,
+    store_payment_proof,
     verify_payment,
 )
 from app.api.v1.endpoints.services import create_service
@@ -110,7 +116,33 @@ class PaymentTestCase(unittest.TestCase):
         response = PaymentRead.model_validate(payment).model_dump()
 
         self.assertTrue(response["has_proof"])
+        self.assertEqual(response["proof_kind"], "image")
         self.assertNotIn("proof_reference", response)
+
+    def test_payment_proof_accepts_an_image_or_pdf_from_the_picker(self) -> None:
+        samples = (
+            ("comprobante.png", b"\x89PNG\r\n\x1a\ncontenido", "proof.png"),
+            ("comprobante.pdf", b"%PDF-1.7\n%%EOF", "proof.pdf"),
+        )
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            for filename, content, stored_name in samples:
+                payment_id = uuid4()
+                proof_directory = root / str(payment_id)
+                with self.subTest(filename=filename), patch(
+                    "app.api.v1.endpoints.payments.payment_proof_directory",
+                    return_value=proof_directory,
+                ), patch(
+                    "app.api.v1.endpoints.payments.payment_proof_path",
+                    side_effect=lambda _payment_id, name: proof_directory / name,
+                ):
+                    stored = store_payment_proof(
+                        payment_id,
+                        UploadFile(filename=filename, file=BytesIO(content)),
+                    )
+
+                self.assertEqual(stored.name, stored_name)
+                self.assertEqual(stored.read_bytes(), content)
 
     def test_verify_payment_confirms_amount_and_records_event(self) -> None:
         payment = create_payment(self.payment_data(), self.db)
@@ -139,61 +171,39 @@ class PaymentTestCase(unittest.TestCase):
             {"payment.received", "payment.verified"},
         )
 
-    def test_verified_payment_can_reactivate_a_suspended_service(self) -> None:
+    def test_verified_payment_does_not_bypass_network_control(self) -> None:
         payment = create_payment(self.payment_data(), self.db)
         self.service.status = ServiceStatus.suspended
         self.db.commit()
 
-        preflight = Mock(id=uuid4())
-        live = Mock(id=uuid4())
-
-        with patch(
-            "app.api.v1.endpoints.payments.control_service_network",
-            side_effect=[preflight, live],
-        ) as control:
-            verified = verify_payment(
-                payment.id,
-                PaymentVerify(
-                    confirmed_amount=Decimal("500.00"),
-                    verified_by="Administrador",
-                ),
-                self.db,
-            )
-
-        self.assertEqual(verified.status, PaymentStatus.verified)
-        self.assertEqual(control.call_count, 2)
-        self.assertEqual(
-            control.call_args_list[0].args[1].value,
-            "reactivate",
+        verified = verify_payment(
+            payment.id,
+            PaymentVerify(
+                confirmed_amount=Decimal("500.00"),
+                verified_by="Administrador",
+            ),
+            self.db,
         )
 
-    def test_rejected_payment_can_suspend_an_active_service(self) -> None:
+        self.assertEqual(verified.status, PaymentStatus.verified)
+        self.assertEqual(self.service.status, ServiceStatus.suspended)
+
+    def test_rejected_payment_does_not_bypass_network_control(self) -> None:
         payment = create_payment(self.payment_data(), self.db)
         self.service.status = ServiceStatus.active
         self.db.commit()
 
-        preflight = Mock(id=uuid4())
-        live = Mock(id=uuid4())
-
-        with patch(
-            "app.api.v1.endpoints.payments.control_service_network",
-            side_effect=[preflight, live],
-        ) as control:
-            rejected = reject_payment(
-                payment.id,
-                PaymentDecision(
-                    performed_by="Administrador",
-                    reason="Comprobante no válido",
-                ),
-                self.db,
-            )
+        rejected = reject_payment(
+            payment.id,
+            PaymentDecision(
+                performed_by="Administrador",
+                reason="Comprobante no válido",
+            ),
+            self.db,
+        )
 
         self.assertEqual(rejected.status, PaymentStatus.rejected)
-        self.assertEqual(control.call_count, 2)
-        self.assertEqual(
-            control.call_args_list[0].args[1].value,
-            "suspend",
-        )
+        self.assertEqual(self.service.status, ServiceStatus.active)
 
     def test_amount_difference_requires_verification_notes(self) -> None:
         payment = create_payment(self.payment_data(), self.db)
@@ -287,6 +297,52 @@ class PaymentTestCase(unittest.TestCase):
         self.assertEqual([item.id for item in by_customer], [payment.id])
         self.assertEqual([item.id for item in by_status], [payment.id])
         self.assertEqual([item.id for item in by_reference], [payment.id])
+
+    def test_accounting_report_contains_summary_and_monthly_movements(self) -> None:
+        payment = create_payment(self.payment_data(), self.db)
+        received_at = payment.received_at.astimezone(UTC)
+
+        response = download_payment_accounting_report(
+            self.db,
+            year=received_at.year,
+            month=received_at.month,
+        )
+
+        self.assertEqual(
+            response.media_type,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertIn(
+            f'aether_pagos_{received_at.year}-{received_at.month:02d}.xlsx',
+            response.headers["content-disposition"],
+        )
+        with ZipFile(BytesIO(response.body)) as workbook:
+            self.assertIn("xl/worksheets/sheet1.xml", workbook.namelist())
+            self.assertIn("xl/worksheets/sheet2.xml", workbook.namelist())
+            workbook_xml = workbook.read("xl/workbook.xml").decode("utf-8")
+            shared_strings = workbook.read("xl/sharedStrings.xml").decode("utf-8")
+            summary_sheet = workbook.read("xl/worksheets/sheet1.xml").decode("utf-8")
+
+        self.assertIn('name="Resumen"', workbook_xml)
+        self.assertIn('name="Movimientos"', workbook_xml)
+        self.assertIn("Cliente de pagos", shared_strings)
+        self.assertIn("AMR801", shared_strings)
+        self.assertIn("Por revisar", shared_strings)
+        self.assertIn("SUMIF", summary_sheet)
+
+    def test_accounting_report_supports_a_month_without_movements(self) -> None:
+        response = download_payment_accounting_report(
+            self.db,
+            year=2000,
+            month=1,
+        )
+
+        with ZipFile(BytesIO(response.body)) as workbook:
+            shared_strings = workbook.read("xl/sharedStrings.xml").decode("utf-8")
+            summary_sheet = workbook.read("xl/worksheets/sheet1.xml").decode("utf-8")
+
+        self.assertIn("enero de 2000", shared_strings.lower())
+        self.assertIn("<f>0</f>", summary_sheet)
 
 
 if __name__ == "__main__":

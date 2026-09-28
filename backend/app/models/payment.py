@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
+from pathlib import Path
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -140,6 +141,12 @@ class Payment(Base):
     @property
     def has_proof(self) -> bool:
         return self.proof_reference is not None
+
+    @property
+    def proof_kind(self) -> str | None:
+        if self.proof_reference is None:
+            return None
+        return "pdf" if Path(self.proof_reference).suffix.lower() == ".pdf" else "image"
 
 
 class PaymentStatusEvent(Base):

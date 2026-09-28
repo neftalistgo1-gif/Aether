@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="aether_background">#07192D</color>
+    <color name="aether_surface">#0D2746</color>
+    <color name="aether_primary">#2EA8FF</color>
+    <color name="aether_text">#F5F9FF</color>
+    <color name="aether_muted">#9BB5D2</color>
+    <color name="aether_error">#FF7885</color>
+</resources>

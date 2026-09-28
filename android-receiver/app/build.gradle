@@ -1,0 +1,28 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.aetheramr.receiver"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.aetheramr.receiver"
+        minSdk 26
+        targetSdk 36
+        versionCode 3
+        versionName "1.0.2"
+        buildConfigField "String", "AETHER_BASE_URL", '"https://aether.aetheramr.com"'
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+}
